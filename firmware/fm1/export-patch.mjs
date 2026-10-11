@@ -35,7 +35,7 @@ const header = `/* Generated from patches/sine.json by the Teia compiler. */\n`
 await fs.writeFile(path.join(out, 'patch.h'), header);
 await fs.writeFile(path.join(out, 'program.json'), JSON.stringify(program, null, 2) + '\n');
 await fs.writeFile(path.join(out, 'lowered.json'), JSON.stringify({ name: patch.name, ops, parameters, values: program.values, registerCount: program.registerCount }, null, 2) + '\n');
-console.log(`Teia graph: ${program.ops.length} operations, ${program.registerCount} registers, ${program.values.length} values`);
+console.log(`FM-1 program: ${ops.length} operations, ${program.registerCount} registers, ${program.values.length} values`);
 
 await fs.writeFile(path.join(out, 'patch.tgp.tmp'), bytes);
 await fs.rename(path.join(out, 'patch.tgp.tmp'), path.join(out, 'patch.tgp'));

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "firmware": "FM-1_912",
-  "reviewedOn": "2026-10-10",
+  "firmware": "FM-1_915",
+  "reviewedOn": "2026-10-11",
   "reviewedSources": {
     "editor/src/graph/types.ts": "d151a68c85539525df1abc869e07378c17c9c21a3dd5d265bc9b4fe7ce72536a",
     "editor/src/graph/nodeTypes.ts": "1f79be272daf828e69d5a2513edd9cf76ac17d3e1ace160611cc59ef11e6fc09",
@@ -10,18 +10,19 @@
     "editor/src/graph/expression.ts": "3d9ffced8af6611ed9b59414f2917895aa21fbf2d0f145d59eeab71a9ab34995",
     "editor/src/audio/dspProgram.ts": "7dc99dcea11d98893e94b12bac5785cb852c2a4ed2377f8d03de78c94a1e4ddc",
     "editor/src/audio/dspOpcodes.ts": "3e605442a356c87dd1c6aef58ce0d00d762c5ed31da0499b90e962181fed55ee",
-    "editor/src/audio/fm1Package.ts": "63672634e1820228493997a7f20b4abc96778e12f0642fbd492c1d9e76045d22",
+    "editor/src/audio/fm1Package.ts": "018a4bf19ea421dcb05bbe0b6f1b9fd3bd87bcde22f66585eed50a41ab89662b",
+    "editor/src/audio/fm1Optimizer.ts": "d0a630bedd42cbd5e51341f5142f00f743326445943ab044e5f037574f0b069a",
     "editor/src/audio/fm1Upload.ts": "352c53da3d8880cb83a0f3fb2f3f4d7c073de89ec007b1d5d55b7534658f0446",
     "editor/src/audio/fm1Support.ts": "dbb414526f456897f11548daf582d2201c58ef169aa48cc5140cc8dec1cb4c40",
     "editor/src/audio/fm1Capabilities.ts": "9dce2bb5869752fa79a06f37d5b2954a6cd28b23dd2486aee40ce35f69ccbb1b",
     "editor/src/editor/Fm1SupportPage.tsx": "4f634b0db59887bc62a1a8a0dbe811e563683ee4cfa534a3a4aa8a1760264f49",
     "editor/src/App.tsx": "a7ab18f0eea1c2c9e395d4c01b34d58621d483f7e9069b4325e82ff3a7da4eee",
     "editor/src/styles.css": "c3fc07b6de0507a4b086b6bcbdf47a474e612cf57ecf189d1ebf99d9dfcc4bc1",
-    "firmware/fm1/runtime.h": "76a66566d92987d6f98521aa977208700c2a242bdcfb1c9ff6b6b73696b8135f",
-    "firmware/fm1/app.c": "724c3fc22eebe3ff5f46b2377ef6743042599287107e074ce5fc5d30b499c714",
+    "firmware/fm1/runtime.h": "97f1000a478b42eb016ee4af395baf83befeb6acc0e94837b6985c9e9e9c8e57",
+    "firmware/fm1/app.c": "645dc926a626be0a66c1d0c73e09e81abccc0843e3da32e06c9fe26f2bf93930",
     "firmware/fm1/upload.h": "1c1c9452c85940a1f03337115a6b40b0727784481d241bcb6e2ddb8d89a1d776",
-    "firmware/fm1/export-patch.mjs": "e168182cde8a0475276674e9bf9bf4845ba68c1976d10582ecba6a2de2b5747d",
-    "scripts/fm1-runtime-spike.py": "ce457b030db05a6ac7833f942c9d8f921e40f73fd8be8eb84b0b73ce43f20f5c",
+    "firmware/fm1/export-patch.mjs": "49d1d91558a849c8f8e71980dd38881083541b33b7c21850c261810d05acc6b6",
+    "scripts/fm1-runtime-spike.py": "8bb0e3402fb66385e1cfa369d2184e34a4fec78b4ca469b018fd14b350d84d57",
     "scripts/fm1-send-patch.py": "ac9f2d5aa2e845dd89660cecbe959f7f490a4bf2fa1aeb2b8f61e89428408c8d",
     "scripts/fm1-install.py": "cb0b4d51615e40b164fd767964d845a65f3931c194d698c650b724f9825f228c"
   },
@@ -32,7 +33,7 @@
       "status": "partial",
       "since": 904,
       "verification": "source reviewed",
-      "notes": "Basic arithmetic since 904; 907 adds abs/min/max/clamp/floor/ceil/round/sign/fract, comparisons and boolean logic. Q16.16 saturation; round ties away from zero. Transcendentals, pow, sqrt and mix remain unsupported.",
+      "notes": "Basic arithmetic since 904; 907 adds abs/min/max/clamp/floor/ceil/round/sign/fract, comparisons and boolean logic. Q16.16 arithmetic; since 913 the basic add/subtract/multiply/divide graph instructions clamp results to ±12000 like WASM; round ties away from zero. Transcendentals, pow, sqrt and mix remain unsupported.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "firmware/fm1/runtime.h",
@@ -598,7 +599,7 @@
       "status": "partial",
       "since": 911,
       "verification": "source reviewed",
-      "notes": "Monophonic note, frequency, velocity, gate and a pending note-on trigger consumed by exactly one rendered sample for physical keys and USB/TRS channel 1. The trigger is independent of the held gate. Channels 2–16 produce zero; per-note event nodes remain unsupported.",
+      "notes": "Optional monophonic source for note, frequency, velocity, gate and a pending note-on trigger consumed by exactly one rendered sample for physical keys and USB/TRS channel 1. Patches without MIDI Note are valid for fixed-frequency or continuously gated drones. The trigger is independent of the held gate. Channels 2–16 produce zero; per-note event nodes remain unsupported.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "editor/src/audio/dspProgram.ts",
@@ -790,7 +791,7 @@
       "status": "supported",
       "since": null,
       "verification": "source reviewed",
-      "notes": "Saturating Q16.16 multiplication.",
+      "notes": "Q16.16 multiplication; since 913 the graph instruction clamps each result to ±12000 like WASM. Internal DSP multiplication helpers retain the full Q16.16 range.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "firmware/fm1/runtime.h",
@@ -805,14 +806,20 @@
       "status": "partial",
       "since": 910,
       "verification": "source reviewed",
-      "notes": "Q16.16 exponentiation uses integer powers and successive square roots. Negative bases only support integral exponents; output saturates instead of producing non-finite values.",
+      "notes": "Sign-preserving Q16.16 exponentiation matches the web node's bipolar behavior: sign(signal) × abs(signal)^exponent. Fixed-point log2 plus interpolated 2^x gives bounded per-sample work and avoids repeated fractional roots; output saturates. Since 914, exponent one returns the input exactly without logarithm/table evaluation; exponent zero retains the existing sign output.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "editor/src/audio/dspProgram.ts",
-        "firmware/fm1/runtime.h"
+        "firmware/fm1/runtime.h",
+        "firmware/fm1/test-nodes.c"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Uses double-precision sign-preserving power for all finite signal and exponent values.",
+        "firmwareBehavior": "Uses saturating Q16.16 log2 and interpolated 2^x with sign-preserving output. Exponent one is exact and bypasses the approximation from 914.",
+        "requiredWork": "Measure target CPU margin and numerical error across representative audio-rate exponent modulation."
+      }
     },
     {
       "id": "Pan",
@@ -904,7 +911,7 @@
       "status": "partial",
       "since": null,
       "verification": "source reviewed",
-      "notes": "Linear ADSR, delay, trigger and timed gate; a trigger-only envelope releases after decay unless gate length is set, while the independent gate input holds sustain. End trigger unsupported. Live durations 0–60 seconds, minimum attack 45 samples. The firmware measures a trigger-only gate length after decay; the web engine measures it from the trigger edge.",
+      "notes": "Linear ADSR, delay, trigger and timed gate; a trigger-only envelope releases after decay unless gate length is set, while the independent gate input holds sustain. End trigger unsupported. Live durations 0–60 seconds, minimum attack 45 samples. The firmware measures a trigger-only gate length after decay; the web engine measures it from the trigger edge. 915 uses an exact quotient/remainder ramp for unchanged durations, refreshing immediately after time modulation or elapsed-position changes; ADSR timing and existing drift are unchanged.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "firmware/fm1/runtime.h",
@@ -1279,7 +1286,7 @@
       "status": "partial",
       "since": 912,
       "verification": "source reviewed",
-      "notes": "Up to six Params outputs map in order to Knobs 1–4, Select and Algorithm. The screen shows each output name and its actual declared-unit value, rounded to up to four decimal places.",
+      "notes": "Up to six Params outputs map in order to Knobs 1–4, Select and Algorithm. The screen prefixes each output name and its actual declared-unit value (rounded to up to four decimal places) with its control reference: K1–K4, SEL or ALG.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md"
@@ -1399,7 +1406,7 @@
       "status": "unknown",
       "since": null,
       "verification": "unverified",
-      "notes": "Pitch, sustained load and new-node late-buffer performance require measurement; memory fit is insufficient.",
+      "notes": "Pitch, sustained load and new-node late-buffer performance require measurement; memory fit is insufficient. A user report of increasing late buffers with test-fm-3 motivated the 914 neutral-operation fast paths. Offline host comparisons do not establish target deadline compliance; device render time and late-buffer growth must be checked after installation. 915 lifts constant/Params-only calculations out of the sample loop and caches them until values change; desktop regression/performance checks do not prove hardware deadline compliance.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md"
@@ -1411,7 +1418,7 @@
       "status": "supported",
       "since": 912,
       "verification": "source reviewed",
-      "notes": "Slot/name, up to six ordered Params labels and declared-unit values rounded to up to four decimal places, maximum render time, late-buffer and MIDI-overflow counts.",
+      "notes": "The first line contains the selected patch number and name without a slot label, followed by an empty line. Up to six ordered Params lines then show K1–K4, SEL or ALG, their labels and declared-unit values rounded to up to four decimal places; maximum render time, late-buffer and MIDI-overflow counts follow.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md"
@@ -1423,7 +1430,7 @@
       "status": "partial",
       "since": 904,
       "verification": "source reviewed",
-      "notes": "910 source identity assigned; cross-build, installation and reboot unverified. Prior 904 installation evidence is historical only; return to stock and interrupted-update recovery unverified. The fm1:install wrapper audits sources, rebuilds changed/missing packages, checks package hashes and invokes the pinned installer with post-reboot identity verification; wrapper execution remains unverified.",
+      "notes": "915 source identity assigned; installation and reboot unverified. Prior 904 installation evidence is historical only; return to stock and interrupted-update recovery unverified. The fm1:install wrapper audits sources, rebuilds changed/missing packages, checks package hashes and invokes the pinned installer with post-reboot identity verification; wrapper execution remains unverified.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md",
@@ -1461,17 +1468,18 @@
       "status": "partial",
       "since": 908,
       "verification": "source reviewed",
-      "notes": "Bend mode on ordinary links and link-strength modulation multiplies by 2^(weighted source). Q16.16 ratio rounded to nearest, saturating at 32767.9999847 and rounding tiny ratios to zero. Uses interpolated Q2.30 table; device timing and audio unverified. Does not add MIDI pitch-wheel input.",
+      "notes": "Since 913, bend instructions clamp the exponent to -32 through 32 and the ratio to 12000 before the following bounded multiplication, matching the compiled WASM operation order. Each bend is applied separately in saved link order. Q16.16 ratios use nearest rounding and an interpolated Q2.30 table; tiny ratios can round to zero. Does not add MIDI pitch-wheel input. Hardware audio and timing unverified. 914 returns the exact unity ratio immediately for a zero exponent.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "firmware/fm1/runtime.h",
         "firmware/fm1/export-patch.mjs",
-        "firmware/fm1/test-nodes.c"
+        "firmware/fm1/test-nodes.c",
+        "firmware/fm1/test-links.c"
       ],
       "drift": {
-        "webBehavior": "Double-precision 2^x with the exponent clamped to -32 through 32.",
-        "firmwareBehavior": "Q16.16 ratio with table interpolation (approximately 0.0001% relative interpolation error), nearest rounding and saturation; subsequent multiplication also saturates.",
-        "requiredWork": "Wider numeric representation is needed to preserve the web range. Measure device timing and audible results."
+        "webBehavior": "Compiled links apply each bend separately: clamp the exponent to -32 through 32, compute double-precision 2^x, clamp the ratio to 12000, then multiply and clamp the result to ±12000. Opposing bends need not cancel after intermediate clipping.",
+        "firmwareBehavior": "913 matches those instruction boundaries and limits using Q16.16 ratios with table interpolation. Ratios below half a Q16.16 step round to zero; multiplication truncates to fixed-point precision.",
+        "requiredWork": "Wider fractional precision is needed for extreme negative bends and very small products. Measure hardware timing and audible results; no runtime verification is claimed."
       }
     },
     {
@@ -1491,6 +1499,56 @@
         "firmwareBehavior": "Paired package instructions read and write a reset-on-load Q16.16 history value with the same one-sample ordering.",
         "requiredWork": "Measure hardware timing and audible stability under representative feedback gains."
       }
+    },
+    {
+      "id": "link arithmetic",
+      "category": "dsp",
+      "status": "partial",
+      "since": 913,
+      "verification": "source reviewed",
+      "notes": "Shared compiler order: weighted sources, average set links (or local base), add, multiply, then individual bends. Since 913, value loads, divide-by-one copies, add/subtract/multiply/divide and bend ratios use the compiled WASM ±12000 graph bounds at every instruction. Applies to ordinary links and generated link-strength stages. Existing package versions and opcode numbers are unchanged; older firmware still accepts patches but uses the older bounds. Knob interpolation is unchanged. Host regressions verify the tested arithmetic and 915 scheduling; hardware timing remains unverified. 914 adds exact fast paths for multiplication by zero/unity, neutral bend and division by ±1/±2; no knob interpolation or feedback scheduling changes. 915 prepares control-only link and strength calculations at buffer boundaries while retaining sample-rate modulation and feedback ordering.",
+      "evidence": [
+        "editor/src/audio/dspProgram.ts",
+        "editor/src/audio/fm1Package.ts",
+        "rust/teia-kernel/src/lib.rs",
+        "firmware/fm1/runtime.h",
+        "firmware/fm1/test-links.c"
+      ],
+      "drift": {
+        "webBehavior": "Graph arithmetic uses double precision, clamps value loads and basic arithmetic to ±12000 and smooths editable values. Same-type links execute in saved order; intermediate clipping can prevent cancellation.",
+        "firmwareBehavior": "913 uses the same link instruction order and graph bounds, with Q16.16 quantization and existing unsmoothed knob updates. General DSP node algorithms retain their separately registered limitations.",
+        "requiredWork": "Assess remaining fixed-point error and small-value underflow in host and hardware comparisons. Knob interpolation remains a separate parity gap."
+      }
+    },
+    {
+      "id": "control scheduling",
+      "category": "dsp",
+      "status": "supported",
+      "since": 915,
+      "verification": "host verified",
+      "notes": "Single-assignment programs split into dependency-ordered control and audio instruction lists on load. Pure calculations depending only on values are prepared after inputs are copied at each 128-frame half-buffer boundary and reused until values change. Stateful DSP, audio-derived arithmetic, feedback and all MIDI outputs remain per sample. Packages reassigning registers retain original-order execution; legacy level smoothing uses the sample-compatible entry point. Exact envelope quotient/remainder progression avoids repeated fractional division without changing samples. No package-format, opcode, resource-limit or knob-interpolation change. Host tests establish equivalence for their fixtures, not hardware performance.",
+      "evidence": [
+        "firmware/fm1/runtime.h",
+        "firmware/fm1/app.c",
+        "firmware/fm1/test-schedule.c",
+        "firmware/fm1/test-nodes.c",
+        "firmware/fm1/patches/feedback-bend.json",
+        "firmware/fm1/README.md"
+      ]
+    },
+    {
+      "id": "compiled instruction optimization",
+      "category": "dsp",
+      "status": "supported",
+      "since": 915,
+      "verification": "host verified",
+      "notes": "FM-1 export simplifies the lowered Q16.16 instruction stream: immutable value folding, bounded arithmetic identities, duplicate pure calculations and unused pure operations. Mutable Params values remain live, intermediate clipping is retained, and stateful/feedback execution order is preserved. Constant folding uses integer arithmetic with firmware rounding, not browser floating-point evaluation. Register numbering and asset/control value indices stay stable. This is a compiler change for firmware 915; no new firmware or package protocol. Hardware timing has not been measured.",
+      "evidence": [
+        "editor/src/audio/fm1Optimizer.ts",
+        "editor/src/audio/fm1Package.ts",
+        "scripts/test-fm1-optimizer.mjs",
+        "firmware/fm1/test-optimizer-render.c"
+      ]
     }
   ],
   "evidenceLog": [
@@ -1511,6 +1569,26 @@
       "firmware": "FM-1_904",
       "scope": "Installation from 903 and reboot identity only. New-node host tests statically compiled, not executed; audio and performance unverified.",
       "source": "firmware/fm1/UPLOAD.md"
+    },
+    {
+      "date": "2026-10-11",
+      "firmware": "FM-1_915",
+      "verification": "host verified",
+      "features": [
+        "control scheduling"
+      ],
+      "scope": "ASan/UBSan host execution compared prepared rendering with original-order execution for test-fm-3 and 22 exported firmware examples, 700 buffers each, with control changes and one-sample MIDI triggers: exact output/register/state equality. A separate binary compiled from the 914 runtime produced bit-identical stereo PCM for the same 23 patches after the envelope optimisation. Cached envelope progression was checked against direct division including duration changes, repeated positions and retriggers. No hardware deadline or audio verification.",
+      "source": "firmware/fm1/test-schedule.c"
+    },
+    {
+      "date": "2026-10-11",
+      "firmware": "FM-1_915",
+      "verification": "host verified",
+      "features": [
+        "compiled instruction optimization"
+      ],
+      "scope": "23 regression patches rendered before/after compiler optimization for 700 blocks of 128 frames with knob changes and MIDI events. ASan/UBSan renderer verifies exact stereo PCM, DSP state, feedback and delay contents. Arithmetic guards cover rounding, intermediate clipping, independent mutable controls, stateful ordering and full value pools. Feedback bend reduces from 72 to 30 instructions; no hardware performance claim.",
+      "source": "scripts/test-fm1-optimizer.mjs"
     }
   ],
   "$schema": "./support.schema.json",

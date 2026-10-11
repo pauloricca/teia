@@ -6,7 +6,7 @@
 #define FELUCCA_CDC 0
 #define FELUCCA_UAC 0
 #define FELUCCA_OTA 1
-#define FELUCCA_ID "FM-1_912"
+#define FELUCCA_ID "FM-1_915"
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #include "fm1_time.h"
 #include "fm1_sys.h"
@@ -85,6 +85,18 @@ static void parameter_line(uint32_t y, const char *label, int32_t value)
         while (k && len < 30) line[len++] = digits[--k];
     }
     line[len] = 0; text_line(y, line);
+}
+/* Params are ordered to match the six physical controls.  Keep the control
+ * reference on screen so a patch's labels can be read without consulting the
+ * panel layout. */
+static void parameter_label(char *line, const char *control, const char *label)
+{
+    uint32_t len = 0, k;
+    for (k = 0; control[k] && len < 30; ++k) line[len++] = control[k];
+    if (len < 30) line[len++] = ' ';
+    for (k = 0; label[k] && len < 30; ++k) line[len++] = label[k];
+    if (len < 30) line[len++] = ' ';
+    line[len] = 0;
 }
 static void clear_notes(void) { uint32_t i; for (i = 0; i < 128; ++i) held[i] = 0; }
 static void octave_leds(void)
@@ -175,6 +187,7 @@ void fm1_alnk0_irq(void)
         fading = patches.pending != 0;
         p = patches.slots[patches.active];
         inputs_audio();
+        teia_prepare_block(&arena.runtime);
         for (i = 0; i < HALF_FRAMES; ++i) {
             int32_t l, r;
             if (p->valid && p->version < 4) {
@@ -184,7 +197,10 @@ void fm1_alnk0_irq(void)
             if (fading) switch_gain = switch_gain > 512u ? switch_gain - 512u : 0;
             else if (switch_gain < TEIA_Q) switch_gain += 512u;
             master_smooth = approach(master_smooth, master_target);
-            teia_sample(&arena.runtime, &l, &r);
+            /* Legacy packages smooth their level every sample. Current
+             * packages snapshot all Params once per half-buffer. */
+            if(p->valid && p->version<4) teia_sample(&arena.runtime,&l,&r);
+            else teia_sample_prepared(&arena.runtime,&l,&r);
             /* Q16.16 -> bounded 24-bit output, with 6 dB additional bench headroom. */
             out[2u * i] = teia_mul(teia_mul(l, (int32_t)switch_gain), master_smooth) * 64;
             out[2u * i + 1u] = teia_mul(teia_mul(r, (int32_t)switch_gain), master_smooth) * 64;
@@ -347,15 +363,24 @@ static void main_loop(void)
             last_ui = now;
             {
                 uint32_t k; teia_patch_t *p = patches.slots[patches.active];
-                number_line(30, "SLOT ", patches.active + 1);
-                text_line(50, p->valid ? p->name : "EMPTY / UPLOAD A PATCH");
+                char header[31], digits[2];
+                static const char *control_names[6] = {"K1", "K2", "K3", "K4", "SEL", "ALG"};
+                digits[0] = (char)('1' + patches.active); digits[1] = 0;
+                str_cpy(header, digits, sizeof header);
+                { uint32_t len = str_len(header); header[len++] = ' '; header[len] = 0; }
+                { const char *name = p->valid ? p->name : "EMPTY / UPLOAD A PATCH";
+                    uint32_t len = str_len(header), n = 0;
+                    while (name[n] && len < 30) header[len++] = name[n++];
+                    header[len] = 0;
+                }
+                text_line(30, header);
+                text_line(44, "");
                 for (k = 0; k < 6; ++k) {
                     char label[31];
                     if (p->valid && k < p->knob_count) {
-                        str_cpy(label, p->knobs[k].label, sizeof label);
-                        { uint32_t len = str_len(label); label[len] = ' '; label[len+1] = 0; }
-                        parameter_line(62 + 14*k, label, p->program.values[p->knobs[k].value]);
-                    } else text_line(62 + 14*k, "");
+                        parameter_label(label, control_names[k], p->knobs[k].label);
+                        parameter_line(58 + 14*k, label, p->program.values[p->knobs[k].value]);
+                    } else text_line(58 + 14*k, "");
                 }
             }
             number_line(150, "MAX RENDER US ", max_ticks / 24u);

@@ -230,6 +230,14 @@ afterMultiply = afterAdd * product(all multiply link values)
 finalValue = afterMultiply * 2^(sum(all bend link values))
 ```
 
+This formula describes the combination before numeric bounds. The compiled engine
+loads values and bounds each arithmetic result to ±12,000. It applies bends
+individually in saved link order, bounding each `2^value` ratio to 12,000 before
+multiplication. Consequently, clipping can prevent opposing links from cancelling
+and can affect a sum before it is divided to form a set average. FM-1 firmware 913
+matches these instruction boundaries; its Q16.16 precision still rounds small
+values and can lose very small bend ratios.
+
 So:
 
 - `set` replaces the node's local value. Multiple `set` links are averaged.
@@ -338,7 +346,7 @@ The bottom-right controls show `EXIT` while editing a subpatch, followed by `PLA
 
 `EXPORT PATCH` downloads a plain `.zip` containing editable `patch.json`, compiled `program.json`, `manifest.json`, referenced samples and images (including original video sources), and preserved Buffer data. It does not contain the runtime. The manifest records asset hashes, external Params bindings, and the engine API version. Export stops with an error if DSP compilation or asset collection fails. The editor’s `LOAD` button continues to load ordinary patch JSON rather than ZIP packages.
 
-`SEND TO FM1` in the `MORE` menu, beside `EXPORT PATCH`, compiles the current patch for the FM-1 and opens a dialog showing operations, registers, parameter/constant values, DSP state entries, and package bytes against the firmware limits. The dialog also lists compatibility warnings from the FM-1 support register for enabled nodes, including nodes inside groups. Warnings distinguish unsupported features, partial support and unverified support, show the affected node names and IDs, and explain known limitations. Disabled nodes (and disabled groups’ contents) are excluded. Enabled unsupported or unreviewed nodes block export/upload, including unused nodes and group contents; disable or remove them to continue. Partial nodes must pass the registered port and compiled-operation restrictions. Feedback loops compile to paired, one-sample history instructions when all other support and resource rules pass. The rules identify the registry’s target firmware, not the connected device’s version. Both browser and CLI uploaders preflight encoded instructions against the same JSON before MIDI access; exceeded limits also block upload. The device reports package-format compatibility only and may reject newer operations at commit on older firmware. Connect an FM-1 running Teia firmware `FM-1_909` or newer for feedback patches, enter preset **1** or **2**, and click **Upload**. Use a Web MIDI-capable browser such as Chrome or Edge on HTTPS or localhost, and allow MIDI SysEx access when prompted. Upload replaces and activates the chosen preset; both slots are held in RAM and clear on power-off. The dialog reports transfer progress and device acknowledgement. **Check connection** queries status and package compatibility without replacing or selecting a preset. If a command times out, its error includes the failed stage, received MIDI/SysEx counts, last SysEx reply and port connection states; copy the error when reporting upload problems. Chrome 152 on macOS has a known SysEx framing bug; finish updating and fully relaunch Chrome to run version 153 or newer (refreshing the tab is insufficient). Resource counts measure memory capacity, not audio performance; check late buffers on the device. The editor and command-line exporter share the same FM-1 compiler and package encoder. See [FM-1 upload documentation](firmware/fm1/UPLOAD.md) for supported graphs, controls and the CLI workflow.
+`SEND TO FM1` in the `MORE` menu, beside `EXPORT PATCH`, compiles the current patch for the FM-1 and opens a dialog showing operations, registers, parameter/constant values, DSP state entries, and package bytes against the firmware limits. A `MIDI Note` node is optional: fixed-frequency and continuously gated drone patches can export without keyboard or MIDI input. The dialog also lists compatibility warnings from the FM-1 support register for enabled nodes, including nodes inside groups. Warnings distinguish unsupported features, partial support and unverified support, show the affected node names and IDs, and explain known limitations. Disabled nodes (and disabled groups’ contents) are excluded. Enabled unsupported or unreviewed nodes block export/upload, including unused nodes and group contents; disable or remove them to continue. Partial nodes must pass the registered port and compiled-operation restrictions. Feedback loops compile to paired, one-sample history instructions when all other support and resource rules pass. The rules identify the registry’s target firmware, not the connected device’s version. Both browser and CLI uploaders preflight encoded instructions against the same JSON before MIDI access; exceeded limits also block upload. The device reports package-format compatibility only and may reject newer operations at commit on older firmware. Connect an FM-1 running Teia firmware `FM-1_909` or newer for feedback patches, enter preset **1** or **2**, and click **Upload**. Use a Web MIDI-capable browser such as Chrome or Edge on HTTPS or localhost, and allow MIDI SysEx access when prompted. Upload replaces and activates the chosen preset; both slots are held in RAM and clear on power-off. The dialog reports transfer progress and device acknowledgement. **Check connection** queries status and package compatibility without replacing or selecting a preset. If a command times out, its error includes the failed stage, received MIDI/SysEx counts, last SysEx reply and port connection states; copy the error when reporting upload problems. Chrome 152 on macOS has a known SysEx framing bug; finish updating and fully relaunch Chrome to run version 153 or newer (refreshing the tab is insufficient). Resource counts measure memory capacity, not audio performance; check late buffers on the device. The editor and command-line exporter share the same FM-1 compiler and package encoder. See [FM-1 upload documentation](firmware/fm1/UPLOAD.md) for supported graphs, controls and the CLI workflow.
 
 FM-1 firmware **904** adds basic arithmetic/mixing, sine/triangle/saw/ramp/square oscillators with phase modulation/reset and pulse width, Noise, linear ADSR with trigger/delay/timed gate, and a resonant low-pass filter. New version-3 packages require the 904 firmware update; 904 continues to accept older packages. [FM-1 node support and units](firmware/fm1/README.md#inputs-and-differences-from-the-browser-engine) documents the fixed-point ranges, timing and differences from the browser engine. Example patches are in `firmware/fm1/patches/` (`subtractive.json`, `phase-fm.json`, `noise.json`).
 
@@ -355,6 +363,42 @@ Firmware **909** adds feedback-loop export and runtime support. Each feedback pa
 Firmware **910** adds package/export and runtime support for Delay, Follower, Map, pow, Quantise, Sample Hold, Tempo, Kink Osc and Custom Wave. The hardware implementations use bounded fixed-point resources: one delay line is limited to about 46 ms, Custom Wave does not yet emit `end trigger`, Tempo is internal-only without swing/MIDI-clock following, and several power/log-based shapes are approximations. See the [FM-1 support matrix](firmware/fm1/SUPPORT.md) for precise limits. Rebuild the editor bundle and refresh the page after installing 910.
 
 Firmware **912** changes the Params screen from a 0–100 range position to the parameter's actual patch-declared value, rounded to up to four decimal places. Build and install 912 to see this on the device; no editor rebuild is required.
+
+Firmware **913** aligns link value loads, averaging arithmetic, add/multiply stages
+and bend ratios with WASM's ±12,000 intermediate bounds, including link-strength
+modulation. Set → add → multiply → bend order is unchanged, as is knob
+interpolation. Build and install 913, then upload your patch again (firmware
+installation clears the RAM slots); no editor rebuild or patch-format migration is
+required. Fixed-point precision differences remain; hardware audio and timing
+have not been verified.
+
+Firmware **914** reduces neutral-operation cost: Pow with exponent 1 returns its
+input exactly, zero bend returns unity immediately, and multiplication by zero or
+one and division by ±1 or ±2 use exact fast paths. This addresses avoidable work
+found while investigating `test-fm-3` device late buffers; desktop comparisons do
+not prove that the FM-1 meets its audio deadline. Install 914, re-upload the patch,
+and check that **LATE BUFFERS** stops increasing during playback. No editor rebuild
+is required; knob interpolation and feedback-delay placement are unchanged.
+
+Firmware **915** separates constant/Params-only work from audio-rate processing.
+It prepares those calculations once at an audio-buffer boundary when values have
+changed, instead of repeating them for every sample. Oscillators, envelopes, MIDI
+triggers, audio-rate modulation and feedback retain their sample-rate ordering.
+Envelope ramps also avoid repeated division without changing their values. For
+the K3-modulated `test-fm-3`, 46 of 72 instructions move out of the per-sample loop.
+Host comparisons against 914 produced identical PCM for 23 patches, including live
+control changes. Install 915 and re-upload your patch; no editor rebuild or patch
+migration is needed. Hardware timing still needs checking with **MAX RENDER US**
+and **LATE BUFFERS**.
+
+FM-1 export also simplifies the fixed-point instruction stream before upload:
+immutable constants are folded, redundant bounded identities and duplicate pure
+calculations are removed, and unused pure calculations are discarded. Knobs stay
+live; intermediate clipping and stateful/feedback order are preserved. The bend
+feedback fixture falls from 72 to 30 instructions, with identical host-rendered
+PCM and state across 23 regression patches. This compiler update works with
+firmware 915: rebuild the editor, refresh it and re-upload the patch. Existing
+uploaded patches retain their original instructions until replaced.
 
 Run `npm run fm1:install` to build firmware if its source inputs or cached package changed, then install it on the connected FM-1 and verify its identity after reboot. This immediately installs firmware and clears RAM patches. Use `npm run fm1:install -- --build-only` to prepare the package without device access, `--force-build` to force rebuilding, or `--port 'Teia FM-1'` to select a MIDI port. The existing pinned build and MIDI environments are required; see [firmware installation](firmware/fm1/UPLOAD.md#build-and-install-firmware). The script does not rebuild or restart the editor.
 

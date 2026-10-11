@@ -19,7 +19,7 @@ const watched = [
   'editor/src/graph/types.ts', 'editor/src/graph/nodeTypes.ts',
   'editor/src/graph/subpatch.ts', 'editor/src/graph/spread.ts', 'editor/src/graph/expression.ts',
   'editor/src/audio/dspProgram.ts', 'editor/src/audio/dspOpcodes.ts',
-  'editor/src/audio/fm1Package.ts', 'editor/src/audio/fm1Upload.ts', 'editor/src/audio/fm1Support.ts', 'editor/src/audio/fm1Capabilities.ts',
+  'editor/src/audio/fm1Package.ts', 'editor/src/audio/fm1Optimizer.ts', 'editor/src/audio/fm1Upload.ts', 'editor/src/audio/fm1Support.ts', 'editor/src/audio/fm1Capabilities.ts',
   'editor/src/editor/Fm1SupportPage.tsx', 'editor/src/App.tsx', 'editor/src/styles.css',
   'firmware/fm1/runtime.h', 'firmware/fm1/app.c', 'firmware/fm1/upload.h',
   'firmware/fm1/export-patch.mjs',

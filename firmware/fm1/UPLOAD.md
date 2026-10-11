@@ -10,6 +10,21 @@ click **Upload**. Allow MIDI SysEx access when the browser asks. Chrome or Edge
 on HTTPS or localhost supports this workflow. The uploader finds the
 `Teia FM-1 spike` MIDI input/output pair; connect only one matching device.
 
+Use **FM-1_913** for the corrected WASM-compatible link arithmetic bounds. Older
+firmware accepts the same patch format but retains the previous arithmetic.
+After installing firmware, upload the patch again; no editor rebuild is needed.
+
+Firmware **914** additionally avoids costly neutral Pow/bend/arithmetic operations.
+For patches that distorted while LATE BUFFERS increased, install 914 and re-upload,
+then check the counter during playback. Host validation is not a hardware timing
+guarantee.
+
+Firmware **915** additionally prepares constant/knob-only expressions outside the
+sample loop and uses exact incremental envelope ramps. This includes K3 modulation
+of a link's weight. Install 915 and re-upload the existing patch; the editor and
+package format do not need changing. Check the device's render time and late-buffer
+counter after installation; desktop tests cannot establish device timing margin.
+
 Uploading replaces and activates the selected RAM slot. It does not install
 firmware or persist patches through power-off. Success appears only after the
 device acknowledges activation. If acknowledgement is lost at the final step,
@@ -89,8 +104,10 @@ as the first spike. Each version-3 package is 1,300 bytes; neither graph is link
 firmware application.
 
 Turn **PRESETS** left for slot 1 and right for slot 2 (encoder 6). The display
-shows the selected slot/name and each knob's actual value in its patch-declared
-units, rounded to up to four decimal places. Both examples bind Knobs 1/2/3 to
+shows the selected patch number and name on one line (for example, `1 Sine`), an
+empty line, then each control reference (`K1`–`K4`, `SEL`, or `ALG`), label and
+actual value in its patch-declared units, rounded to up to four decimal places.
+Both examples bind Knobs 1/2/3 to
 level/attack/release.
 Keyboard and channel 1 MIDI control the selected graph. Selecting an empty slot
 produces silence. Knob changes stay in that RAM slot when switching away and
@@ -126,10 +143,11 @@ stereo output. See [node support and units](README.md#inputs-and-differences-fro
 nodes/modes fail export. Limits: 256 operations, 256 registers, 128 values, 32 state
 entries (defined in `support.json`; `limits.json` is generated). This is not general Teia patch compatibility or a measured CPU budget.
 
-An FM-1 patch must contain a `MIDI Note` node; connect its `frequency`, `gate`,
-velocity, note or trigger outputs just as in the editor. The board feeds physical
-keys and USB/TRS MIDI channel 1 into that node. Its `channel` control must remain
-at `all` or `1` and cannot be linked on FM-1.
+An FM-1 patch may include a `MIDI Note` node to use the board's physical keys or
+USB/TRS MIDI channel 1. Connect its `frequency`, `gate`, velocity, note or trigger
+outputs just as in the editor. It is optional, so fixed-frequency and continuously
+gated drone patches can export without it. When present, its `channel` control must
+remain at `all` or `1` and cannot be linked on FM-1.
 
 One enabled Params node may expose zero to six outputs. There are no reserved
 parameter names or `fm1.controlsNode`/`fm1.knobs` metadata. Params outputs map in

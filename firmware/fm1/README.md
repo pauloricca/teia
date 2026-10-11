@@ -5,7 +5,7 @@ musical engines, sample bank, sequencer, arpeggiator, mixer or effects are linke
 Felucca supplies the hardware abstraction, boot/interrupt assembly, USB MIDI,
 TRS MIDI input, LCD transfers and firmware updater. Derived code is GPL-3.0-only.
 
-**Current source target: FM-1_912**, with two RAM patch slots, USB MIDI SysEx uploads and
+**Current source target: FM-1_915**, with two RAM patch slots, USB MIDI SysEx uploads and
 PRESETS selection. It boots silent with empty slots. See the
 [upload/install guide and protocol](UPLOAD.md) for complete commands and controls.
 The editor FM compiler shares the package encoder with the CLI; the Rust/WASM engine is unchanged.
@@ -31,9 +31,59 @@ source changes needing review and stale generated documentation.
 supported subset, and lowers it to portable binary instructions. The native
 firmware interprets those instructions. Graph wiring and parameter bindings are
 uploaded data. DSP primitives, hardware drivers and lookup tables are firmware.
-There is no embedded demo program in the current application image. Playback is
-provided by an explicit MIDI Note node. One enabled Params node may expose up to
-six outputs; their saved order is the hardware-control order.
+There is no embedded demo program in the current application image. A patch may
+use an explicit MIDI Note node for keyboard or MIDI-controlled playback, but it is
+not required: fixed-frequency or continuously gated drone patches are valid too.
+One enabled Params node may expose up to six outputs; their saved order is the
+hardware-control order.
+
+Firmware 913 matches the compiled WASM link arithmetic boundaries: value loads,
+divide-by-one copies, add/subtract/multiply/divide results and bend ratios are
+bounded to ±12,000. The shared compiler still evaluates weighted sources, averages
+set links (or uses the local base), then applies add, multiply and individual bend
+links. Each stage is bounded before the next, so intermediate clipping can affect
+averages and prevent opposing bends from cancelling. This also applies to generated
+link-strength Multiply stages. Internal DSP helpers keep their full Q16.16 working
+range; the patch format and opcode identities are unchanged. Fixed-point rounding,
+small-value underflow and unsmoothed knob updates remain differences from WASM.
+Install 913 and re-upload the patch to use the fix; an editor rebuild is unnecessary.
+The change is source reviewed; host execution and hardware audio/timing are unverified.
+
+Firmware 914 removes unnecessary work from neutral operations: Pow at exponent
+one is an exact identity instead of using fixed-point log2/exp2; bend at zero
+returns unity; multiplication by zero/unity and division by ±1/±2 use exact fast
+paths. The signed division paths preserve truncation toward zero. Other Pow
+exponents still use the existing approximation. This was motivated by increasing
+device late buffers with `test-fm-3`, not by a nonzero pitch bend at weight zero.
+The offline firmware render keeps its oscillator at 220 Hz with that zero-weight
+link. Host comparisons cannot measure the board's deadline: after installing 914
+and re-uploading the patch, check MAX RENDER US against the roughly 2.9 ms audio
+half-buffer interval and confirm LATE BUFFERS does not continue to grow. Knob
+interpolation and feedback-delay placement are unchanged.
+
+Firmware 915 builds two dependency-ordered instruction lists when loading a patch.
+Value loads and pure operations depending only on them are prepared after the
+hardware controls are copied at a half-buffer boundary. Their registers remain
+cached until the values change. Stateful nodes, audio-derived calculations, MIDI
+outputs (including one-sample triggers), and feedback reads/writes remain in their
+original per-sample order. Non-single-assignment packages conservatively keep all
+instructions in original order. The sample-compatible renderer also preserves
+legacy packages' per-sample level smoothing. No new instruction or package format
+is needed, so existing exported patches benefit from the firmware update.
+
+ADSR progression now advances an exact quotient/remainder ramp for an unchanged
+duration; time modulation, retriggers and elapsed-position changes refresh it.
+This avoids the repeated 16-step fractional divide and preserves the previous
+Q16.16 result. The runtime remains within the existing 16 KiB arena. Knob
+interpolation and feedback-delay placement are unchanged.
+
+The `feedback-bend.json` fixture captures the K3-modulated `test-fm-3` graph: 46 of
+72 instructions become control work, leaving 26 audio-rate instructions. Host
+ASan/UBSan comparisons of this graph and 22 existing examples passed with exact
+samples, registers and DSP state across control changes and MIDI triggers. Stereo
+PCM was also bit-identical to a separately compiled 914 renderer for all 23 patches.
+These results verify the optimisation's tested numerical behavior, not device CPU
+margin. Install 915, re-upload the patch and check that late buffers stop increasing.
 
 The original two fixtures compile to a small MIDI-driven oscillator/envelope graph.
 Sine connects a sine oscillator through an envelope to output; Octave sine
@@ -55,8 +105,10 @@ operations, 66 registers, 27 values and 1,856 bytes.
 | Both OCT buttons held for 5 s | Mute, detach USB and request ROM recovery; still unverified |
 
 PRESETS uses encoder 6; Knobs 1–4 use encoders 2/3/4/5, SELECT uses encoder 0,
-and ALGORITHM uses encoder 1. The display shows slot/name, parameter labels and
-their actual declared-unit values (up to four decimal places), maximum render time,
+and ALGORITHM uses encoder 1. The display's first line is the selected patch number
+and name (for example, `1 Sine`), followed by an empty line. Each parameter line
+starts with its physical control reference (`K1`–`K4`, `SEL`, or `ALG`), then its
+label and actual declared-unit value (up to four decimal places), followed by maximum render time,
 late-buffer count and MIDI-overflow count. Calibration storage is not implemented.
 
 Keys held through startup are ignored until all physical keys are released.
@@ -118,7 +170,7 @@ and channel routing are not implemented.
 | Tempo | Internal BPM division pulses and frequency outputs. MIDI clock source selection and swing are not implemented |
 | Quantise | Fixed-point nearest-scale frequency quantiser for all editor scales and roots; log/power approximation differs from browser precision |
 | Map | Live source/target ranges with saturating Q16.16 arithmetic; an equal source range uses one unit instead of the browser epsilon |
-| pow | Integer powers plus successive-square-root fractional powers. Negative bases require an integral exponent; results saturate |
+| pow | Sign-preserving power: `sign(signal) × abs(signal)^exponent`; fractional exponents retain bipolar audio. Fixed-point `log2` plus interpolated `2^x` bounds work per sample; results saturate |
 | Delay | One delay node per patch, with time/feedback/mix. The fixed 2,048-sample line limits time to about 46 ms at 44.1 kHz and has integer-sample taps |
 | Follower | Rectification with live, linear Q16.16 attack/release smoothing; zero time is immediate |
 
@@ -172,7 +224,23 @@ cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined \
   -I .cache/fm1-spike/naked/build/gen firmware/fm1/test-nodes.c \
   -lm -o .cache/fm1-spike/test-nodes
 .cache/fm1-spike/test-nodes
+
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined \
+  -I .cache/fm1-spike/naked/build/gen firmware/fm1/test-links.c \
+  -lm -o .cache/fm1-spike/test-links
+.cache/fm1-spike/test-links
+
+cc -std=c11 -O2 -Wall -Wextra -Werror -Wno-unused-function \
+  -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I .cache/fm1-spike/naked/build/gen firmware/fm1/test-schedule.c \
+  -o .cache/fm1-spike/test-schedule
+.cache/fm1-spike/test-schedule .cache/fm1-spike/naked/patches/*/patch.tgp
 ```
+
+`test-links.c` covers signed set-average clipping, weighted mixed link modes,
+link-strength stages, order-dependent opposing bends, bend-ratio clipping and
+value/arithmetic bounds, including the divide-by-one optimization. Compile without
+executing it when only static validation is authorized.
 
 `test-nodes.c` covers arithmetic saturation, waveform landmarks, phase/reset,
 noise bounds, ADSR/timed gates, MIDI trigger-versus-gate separation, low-pass response/impulse bounds and invalid
@@ -313,3 +381,24 @@ trigger` and reduced sustain progression, Tempo is internal-only without swing,
 and Kink/pow/Quantise use fixed-point approximations. Build/install 910 and
 rebuild/refresh the editor before exporting these patches. Source reviewed;
 cross-build, hardware audio and timing remain unverified.
+
+### Compiler instruction simplification
+
+The exporter optimizes the lowered Q16.16 stream with exact integer arithmetic,
+retaining rounding and every necessary +/-12000 clipping boundary. Immutable
+values can be folded; physical controls remain mutable even when their defaults
+match. Duplicate pure calculations and unused pure work are removed. Stateful
+operations and feedback reads/writes retain their order, state slots, and register
+numbering; wave assets and control value indices are unchanged. Register and value
+pools are not compacted. No firmware version or protocol change is required:
+rebuild/refresh the editor and re-upload to firmware 915 to use this compiler change.
+
+Run `node scripts/test-fm1-optimizer.mjs` for the offline native differential test
+(requires a host C compiler and explicit permission for runtime tests). It compiles
+the exporter with and without optimization, then compares 700 blocks of PCM, DSP
+state, feedback and delay contents for each of 23 regression fixtures, changing
+controls and MIDI events. It also checks arithmetic clipping/rounding and mutable
+control guards. The bend feedback fixture shrinks from 72 to 30 instructions and
+2035 to 1027 package bytes. This measures stream size and equivalence, not device
+render time. The broader historical `fm1-910-nodes` fixture is not part of this
+suite: its unoptimized package already fails the current native decoder.

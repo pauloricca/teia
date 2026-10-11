@@ -13,6 +13,32 @@ static void arithmetic(void)
     assert(teia_div(INT32_MIN,-TEIA_Q)==INT32_MAX);
     assert(teia_div(TEIA_Q,0)==0);
     assert(teia_fraction(1,2,16)==32768);
+    /* Neutral link paths, including the signed extremes and odd negative
+     * numerators whose averages must truncate toward zero, not floor. */
+    assert(teia_mul(INT32_MIN,0)==0);
+    assert(teia_mul(INT32_MIN,TEIA_Q)==INT32_MIN);
+    assert(teia_mul(TEIA_Q,INT32_MAX)==INT32_MAX);
+    assert(teia_div(-3,2*TEIA_Q)==-1);
+    assert(teia_div(3,-2*TEIA_Q)==-1);
+    assert(teia_div(INT32_MIN,2*TEIA_Q)==INT32_MIN/2);
+    assert(teia_div(INT32_MIN,TEIA_Q)==INT32_MIN);
+}
+static void power(void)
+{
+    const int32_t identity_inputs[]={INT32_MIN,-10000*TEIA_Q,-TEIA_Q,-1,0,1,TEIA_Q/3,TEIA_Q,INT32_MAX};
+    for(unsigned i=0;i<sizeof identity_inputs/sizeof *identity_inputs;i++)
+        assert(teia_pow_q(identity_inputs[i],TEIA_Q)==identity_inputs[i]);
+    /* Pow follows the browser's sign-preserving semantics at fractional
+     * exponents, so bipolar audio stays bipolar instead of half-wave clipping. */
+    assert(teia_pow_q(TEIA_Q/4,TEIA_Q/2)>TEIA_Q/2-2);
+    assert(teia_pow_q(TEIA_Q/4,TEIA_Q/2)<TEIA_Q/2+2);
+    assert(teia_pow_q(-TEIA_Q/4,TEIA_Q/2)<-TEIA_Q/2+2);
+    assert(teia_pow_q(-TEIA_Q/4,TEIA_Q/2)>-TEIA_Q/2-2);
+    assert(teia_pow_q(-TEIA_Q/4,TEIA_Q/4)<-46300);
+    assert(teia_pow_q(-TEIA_Q/4,TEIA_Q/4)>-46400);
+    assert(teia_pow_q(-TEIA_Q/4,-TEIA_Q/2)<-2*TEIA_Q+8);
+    assert(teia_pow_q(-TEIA_Q/4,-TEIA_Q/2)>-2*TEIA_Q-8);
+    assert(fabs((double)teia_pow_q(-TEIA_Q/4,99*TEIA_Q/100)+pow(0.25,0.99)*TEIA_Q)<32);
 }
 static void bend(void)
 {
@@ -65,6 +91,21 @@ static void oscillators(void)
 }
 static void envelope(void)
 {
+    const uint32_t durations[]={0,1,2,45,441,22050,60*TEIA_FS};
+    teia_state_t progress={0};
+    for(unsigned d=0;d<sizeof durations/sizeof *durations;d++) {
+        for(unsigned i=0;i<30000;i++) {
+            progress.elapsed=i;
+            assert(teia_progress_cached(&progress,durations[d])==teia_progress(i,durations[d]));
+        }
+        /* Endpoints, repeated elapsed values, backwards jumps, and a changed
+         * duration must never reuse an inapplicable incremental result. */
+        const uint32_t jumps[]={durations[d],1,0,7,7,6,1000};
+        for(unsigned j=0;j<sizeof jumps/sizeof *jumps;j++) {
+            progress.elapsed=jumps[j];
+            assert(teia_progress_cached(&progress,durations[d])==teia_progress(jumps[j],durations[d]));
+        }
+    }
     teia_state_t s={0}; int32_t v[]={TEIA_Q,0,0,TEIA_Q/2,0,0,0,0};
     teia_op_t o={.a=0,.b=1,.c=2,.d=3,.e=4,.f=5,.g=6,.h=7};
     for(int i=0;i<45;i++) teia_adsr(&s,&o,v);
@@ -241,7 +282,7 @@ static void validation(void)
         p.values[0]=INT32_MIN;
         p.ops[1]=(teia_op_t){.code=code,.out=1,.a=0,.b=0,.state=0};
         assert(teia_load(&r,&p)); teia_sample(&r,&l,&rr);
-        if(code==32) assert(r.regs[1]==INT32_MAX);
+        if(code==32) assert(r.regs[1]==TEIA_DSP_LIMIT); /* Value load bounds INT32_MIN like WASM. */
         p.ops[1].a=2; assert(!teia_validate(&p)); p.ops[1].a=0;
         if(code>=33 && code<=36) { p.ops[1].b=2; assert(!teia_validate(&p)); p.ops[1].b=0; }
         if(code==37) { p.ops[1].state=TEIA_MAX_STATES; assert(!teia_validate(&p)); }
@@ -261,6 +302,6 @@ static void validation(void)
 }
 int main(void)
 {
-    arithmetic(); bend(); oscillators(); envelope(); midi_trigger_is_not_gate(); filters(); shaping(); controls(); validation();
-    puts("PASS: arithmetic bounds, waveforms, modulation/reset, noise, ADSR, low/high/band/all-pass response, shaping/DC, controls, validation");
+    arithmetic(); power(); bend(); oscillators(); envelope(); midi_trigger_is_not_gate(); filters(); shaping(); controls(); validation();
+    puts("PASS: arithmetic/power bounds, waveforms, modulation/reset, noise, ADSR, low/high/band/all-pass response, shaping/DC, controls, validation");
 }

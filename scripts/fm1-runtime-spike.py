@@ -48,7 +48,7 @@ def main():
     pin.require(old in usb, "Upstream USB identity changed")
     usb_path.write_text(usb.replace(old, descriptor("STR2", "Teia FM-1 spike")))
     subprocess.run(["node", str(ROOT / "firmware/fm1/export-patch.mjs"), str(stage / "build/gen")], check=True)
-    for name in ("sine", "octave", "tremolo", "subtractive", "phase-fm", "noise", "arithmetic", "highpass", "bandpass", "allpass", "crossover", "hardclip", "saturate", "wavefold", "fold", "abs", "remove-dc", "clamp", "accumulator", "random", "expression-functions", "bend"):
+    for name in ("sine", "octave", "tremolo", "subtractive", "phase-fm", "noise", "arithmetic", "highpass", "bandpass", "allpass", "crossover", "hardclip", "saturate", "wavefold", "fold", "abs", "remove-dc", "clamp", "accumulator", "random", "expression-functions", "bend", "feedback-bend"):
         subprocess.run(["node", str(ROOT / "firmware/fm1/export-patch.mjs"), str(stage / "patches" / name), str(ROOT / "firmware/fm1/patches" / (name + ".json"))], check=True)
     # Tiny fixed-cell font: no full Felucca graphics buffers or screens.
     from PIL import Image, ImageDraw, ImageFont, __version__ as pillow
@@ -66,7 +66,7 @@ def main():
     build = module("felucca_builder", pin.SOURCE / "tools/build.py")
     build.SRC = stage; build.FW = stage / "firmware"; build.OUT = stage / "build"
     build.GEN = stage / "build/gen"; build.LDR = stage / "build/loader"
-    build.DOCKER_IMAGE = pin.IMAGE; build.PRODUCT = "FM-1_912"
+    build.DOCKER_IMAGE = pin.IMAGE; build.PRODUCT = "FM-1_915"
     # Preprocessor identity comes from the shell, not build_app's default flag.
     for rel, expected in build.SDK_SHA256.items():
         pin.require(pin.sha(pin.SDK / "cpu/wl82/tools" / rel) == expected, "SDK file checksum mismatch")
@@ -80,7 +80,7 @@ def main():
         if re.search(r"\s" + re.escape(name) + r"$", syms, re.M): errors.append(f"Unexpected Felucca musical component: {name}")
     for note in notes: print("ok:", note)
     pin.require(not errors, "\n".join(errors))
-    package = build.fm1pkg_make.ufw(build.fm1pkg_make.flash_image(img, build.fm1pkg_make.KEY), ota, "FM-1_912")
+    package = build.fm1pkg_make.ufw(build.fm1pkg_make.flash_image(img, build.fm1pkg_make.KEY), ota, "FM-1_915")
     out = build.OUT
     (out / "teia-fm1-spike.fwsc").write_bytes(package)
     (out / "symbols.txt").write_text(syms)

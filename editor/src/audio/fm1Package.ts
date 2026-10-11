@@ -1,4 +1,5 @@
 import { compilePatchToDspProgram, type DspProgram, type DspOp } from './dspProgram';
+import { optimizeFm1Ops } from './fm1Optimizer';
 import type { Patch } from '../graph/types';
 import { fm1Capabilities, fm1Limits as limits, fm1FilterModes, fm1DistortionModes, fm1FunctionArity, inspectFm1Package } from './fm1Capabilities';
 import { getFm1SupportErrors } from './fm1Support';
@@ -24,14 +25,11 @@ export function analyzeFm1Patch(patch: Fm1Patch): Fm1Analysis {
     const eligibilityErrors = getFm1SupportErrors(fm1Patch);
     if (eligibilityErrors.length) return { usage, errors: eligibilityErrors, compiled: null };
     const program = compilePatchToDspProgram(fm1Patch, { deduplicateLoads: false, foldConstants: false, eliminateDeadPureOps: false, analyzeSchedule: false });
-    usage = { operations: program.ops.length, registers: program.registerCount, values: program.values.length, states: program.stateCount, bytes: 116 + program.ops.length * limits.operationBytes + program.values.length * 4 };
+    usage = { operations: program.ops.length, registers: program.registerCount, values: program.values.length, states: program.stateCount, bytes: 187 + program.ops.length * limits.operationBytes + program.values.length * 4 };
     if (program.errors.length) return { usage, errors: program.errors, compiled: null };
-    try {
-      return { usage, errors: [], compiled: lowerFm1Patch(fm1Patch, program) };
-    } finally {
-      usage.values = program.values.length;
-      usage.bytes = 116 + program.ops.length * limits.operationBytes + program.values.length * 4;
-    }
+    const compiled = lowerFm1Patch(fm1Patch, program);
+    usage = { operations: compiled.ops.length, registers: program.registerCount, values: program.values.length, states: program.stateCount, bytes: compiled.bytes.length };
+    return { usage, errors: [], compiled };
   } catch (error) {
     return { usage, errors: [error instanceof Error ? error.message : String(error)], compiled: null };
   }
@@ -67,9 +65,6 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
   const controlsId = controlsNode?.id;
   const controlOutputs = controlsNode?.outputs ?? [];
   if (controlOutputs.length > 6) throw new Error('FM-1 supports at most six Params outputs: Knob 1, Knob 2, Knob 3, Knob 4, Select, Algorithm.');
-  if (patch.nodes.every(node => node.enabled === false || node.type !== 'MidiNote')) {
-    throw new Error('FM-1 patches must use a MIDI Note node for keyboard and MIDI input.');
-  }
   for (const node of patch.nodes.filter(node => node.enabled !== false && node.type === 'MidiNote')) {
     if ((node.params.channel ?? 0) !== 0 && (node.params.channel ?? 0) !== 1) {
       throw new Error(`MIDI Note ${node.id}: FM-1 supports only channel 1 or all channels.`);
@@ -83,7 +78,7 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
   }
   const literalValues = new Set(program.valueBindings.filter(b => b.kind === 'constant').map(b => b.valueIndex));
   const literalRegisters = new Map<number, number>();
-  const ops: number[][] = [];
+  let ops: number[][] = [];
   let fm1DelayCount = 0;
   // The browser's Tempo opcode has no state because its transport is global.
   // FM-1 patches are self-contained, so reserve one state entry per output.
@@ -193,6 +188,10 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
       default: throw new Error(`Unsupported opcode ${o.opcode}`);
     }
   }
+  const fixedValues = program.values.map(q16);
+  const mutableValues = new Set(program.valueBindings.filter(b => b.nodeId === controlsId && controlsId !== undefined).map(b => b.valueIndex));
+  ops = optimizeFm1Ops(ops, fixedValues, mutableValues, limits.values);
+  for (let i = program.values.length; i < fixedValues.length; i++) program.values.push(fixedValues[i] / 65536);
   for (const [label, used, maximum] of [
     ['operations', ops.length, limits.operations], ['registers', program.registerCount, limits.registers],
     ['values', program.values.length, limits.values], ['state entries', fm1StateCount, limits.states],

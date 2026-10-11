@@ -1,0 +1,230 @@
+{
+  "name": "Feedback bend",
+  "nodes": [
+    {
+      "id": "audio_out",
+      "type": "AudioOut",
+      "params": {
+        "level": 0.8
+      }
+    },
+    {
+      "id": "button_1",
+      "type": "Button",
+      "params": {
+        "clicks": 352,
+        "midiCc": 1,
+        "midiChannel": 0,
+        "mode": 1,
+        "pressed": 0
+      },
+      "enabled": false
+    },
+    {
+      "id": "envelope_1",
+      "type": "Envelope",
+      "params": {
+        "attack": 0.01,
+        "decay": 0,
+        "delay": 0,
+        "gateLength": 0,
+        "release": 0.24,
+        "sustain": 1
+      }
+    },
+    {
+      "id": "params_1",
+      "type": "Params",
+      "params": {
+        "feedback": 0,
+        "freq": 220,
+        "release": 0.5,
+        "saturation": 1
+      },
+      "outputs": [
+        {
+          "name": "release",
+          "defaultValue": 0.5,
+          "min": 0,
+          "max": 2
+        },
+        {
+          "name": "saturation",
+          "defaultValue": 1,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "name": "feedback",
+          "defaultValue": 0,
+          "min": 0,
+          "max": 1
+        },
+        {
+          "name": "freq",
+          "defaultValue": 220,
+          "min": 0,
+          "max": 400
+        }
+      ]
+    },
+    {
+      "id": "pow_1",
+      "type": "Pow",
+      "params": {
+        "exponent": 1
+      }
+    },
+    {
+      "id": "sine_1",
+      "type": "SineOsc",
+      "params": {
+        "frequency": 220
+      }
+    },
+    {
+      "id": "squareosc_1",
+      "type": "SquareOsc",
+      "params": {
+        "frequency": 1,
+        "phase": 0,
+        "phaseReset": 0,
+        "pulse width": 0.5,
+        "rangeMax": 1,
+        "rangeMin": -1
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": {
+        "node": "envelope_1",
+        "port": "signal"
+      },
+      "to": {
+        "node": "audio_out",
+        "port": "both"
+      },
+      "weight": 1,
+      "mode": "set"
+    },
+    {
+      "from": {
+        "node": "pow_1",
+        "port": "signal"
+      },
+      "to": {
+        "node": "audio_out",
+        "port": "both"
+      },
+      "weight": 1,
+      "mode": "set"
+    },
+    {
+      "from": {
+        "node": "params_1",
+        "port": "release"
+      },
+      "to": {
+        "node": "envelope_1",
+        "port": "release"
+      },
+      "weight": 1,
+      "mode": "set"
+    },
+    {
+      "from": {
+        "node": "sine_1",
+        "port": "signal"
+      },
+      "to": {
+        "node": "envelope_1",
+        "port": "signal"
+      },
+      "weight": 1,
+      "mode": "set"
+    },
+    {
+      "from": {
+        "node": "button_1",
+        "port": "signal"
+      },
+      "to": {
+        "node": "envelope_1",
+        "port": "trigger"
+      },
+      "weight": 1,
+      "mode": "set"
+    },
+    {
+      "from": {
+        "node": "squareosc_1",
+        "port": "signal"
+      },
+      "to": {
+        "node": "envelope_1",
+        "port": "trigger"
+      },
+      "weight": 1,
+      "mode": "set"
+    },
+    {
+      "from": {
+        "node": "params_1",
+        "port": "saturation"
+      },
+      "to": {
+        "node": "pow_1",
+        "port": "exponent"
+      },
+      "weight": 1,
+      "mode": "set"
+    },
+    {
+      "from": {
+        "node": "envelope_1",
+        "port": "signal"
+      },
+      "to": {
+        "node": "pow_1",
+        "port": "signal"
+      },
+      "weight": 1,
+      "mode": "set"
+    },
+    {
+      "from": {
+        "node": "params_1",
+        "port": "freq"
+      },
+      "to": {
+        "node": "sine_1",
+        "port": "frequency"
+      },
+      "weight": 1,
+      "mode": "set"
+    },
+    {
+      "from": {
+        "node": "pow_1",
+        "port": "signal"
+      },
+      "to": {
+        "node": "sine_1",
+        "port": "frequency"
+      },
+      "weight": 0,
+      "mode": "bend",
+      "weightModulations": [
+        {
+          "from": {
+            "node": "params_1",
+            "port": "feedback"
+          },
+          "weight": 1,
+          "mode": "set"
+        }
+      ]
+    }
+  ]
+}

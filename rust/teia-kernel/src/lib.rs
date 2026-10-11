@@ -3020,6 +3020,7 @@ fn valid_hot_dsp_op(
             valid_dsp_register(out)
                 && frequency_is_valid
                 && oscillator_inputs_are_valid
+                && (a != 4 || valid_dsp_register_value(value))
                 && (a != 12 || valid_dsp_register_value(value))
                 && state_is_valid
                 && range_is_valid
@@ -9752,7 +9753,7 @@ fn render_dsp_phase_oscillator_output(
                     0.0
                 }
             }
-            4 => dsp_oscillator(op.a, render_phase, op.value),
+            4 => dsp_oscillator(op.a, render_phase, node_reg(node_context, op.value as i32)),
             12 => dsp_kink_oscillator(
                 render_phase,
                 node_reg(node_context, op.value as i32),
@@ -9956,7 +9957,12 @@ fn render_dsp_op<const REPEAT: bool>(
                 let index = op.state as usize;
                 let phase_state = dsp_state_ptr(index);
                 let phase = *phase_state;
-                let output = map_dsp_oscillator_range(op, dsp_oscillator(op.a, phase, op.value), node_context);
+                let pulse_width = if op.a == 4 {
+                    dsp_reg_unchecked(op.value as i32)
+                } else {
+                    0.5
+                };
+                let output = map_dsp_oscillator_range(op, dsp_oscillator(op.a, phase, pulse_width), node_context);
                 set_dsp_reg_unchecked(op.out, output);
                 *phase_state = normalize_phase(phase + frequency / sample_rate.max(1.0));
                 return;
@@ -10637,10 +10643,11 @@ fn block_op_inputs(op: DspOp) -> Option<([i32; 8], usize)> {
             Some((inputs, cache.count as usize))
         },
         DSP_OP_OSC if (0..=4).contains(&op.a) && op.d < 0 && op.e < 0 && op.state >= 0 => {
+            let pulse_width = if op.a == 4 { op.value.round() as i32 } else { -1 };
             if op.value4 >= 0.5 {
-                Some(([op.b, op.value2.round() as i32, op.value3.round() as i32, -1, -1, -1, -1, -1], 3))
+                Some(([op.b, op.value2.round() as i32, op.value3.round() as i32, pulse_width, -1, -1, -1, -1], if pulse_width >= 0 { 4 } else { 3 }))
             } else {
-                Some(([op.b, -1, -1, -1, -1, -1, -1, -1], 1))
+                Some(([op.b, pulse_width, -1, -1, -1, -1, -1, -1], if pulse_width >= 0 { 2 } else { 1 }))
             }
         }
         DSP_OP_OSC if op.a == 12 && op.state >= 0 && valid_dsp_register_value(op.value) => {
@@ -11161,7 +11168,12 @@ unsafe fn render_dsp_block(plan: &mut DspBlockPlan, frames: usize, sample_rate: 
                         let frequency = block_register(plan, op.b, frame).max(0.0);
                         let state = dsp_state_ptr(op.state as usize);
                         let phase = *state;
-                        let output = dsp_oscillator(op.a, phase, op.value);
+                        let pulse_width = if op.a == 4 {
+                            block_register(plan, op.value.round() as i32, frame)
+                        } else {
+                            0.5
+                        };
+                        let output = dsp_oscillator(op.a, phase, pulse_width);
                         let output = if op.value4 >= 0.5 {
                             let min = block_register(plan, op.value2.round() as i32, frame);
                             let max = block_register(plan, op.value3.round() as i32, frame);

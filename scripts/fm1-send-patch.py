@@ -48,7 +48,9 @@ def validate_package(data, support):
         raise RuntimeError("Invalid package length or resource counts")
     instructions = {op["code"]: op for op in support["protocol"]["instructions"]}
     functions = {fn["id"] for fn in support["compiler"]["functions"]}
-    required = 902
+    required = fmt.get("since", 902)
+    delay = support["compiler"]["delay"]
+    delays = 0
     for i in range(count):
         offset = fmt["headerBytes"] + i * fmt["operationBytes"]
         code = struct.unpack_from("<h", data, offset)[0]
@@ -56,6 +58,12 @@ def validate_package(data, support):
         if op is None or version < op["minimumPackageVersion"]:
             raise RuntimeError(f"Unsupported instruction {code} at operation {i}")
         required = max(required, op["since"])
+        if code in (delay["instruction"], delay["legacyInstruction"]):
+            delays += 1
+            if delays > delay["maxNodes"]:
+                raise RuntimeError(f"FM-1 supports at most {delay['maxNodes']} Delay nodes per patch")
+            if delays > 1:
+                required = max(required, delay["since"])
         if code == 25:
             waveform = struct.unpack_from("<h", data, offset + 18)[0]
             if waveform not in support["compiler"]["oscillatorModes"] or waveform == 6:

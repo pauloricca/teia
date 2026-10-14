@@ -5,10 +5,48 @@ musical engines, sample bank, sequencer, arpeggiator, mixer or effects are linke
 Felucca supplies the hardware abstraction, boot/interrupt assembly, USB MIDI,
 TRS MIDI input, LCD transfers and firmware updater. Derived code is GPL-3.0-only.
 
-**Current source target: FM-1_915**, with two RAM patch slots, USB MIDI SysEx uploads and
+**Current source target: FM-1_921**, with two RAM patch slots, USB MIDI SysEx uploads and
 PRESETS selection. It boots silent with empty slots. See the
 [upload/install guide and protocol](UPLOAD.md) for complete commands and controls.
 The editor FM compiler shares the package encoder with the CLI; the Rust/WASM engine is unchanged.
+
+## Two smoothed delays (917)
+
+`Delay` keeps `signal`, `time`, `feedback`, `mix` → `signal`. Two independent
+44,101-sample lines (one second plus interpolation guard each) consume 176,404
+bytes. The runtime uses a size-checked POOL allocation instead of the former
+16 KiB arena. The existing 360 KiB POOL also holds patch banks and staging;
+linker checks retain their headroom guard. No heap or external RAM is required.
+The 917 cross-build uses 182,652 bytes for the runtime and 226,140 of
+368,640 bytes for the whole pool (142,500 bytes free), with 12,048 bytes of
+ordinary RAM data/BSS. See the [static build report](../../docs/spikes/fm1-results/delay-917.json);
+these figures do not establish audio timing or sound quality.
+
+Storage is signed 16-bit with 12 fractional bits: −8 to 7.999755859375,
+rounded to nearest with ties away from zero and saturated before conversion.
+This keeps the previous headroom at reduced wet-signal precision; dry audio
+remains Q16.16. Both lines run at 44.1 kHz. A fractional read linearly
+interpolates adjacent samples. The target time is clamped to 0–1 second and
+smoothed every audio sample by a one-pole approach with coefficient 1/256
+(about 5.8 ms time constant, about 27 ms for 99% of a step). Initialization
+applies the first target directly. Subsequent time changes bend pitch and fast
+modulation is attenuated by smoothing; this is not a pitch-preserving crossfade.
+
+Zero time settles into exact dry bypass. During transitions below one sample,
+the tap interpolates current input and previous history, and feedback fades
+with delay length to avoid an abrupt write change at zero. Feedback remains
+0–2, mix 0–1. History validity resets on patch load, so stale tails cannot leak
+and the audio interrupt does not have to clear 172 KiB when switching patches.
+
+New exports use instruction 53 (917+); legacy 44 remains accepted and uses the
+new behavior on 917. The compiler, both upload preflights and device validation
+enforce the contract's two-node ceiling. The browser still uses floating-point
+storage, a 1.5-second maximum and immediate time changes; see the structured
+Delay drift in `support.json`. `test-delay.c` covers independence, capacity,
+interpolation, zero transitions, saturation, reload and validation; its
+assertions are supplied for an explicitly authorized functional test, not a
+claim of verification. Install the rebuilt firmware and ordinarily refresh the
+rebuilt editor before exercising two delays and modulating their time inputs.
 
 ## Feature tracking
 
@@ -34,8 +72,11 @@ uploaded data. DSP primitives, hardware drivers and lookup tables are firmware.
 There is no embedded demo program in the current application image. A patch may
 use an explicit MIDI Note node for keyboard or MIDI-controlled playback, but it is
 not required: fixed-frequency or continuously gated drone patches are valid too.
-One enabled Params node may expose up to six outputs; their saved order is the
-hardware-control order.
+One enabled Params node may expose outputs within the shared 128-value patch budget.
+K1–K4 always edit the first four. Select browses the extras (stopping at either end),
+and Algorithm edits the single visible extra. Browsing preserves values; each RAM
+slot retains its selection while it remains in range. Five rows have aligned outlined
+bars showing `(value - min) / (max - min)`. New exports require firmware 916.
 
 Firmware 913 matches the compiled WASM link arithmetic boundaries: value loads,
 divide-by-one copies, add/subtract/multiply/divide results and bend ratios are
@@ -74,7 +115,7 @@ is needed, so existing exported patches benefit from the firmware update.
 ADSR progression now advances an exact quotient/remainder ramp for an unchanged
 duration; time modulation, retriggers and elapsed-position changes refresh it.
 This avoids the repeated 16-step fractional divide and preserves the previous
-Q16.16 result. The runtime remains within the existing 16 KiB arena. Knob
+Q16.16 result. At introduction in 915, the runtime remained within the 16 KiB arena. Knob
 interpolation and feedback-delay placement are unchanged.
 
 The `feedback-bend.json` fixture captures the K3-modulated `test-fm-3` graph: 46 of
@@ -97,7 +138,7 @@ operations, 66 registers, 27 values and 1,856 bytes.
 | Control | Action |
 | --- | --- |
 | PRESETS | Left: slot 1; right: slot 2, including empty slots |
-| Knobs 1–4, SELECT, ALGORITHM | Ordered Params outputs 1–6. Each output supplies its display label, default and range; the firmware uses one percent of that range as an encoder step. |
+| Knobs 1–4, SELECT, ALGORITHM | Knobs 1–4 edit outputs 1–4; SELECT browses extras and ALGORITHM edits the visible extra. Each output supplies its display label, default and range; the firmware uses one percent of that range as an encoder step. |
 | Physical note keys | One voice, highest held note wins; F3–G5 at the centred octave using upstream matrix mapping |
 | OCT− / OCT+ | Transpose physical keys down/up one octave per press, limited to −3…+3; press both to centre. The lit button steadily points back to centre; neither is lit at zero. MIDI is unchanged. |
 | USB or TRS MIDI, channel 1 | Note on/off; velocity zero is note off; CC 120/123 clears that source's held notes |
@@ -107,7 +148,7 @@ operations, 66 registers, 27 values and 1,856 bytes.
 PRESETS uses encoder 6; Knobs 1–4 use encoders 2/3/4/5, SELECT uses encoder 0,
 and ALGORITHM uses encoder 1. The display's first line is the selected patch number
 and name (for example, `1 Sine`), followed by an empty line. Each parameter line
-starts with its physical control reference (`K1`–`K4`, `SEL`, or `ALG`), then its
+starts with its physical control reference (`K1`–`K4` for fixed controls; no prefix for the extra parameter), then its
 label and actual declared-unit value (up to four decimal places), followed by maximum render time,
 late-buffer count and MIDI-overflow count. Calibration storage is not implemented.
 
@@ -137,8 +178,8 @@ and channel routing are not implemented.
 - Maximum 256 operations, 256 registers, 128 values and 32 state entries per patch.
   These remain configurable storage limits, not a measured audio CPU budget.
   Version 3 uses 24-byte instructions (maximum package 6,772 bytes); firmware 907
-  also decodes older 12-byte version-1/2 instructions. The runtime still fits its
-  reserved 16 KiB arena; patch banks and staging storage are additional.
+  also decodes older 12-byte version-1/2 instructions. The runtime, including two 16-bit delay lines, is allocated in POOL and
+  statically capped at 192 KiB; patch banks and staging storage are additional.
 
 ### Inputs and differences from the browser engine
 
@@ -171,13 +212,13 @@ and channel routing are not implemented.
 | Quantise | Fixed-point nearest-scale frequency quantiser for all editor scales and roots; log/power approximation differs from browser precision |
 | Map | Live source/target ranges with saturating Q16.16 arithmetic; an equal source range uses one unit instead of the browser epsilon |
 | pow | Sign-preserving power: `sign(signal) × abs(signal)^exponent`; fractional exponents retain bipolar audio. Fixed-point `log2` plus interpolated `2^x` bounds work per sample; results saturate |
-| Delay | One delay node per patch, with time/feedback/mix. The fixed 2,048-sample line limits time to about 46 ms at 44.1 kHz and has integer-sample taps |
+| Delay | Since 917: two independent mono nodes, 0–1 second each. Signed 16-bit samples with 12 fractional bits and ±8 headroom; linear fractional reads and 256-sample time smoothing. Live feedback 0–2, mix 0–1. Time modulation bends pitch; returning to zero is smoothed. New exports require 917 |
 | Follower | Rectification with live, linear Q16.16 attack/release smoothing; zero time is immediate |
 
 Crossover accepts `signal` and `frequency 1` … `frequency 8` (according to points),
 and outputs `band 1` … `band 9`. Its 12/24/36/48 dB/octave slope cascades
-Butterworth low/high-pass sections with the same cutoff limits. The compiler reserves
-four state entries per section, so the 32-entry budget limits the number of bands
+Butterworth low/high-pass sections with the same cutoff limits. Since 921 the compiler packs each firmware DSP section into one state record,
+so the 32-entry budget limits the number of bands
 and slope, especially alongside oscillators/envelopes. Recombined bands are not
 guaranteed phase-aligned or flat. All new filters require firmware 905 (opcodes
 29–31); 904 rejects these instructions without replacing a preset.
@@ -188,14 +229,14 @@ browser biquad with fixed-point coefficients and a narrower resonance range;
 large/resonant signals saturate. Audio-rate cutoff/Q changes cost considerably
 more than static settings. Legacy version-1/2 AR instructions retain the original
 2-second, edge-captured timing. New ADSR stages use live durations quantised to
-samples. Envelope `end trigger` remains unsupported. This backend is not
+samples. Since 921, Envelope `end trigger` emits one sample when release reaches idle. This backend is not
 bit-identical to the Rust kernel; see the support matrix for each node's limits.
 
 Examples: `patches/subtractive.json` (saw/low-pass/ADSR), `patches/phase-fm.json`
 (two sines, quarter-cycle modulation depth), and `patches/noise.json` (noise
 percussion), plus `patches/arithmetic.json` (triangle/square/ramp mixed by an Expression). Load them with **LD**, then use **FM** after updating to firmware 904.
 Every example must contain MIDI Note for performance input. Params outputs are
-optional, named per patch and map in their saved order to the six hardware encoders.
+optional and named per patch. The first four use K1–K4; further outputs use Select to browse and Algorithm to edit.
 
 - Nominal 44.1 kHz; the inherited I2S divider is documented upstream as roughly
   44,117.6 Hz. Pitch and timing still require measurement. DMA halves contain
@@ -216,6 +257,19 @@ cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined \
   -lm -o .cache/fm1-spike/test-runtime
 .cache/fm1-spike/test-runtime
 ```
+
+Delay regression assertions can be compiled without executing them:
+
+```sh
+cc -std=c11 -Wall -Wextra -Werror -Wno-unused-function \
+  -I .cache/fm1-spike/naked/build/gen -fsyntax-only firmware/fm1/test-delay.c
+```
+
+For an authorized offline functional check, replace `-fsyntax-only` with
+`-fsanitize=address,undefined -o .cache/fm1-spike/test-delay`, then run
+`.cache/fm1-spike/test-delay`. On hardware, listen to independently routed
+delays at 0.5 and 1 second, turn time controls and connect an oscillator to
+`time`, check the smooth return to zero, and switch patches to check tail reset.
 
 Additional offline checks (only run when functional testing is intended):
 
@@ -402,3 +456,35 @@ control guards. The bend feedback fixture shrinks from 72 to 30 instructions and
 2035 to 1027 package bytes. This measures stream size and equivalence, not device
 render time. The broader historical `fm1-910-nodes` fixture is not part of this
 suite: its unoptimized package already fails the current native decoder.
+
+FM-1_918 adds the editor live-edit probe and indexed value update protocol described in [UPLOAD.md](UPLOAD.md#live-values-fm-1_918). Value batches apply between buffers without fading or resetting DSP state. This source revision has not yet been hardware verified.
+
+FM-1 920 parameter display: K1–K4 keep their prefixes; the extra parameter has
+no ALG prefix. Each name, value and aligned 46-pixel outlined bar share one
+row. Names are cropped to leave room for the complete value. Parameter rows redraw only when their label, value or range changes, with
+text and bar composed before transfer to avoid blank-bar flashing.
+Params names may contain spaces, punctuation and Unicode and have no FM-1 source
+length limit. Full names remain in the editor patch; the device preview is cropped
+to 31 UTF-8 bytes at a character boundary and to available screen columns.
+Latin-1 characters render directly; other Unicode glyphs display as `?`.
+Package v6 uses 128 records of 45 bytes (index, 32-byte zero-padded UTF-8 label,
+three i32 range/step fields), a 5,797-byte header and a 12,453-byte maximum package.
+Firmware 919 still reads versions 1–5. Install the new firmware, refresh the
+rebuilt editor and re-export/upload to use longer names. Hardware display behavior
+has not been verified by automated testing.
+
+
+## FM-1 921: MIDI events and repeated voices
+
+- Envelope `end trigger` now pulses for one sample when release completes. It stays zero while idle and does not fire on retrigger. The existing trigger-only gate-length timing difference remains documented in the support register.
+- MIDI Note On: `channel` → `note`, `frequency`, `velocity`. MIDI Note Off: `channel` → `note`, `frequency`. Channel 0 accepts all, 1–16 filter USB/TRS input; physical keys produce channel-1 events. Events arrive at audio-block boundaries and are serialized with a zero sample after each. Velocity-zero Note On becomes Note Off. Physical releases retain the pitch captured when pressed, even after octave changes. MIDI note 0 remains indistinguishable from an idle note tag.
+- Spawn: `trigger`, `release trigger`, internal `kill trigger` → internal `instance gate`. Rising triggers allocate clean, independent state; matching release tags lower every matching instance gate; each instance's rising kill trigger removes it after rendering that sample. A held trigger does not create extra voices. New triggers are dropped at capacity.
+- Spread: `count` → internal one-based `item index`. Count is latched once per audio block and clamped to the exported capacity. Removed items lose their state. Boundary links sum or multiply per-instance values.
+
+The compiler reserves at most eight instances per container and at most eight containers, lowering the common capacity to fit the shared 32-record state pool. Each oscillator, filter section, envelope, sample hold and feedback history owns independent records per instance. Firmware state records are packed from the browser's scalar state layout; deterministic noise/random seeds may consequently differ from earlier builds. Delay and Tempo are rejected inside templates; keep them outside. Nested runtime containers remain unsupported. Rendering uses stable pool-slot order. Reloading a package resets all instances.
+
+The MIDI queue holds 256 events. Overflow discards queued events, increments the runtime rejection counter and releases existing Spawn gates to avoid stuck held voices. Normal release tails can still finish and kill their instances. USB disconnect and CC 120/123 enqueue note-offs for tracked notes.
+
+Instructions 54–63 implement completion, MIDI events, repeat brackets, collectors, instance gate and block latch. Older firmware rejects these instructions before activating a patch. Package layouts are unchanged. `patches/midi-spawn.json` demonstrates note-tag release, instance-local pitch/velocity sample holds and envelope completion → kill. `patches/spread-harmonics.json` demonstrates one-based harmonic indexing. `test-events-repeat.c` contains host regression assertions; it has only been statically compiled in this task, not executed.
+
+Rebuild with `.cache/fm1-spike/python/bin/python scripts/fm1-runtime-spike.py`, then install the resulting `FM-1_921` image through the existing firmware installation workflow and re-export/upload the desired patch. No flash, restart or audio verification is implied by the static build. For bench validation, play/release chords, hold/retrigger notes, exercise channel filtering, wait for envelope tails, and reduce/increase Spread count. Check the device's late-buffer counter under the intended voice load.

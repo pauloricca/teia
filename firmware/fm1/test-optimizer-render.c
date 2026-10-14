@@ -24,5 +24,7 @@ int main(int argc,char **argv) {
         fwrite(r.state,sizeof r.state,1,stdout);
         fwrite(r.feedback,sizeof r.feedback,1,stdout);
         fwrite(r.delay,sizeof r.delay,1,stdout);
+        fwrite(r.delay_state,sizeof r.delay_state,1,stdout);
+        fwrite(r.delay_slot,sizeof r.delay_slot,1,stdout);
     }
 }

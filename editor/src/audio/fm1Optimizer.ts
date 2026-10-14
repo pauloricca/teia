@@ -1,4 +1,4 @@
-import { fm1FunctionArity } from './fm1Capabilities';
+import { fm1Delay, fm1FunctionArity } from './fm1Capabilities';
 
 const Q = 65536;
 const BOUND = 12000 * Q;
@@ -8,7 +8,7 @@ const hasOutput = (op: number[]) => op[0] !== 5 && op[0] !== 43;
 // These are register operands, not value indices, state slots or mode literals.
 function inputs(op: number[]): number[] {
   switch (op[0]) {
-    case 0: case 42: return [];
+    case 0: case 42: case 54: return [];
     case 1: case 3: case 5: case 24: case 32: case 37: case 41: case 43: return [2];
     case 2: case 21: case 22: case 23: case 28: case 33: case 34: case 35: case 36: case 47: case 50: return [2, 3];
     case 19: case 20: case 27: case 29: case 30: case 31: case 45: case 48: return [2, 3, 4];
@@ -17,10 +17,10 @@ function inputs(op: number[]): number[] {
     case 38: return [2, ...(fm1FunctionArity(op[6])! >= 2 ? [3] : []), ...(fm1FunctionArity(op[6]) === 3 ? [4] : [])];
     case 39: case 46: return [2, 3, 4, 6, 7];
     case 40: return [2, 3, ...(op[4] >= 0 ? [4] : [])];
-    case 44: return [2, 3, 4, 6];
+    case fm1Delay.legacyInstruction: case fm1Delay.instruction: return [2, 3, 4, 6];
     case 49: return [2, 4];
     case 51: return [2, 3, 4, 6, 7, 8];
-    case 52: return [3];
+    case 52: case 55: return [3];
     default: throw new Error(`Missing FM-1 optimizer operand description: ${op[0]}`);
   }
 }

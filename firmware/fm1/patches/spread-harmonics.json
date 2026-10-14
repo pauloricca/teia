@@ -1,0 +1,52 @@
+{
+  "name": "Spread harmonics",
+  "nodes": [
+    {
+      "id": "items",
+      "type": "Spread",
+      "params": {
+        "count": 4
+      },
+      "spreadNodeIds": [
+        "osc"
+      ]
+    },
+    {
+      "id": "osc",
+      "type": "SineOsc",
+      "params": {
+        "frequency": 110
+      }
+    },
+    {
+      "id": "out",
+      "type": "AudioOut",
+      "params": {
+        "level": 0.1
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": {
+        "node": "items",
+        "port": "item index"
+      },
+      "to": {
+        "node": "osc",
+        "port": "frequency"
+      },
+      "weight": 110
+    },
+    {
+      "from": {
+        "node": "osc",
+        "port": "signal"
+      },
+      "to": {
+        "node": "out",
+        "port": "both"
+      }
+    }
+  ]
+}

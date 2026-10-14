@@ -3,6 +3,6 @@
   "registers": 256,
   "values": 128,
   "states": 32,
-  "packageVersion": 4,
+  "packageVersion": 6,
   "operationBytes": 24
 }

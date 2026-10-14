@@ -105,7 +105,7 @@ firmware application.
 
 Turn **PRESETS** left for slot 1 and right for slot 2 (encoder 6). The display
 shows the selected patch number and name on one line (for example, `1 Sine`), an
-empty line, then each control reference (`K1`–`K4`, `SEL`, or `ALG`), label and
+empty line, then each control reference (`K1`–`K4` or `ALG`), label and
 actual value in its patch-declared units, rounded to up to four decimal places.
 Both examples bind Knobs 1/2/3 to
 level/attack/release.
@@ -149,12 +149,13 @@ outputs just as in the editor. It is optional, so fixed-frequency and continuous
 gated drone patches can export without it. When present, its `channel` control must
 remain at `all` or `1` and cannot be linked on FM-1.
 
-One enabled Params node may expose zero to six outputs. There are no reserved
+One enabled Params node may expose outputs within the shared 128-value patch budget. There are no reserved
 parameter names or `fm1.controlsNode`/`fm1.knobs` metadata. Params outputs map in
-their saved order to **Knob 1**, **Knob 2**, **Knob 3**, **Knob 4**, **Select** and
-**Algorithm**. The output name is shown on the screen, its default becomes the
-uploaded value, and its min/max become the encoder range. Labels use lowercase
-English words separated by spaces (maximum 11 characters). Firmware steps each
+their saved order to **Knob 1**–**Knob 4** for the first four. **Select** browses
+extras, stopping at either end; **Algorithm** edits the single visible extra.
+Browsing preserves values. Aligned outlined bars display each visible value
+as a proportion of its min/max range. The output name is shown on the screen, its default becomes the
+uploaded value, and its min/max become the encoder range. Labels accept spaces, punctuation and Unicode; see the firmware 919 display and UTF-8 rules below. Firmware steps each
 encoder by one percent of the declared range. Patch names are 1–23 printable
 ASCII characters. Values are delivered at the start of each audio buffer;
 envelope durations are captured at gate edges.
@@ -185,14 +186,15 @@ slot bitmask, then `F7`. Status codes: 0 success, 1 bad command/length, 2 missin
 or out-of-order transfer, 3 CRC mismatch, 4 invalid graph, 5 switch busy.
 Commit/select replies are sent only after the audio thread has applied them.
 A lost acknowledgment is ambiguous: use `--status` before retrying an upload.
-The sender does not blindly repeat a commit. A new begin replaces an incomplete
+The sender does not blindly repeat a commit. The browser waits 10 ms after a matched reply before sending the next request, allowing existing firmware to release its receive mailbox. It retries a timed-out status, package-capability or live-edit-capability probe once with a fresh token; device errors are not retried. After a patch-data timeout, the browser queries status: the chunk’s end offset confirms acceptance, its start offset permits one resend, and any other offset stops the upload. A second data timeout stops the upload. Begin, commit, selection and value updates are never automatically retried. This uses the existing status offset and ordered-data protocol; no firmware update is needed. Hardware verification of recovery remains pending. A new begin replaces an incomplete
 transfer; a 10-second idle timeout or USB reset cancels it.
 
-Package `TGP1`, version u16=4: counts (operations/registers/values, three u16),
-24-byte zero-padded name, a u8 Params-control count and six reserved control records
-(value index u8, zero-padded label[12], min/max/step i32), followed by operations
-(twelve i16 each) and values (i32 each). The version-4 header is 187 bytes;
-maximum total size is 6,843 bytes. No native C structures are sent over USB.
+Package `TGP1`, version u16=6: counts (operations/registers/values, three u16),
+24-byte zero-padded name, a u8 Params-control count and 128 reserved control records
+(value index u8, zero-padded UTF-8 label[32], min/max/step i32), followed by operations
+(twelve i16 each) and values (i32 each). The version-6 header is 5,797 bytes;
+maximum total size is 12,453 bytes. Firmware 919 reads versions 1–6; version 4
+retains its 187-byte header and six records. Version 5 retains its 3,237-byte header. Older firmware rejects v6 packages. No native C structures are sent over USB.
 
 Version 4 adds ordered Params controls and the MIDI Note instruction. Version 3 adds native arithmetic, oscillators/phase/PWM, noise, ADSR and low-pass
 instructions. Each record has fields `code,out,a,b,c,state,d,e,f,g,h,i`, all i16.
@@ -223,7 +225,8 @@ stateful instructions must use distinct state slots. Operand layouts:
 | 41 | Bend scaling (908+) | a: exponent register; out: Q16.16 ratio `2^a`, rounded and saturated; no state |
 | 42 | Feedback read (909+) | out: previous Q16.16 value; state: shared feedback history slot |
 | 43 | Feedback write (909+) | a: completed Q16.16 value; state: matching feedback history slot |
-| 44 | Delay (910+) | a: signal, b: time, c: feedback, d: mix; one shared 2,048-sample line and unique state |
+| 44 | Legacy Delay (910+) | a: signal, b: time, c: feedback, d: mix; unique state. Before 917: one 2,048-sample line. On 917: upgraded to the smoothed delay behavior below |
+| 53 | Smoothed Delay (917+) | Same operands as 44; up to two independent one-second 16-bit lines, fractional interpolation and 256-sample time smoothing. Both delay instructions count toward the shared two-node ceiling |
 | 45 | Follower (910+) | a: signal, b: attack, c: release; unique state |
 | 46 | Map (910+) | a: signal, b/c: source minimum/maximum, d/e: target minimum/maximum |
 | 47 | Power (910+) | a: signal, b: exponent |
@@ -353,3 +356,24 @@ firmware. A successful connection check is not full feature negotiation; the dev
 can still reject a graph at commit. The CLI reports the package's minimum firmware
 from the instruction registry. No firmware protocol or DSP changes are made by
 updating the tracking system itself.
+
+## Live values (FM-1_918)
+
+Command 7 with an empty body probes live-edit support using the ordinary status reply. Command 6 carries a zero-based preset byte, the original uploaded package CRC32 (little endian), a count byte (1–18), and count records of one value-index byte plus a signed little-endian Q16.16 int32. The preset must be active, its original CRC must match, and the package must be version 4 or later. All indices and exposed-control ranges are validated before publication. The audio ISR applies the batch at a buffer boundary and the normal acknowledgement follows application. DSP state and fade gain are preserved. More than 18 changes use successive acknowledged batches; the entire edit is not atomic across batches. Replacing a patch changes its identity; editing values retains it. Old firmware rejects the probe, so the editor requires an update before starting a live upload. Neither command writes flash. Source implementation only; hardware verification remains pending.
+
+FM-1 920 parameter display: K1–K4 keep their prefixes; the extra parameter has
+no ALG prefix. Each name, value and aligned 46-pixel outlined bar share one
+row. Names are cropped to leave room for the complete value. Parameter rows redraw only when their label, value or range changes, with
+text and bar composed before transfer to avoid blank-bar flashing.
+Params names may contain spaces, punctuation and Unicode and have no FM-1 source
+length limit. Full names remain in the editor patch; the device preview is cropped
+to 31 UTF-8 bytes at a character boundary and to available screen columns.
+Latin-1 characters render directly; other Unicode glyphs display as `?`.
+Package v6 uses 128 records of 45 bytes (index, 32-byte zero-padded UTF-8 label,
+three i32 range/step fields), a 5,797-byte header and a 12,453-byte maximum package.
+Firmware 919 still reads versions 1–5. Install the new firmware, refresh the
+rebuilt editor and re-export/upload to use longer names. Hardware display behavior
+has not been verified by automated testing.
+
+
+FM-1 921 adds instructions 54–63 for Envelope completion, MIDI Note On/Off and bounded Spread/Spawn templates. Existing package formats are retained; uploaders derive the required firmware from the support contract, and older firmware rejects unknown instructions at commit. Re-export patches after installing 921. The new MIDI Spawn and Spread harmonics examples live in `firmware/fm1/patches/`; consult the firmware README for voice capacity and bench checks.

@@ -48,7 +48,8 @@ for (const name of fixtures) {
   const a = before(patch), b = after(patch);
   const render = (p, name) => {
     const file = join(work,name+'.tgp'); writeFileSync(file,p.bytes);
-    return execFileSync(join(work,'render'),[file],{maxBuffer:32*1024*1024});
+    // 700 snapshots now include two one-second 16-bit delay lines (~123 MB).
+    return execFileSync(join(work,'render'),[file],{maxBuffer:192*1024*1024});
   };
   assert.deepEqual(render(a,'a'),render(b,'b'),name+' PCM/state mismatch');
   console.log(`${name}: ${a.ops.length} -> ${b.ops.length} instructions; identical PCM, DSP state, feedback and delay`);

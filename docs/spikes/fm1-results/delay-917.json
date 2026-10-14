@@ -1,0 +1,97 @@
+{
+  "status": "cross-compiled and statically checked; no host DSP execution or hardware test",
+  "upstream_commit": "129a4cf4e98e6ef06a4a89e97b65092247d69412",
+  "sdk_commit": "d179b4484759423312073f5fbb232501aa491047",
+  "compiler_sha256": "c45189ee624de0430deb0db02e6dce171fb5538e7fe323e3964dc8ac6236240f",
+  "image": "debian@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587",
+  "checks": [
+    ".ram_text: 916 insns, no calls",
+    "image 43204 B; RAM .data+.bss 12048 B of 73728; pool 226140 B of 368640"
+  ],
+  "forbidden_symbols_absent": [
+    "dly_buf",
+    "sl_buf",
+    "eng_mem",
+    "SMP_DATA",
+    "mix_block",
+    "seq_tick",
+    "ENGINES",
+    "demo_program"
+  ],
+  "sources": {
+    "firmware/fm1/.DS_Store": "0faccd38c1ea082c8b9612d34f702ab6f0ce97559e10114c71b50b038f8abe54",
+    "firmware/fm1/LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "firmware/fm1/README.md": "43c39b4dd48f1d482bc0e8945ed8ad16df1d25d37bfe796eb105989803b5e56e",
+    "firmware/fm1/SUPPORT.md": "2344aac507f10ca380554fd66503bf54f44c07bf466759696cc41992c6edf4a2",
+    "firmware/fm1/UPLOAD.md": "6ea3e8c63efca10f0d81f6d280bb5714a5b6e5d1b048e8b4a3ab9e3c9e93c3fa",
+    "firmware/fm1/app.c": "94df2d557ddafaed8afe48316abe071304654149fff1c2b9099882d9bd3a0393",
+    "firmware/fm1/export-patch.mjs": "353bef764a79b6400b7ad9346dbf9e05819b4d24b7341498831962327ddb7ba8",
+    "firmware/fm1/fixtures/sine-v1.tgp": "70af4252ff7b317af3977a6975fb848c90afebbc2a8fb92ca76cfbcd707a496a",
+    "firmware/fm1/limits.json": "042b6493b7f97cb48fb7c928726541822068d64b8cb0d35e05ae714446ad89be",
+    "firmware/fm1/patches/abs.json": "52520668a7d81a16f97af5413eb2f0fdbdcff9b2cc3f27f5df70965bc2155ec3",
+    "firmware/fm1/patches/accumulator.json": "49c0ed31ce0f09d8874b943a76456ec4ffc367a454eeb5fb79e73bc2ef3cd1c8",
+    "firmware/fm1/patches/allpass.json": "5cb108ef73f5a9cadf657e629acf307fb535b1f220d4a7d626873dfcda4db7e3",
+    "firmware/fm1/patches/arithmetic.json": "c608f2cc3078a226db2b64640145675548d75ddf203432f6902cbe05cd0ef5dc",
+    "firmware/fm1/patches/bandpass.json": "921c479b1f94a999410c223219a5f6e17418055361ba55b6a59bd0384ab00908",
+    "firmware/fm1/patches/bend.json": "1d4f5b0166a7ad30365d410fbd4b64d65d64970b8a59a3b3676e5b395f72bd77",
+    "firmware/fm1/patches/clamp.json": "98bfb9236d284ca0270c3a8a979b13042c87585c64ed540b9d6f9973a3bff8eb",
+    "firmware/fm1/patches/crossover.json": "132e915e6ca0fd2d2061f02821b5d006fd1f3b179e1d56581c0dd8115abd211b",
+    "firmware/fm1/patches/expression-functions.json": "3a8473c8e6b9c55eddd8900974a50a9580368d942aaee9be18259cfa03d84ffa",
+    "firmware/fm1/patches/feedback-bend.json": "57bd4cc856a8d2e8c76e150af5045621ad4e9a70f5c90df5275bce3b1a6c3512",
+    "firmware/fm1/patches/fm1-910-nodes.json": "811e28f16132891c935bb5369b09ff1820e4af870d5574b68422600127506f6e",
+    "firmware/fm1/patches/fold.json": "67a4aed4d49a4ace631d31fcee8ca2c3c663a6824a4b2b706be6c7e6b2d54c0d",
+    "firmware/fm1/patches/hardclip.json": "f6ce8c133b25834a7b423ff09825e556a154dbf605737d6dab8d415adf11db94",
+    "firmware/fm1/patches/highpass.json": "78f34d3ceadd86e8911e2f5fa2cd390c84cbd876c6bbb739e2f1b54da994eeea",
+    "firmware/fm1/patches/noise.json": "53014bfcc1f43a378a5017a2456727b48e1fd613401d9d06365e9190b0e03746",
+    "firmware/fm1/patches/octave.json": "3f7aa175cb14fd77056211ae101825b471c726e5bc680ae0064821b760fd779c",
+    "firmware/fm1/patches/phase-fm.json": "93380412c64e92d32a0181d71b455348b09376520b2e1481eb7958128b2e653b",
+    "firmware/fm1/patches/random.json": "73279f1b5f7f8d19d76046b7a035e669a6dfaa5f8834c1e8a2e1985daacd5a78",
+    "firmware/fm1/patches/remove-dc.json": "a705f63d02c44628e0b486a115529a307a331e0161dc46a9d019713bfcae5ec9",
+    "firmware/fm1/patches/saturate.json": "8aa279945add63aea21e10660404d4fb3b5e990ba9e54de41620f9fbf16043e7",
+    "firmware/fm1/patches/sine.json": "3de480715c82b5491904f211fed9bbf8169bb08076b2d9c7d150adaa4e00275f",
+    "firmware/fm1/patches/subtractive.json": "05b785e0673240af8ee69c5237291d3188ccc1a7ffb6e501fa4dd54524951eee",
+    "firmware/fm1/patches/test.json": "28882b98bd389f4494c8d7a2d7b5bf9f30b5a446b109d6c5afc5a2369cfd9cf4",
+    "firmware/fm1/patches/tremolo.json": "1a074fa160350186088b4a5f9998937b7b7e5ebd6e4539ebd4e38ffd84148ead",
+    "firmware/fm1/patches/wavefold.json": "13dedaa42ea0a49d02d68d246bdddb1dfbd78aa2320058911f95b2f1891aabd1",
+    "firmware/fm1/runtime.h": "0b7ed10591f2e2b767f4ec53975d5771fb17d006386c2aa23911748467b79cb3",
+    "firmware/fm1/support.json": "28610bca8e579de24fe6b705603b6615fbbe75ab6b85caf9e957b19536d572e9",
+    "firmware/fm1/support.schema.json": "839e5835d46b255028f55c9886758934c7dc09ddde79ad056b66a35983a545a0",
+    "firmware/fm1/test-delay.c": "c42f07e37152439f2dffc3648ec023a3343e03695ad8c820ce1195fd41d00ea1",
+    "firmware/fm1/test-links.c": "7a8ceadb7ab0be0c1ba600b03697a381790b9f4df595c859a1a3c8fc454253cd",
+    "firmware/fm1/test-nodes.c": "12f09f307ef8f0d43312ced3e1a66743e4201104502a9932967f76bdca20630e",
+    "firmware/fm1/test-optimizer-render.c": "a6cabd9dca800393793914e9556fc80a317183b8f828bc6059c2ede4f0ad0ca2",
+    "firmware/fm1/test-ranges.c": "efc37e8cbc81ca969468c80540d4b3cbd463ae0c787c2bb71583bab91ccd9610",
+    "firmware/fm1/test-runtime.c": "67819f96a55d37ea9fae83a4ad0d4de75bafdd7212a50b6448902bac4d2e9b68",
+    "firmware/fm1/test-schedule.c": "9db20d2974113529a075d7641060a79703a8518d8e2229362f736ba5f014f6b6",
+    "firmware/fm1/test-upload.c": "346db0f3c6e1f982b36a00f6958ddbc5b919a1696499b7224bfbd9c68892e95a",
+    "firmware/fm1/upload.h": "43559a397cf608b431aca11aa1bfd28e5bb8d2492e05dfeebd1a9b1683fdeb59"
+  },
+  "artifacts": {
+    "felucca.bin": {
+      "bytes": 43204,
+      "sha256": "e4e87cb59aa65e62909b2c0cf3877ef857b1c91ce4f26e52757485c37fe924d9"
+    },
+    "felucca.elf": {
+      "bytes": 51908,
+      "sha256": "e8f34569e0f585115c6795403463ab0fe139d1a53297d013dc940ddc59bd81b9"
+    },
+    "teia-fm1-spike.fwsc": {
+      "bytes": 610078,
+      "sha256": "28dfdd5a006872581e411594eb9a747eaf5901af9a43184337f673cb550341f7"
+    },
+    "loader/ota.bin": {
+      "bytes": 6922,
+      "sha256": "1b54f9f293a616fcd485a90218da64601d6df682a76da402de66ccd42c450e96"
+    },
+    "gen/program.json": {
+      "bytes": 9609,
+      "sha256": "8db8ca939e0b924f5aa035fdfb2b80b760a3020e94dfc9c7ca87b2dd520a0213"
+    },
+    "gen/patch.h": {
+      "bytes": 22526,
+      "sha256": "e56908783244120658b69000c638136ff30fc4c72c6fdcaacdfd6a8c8f98f13b"
+    }
+  },
+  "firmware": "FM-1_917",
+  "scope": "Two one-second 16-bit delays, fractional interpolation and time smoothing. Pinned linker/MMIO/ROM-call checks passed; runtime arena is 182652 bytes and pool total 226140 of 368640 bytes. Static checks do not establish audio quality or real-time performance."
+}

@@ -56,6 +56,7 @@ export function getFm1SupportErrors(patch: Patch): string[] {
     .filter(warning => warning.status === 'unsupported' || warning.status === 'unknown')
     .map(warning => `${warning.nodes.join('; ')}: ${warning.status === 'unknown' ? 'FM-1 support needs review' : 'not supported on FM-1'}. ${warning.notes}`);
   const features = new Map(support.features.filter(feature => feature.category === 'node').map(feature => [feature.id, feature]));
+  let delays = 0;
   const visit = (current: Patch, parent: string) => {
     const enabled = new Map(current.nodes.filter(node => node.enabled !== false).map(node => [node.id, node]));
     const checkOutput = (endpoint: { node: string; port: string }) => {
@@ -83,9 +84,18 @@ export function getFm1SupportErrors(patch: Patch): string[] {
       if (link.weightModulations) checkModulations(link.weightModulations);
     }
     for (const node of enabled.values()) {
+      if (node.type === 'Delay' && ++delays > support.compiler.delay.maxNodes) {
+        errors.push(`FM-1 supports at most ${support.compiler.delay.maxNodes} Delay nodes per patch, including group contents.`);
+      }
       if (node.type === 'Group' && node.subpatch) visit(node.subpatch, `${parent}${node.id} → `);
     }
   };
   visit(patch, '');
   return [...new Set(errors)];
+}
+
+/** Node availability for FM1 mode; partial implementations retain compiler restrictions. */
+export function isFm1NodeImplemented(type: string): boolean {
+  const feature = support.features.find(feature => feature.category === 'node' && feature.id === type);
+  return feature?.status === 'supported' || feature?.status === 'partial';
 }

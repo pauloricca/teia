@@ -25,6 +25,8 @@ import {
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent, type FocusEvent as ReactFocusEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { DSP_OP, compilePatchToDspProgram, type DspProgram } from '../audio/dspProgram';
+import { Fm1ModeContext } from './Fm1ModeContext';
+import { useFm1LiveEdit } from '../audio/useFm1LiveEdit';
 import { Fm1UploadDialog } from './Fm1UploadDialog';
 import { createPatchPackage } from '../audio/patchPackage';
 import {
@@ -434,6 +436,12 @@ function NodeEditorInner() {
   const [pendingBoundaryPort, setPendingBoundaryPort] = useState<BoundaryPortSelection | null>(null);
   const [selectedBoundaryPort, setSelectedBoundaryPort] = useState<BoundaryPortSelection | null>(null);
   const [newPatchConfirmationOpen, setNewPatchConfirmationOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const fm1BusyRef = useRef(false);
+  const [fm1Mode, setFm1Mode] = useState(() => initialState?.ui?.fm1Mode === true);
+  const [fm1Live, setFm1Live] = useState(false);
+  const [fm1Preset, setFm1Preset] = useState(1);
   const [fm1Patch, setFm1Patch] = useState<Patch | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [saveFeedbackActive, setSaveFeedbackActive] = useState(false);
@@ -589,12 +597,13 @@ function NodeEditorInner() {
   }, [editingAreaId]);
 
   const toggleAudioPlayback = useCallback(() => {
+    if (fm1Mode) { setFm1Live(current => current ? false : !fm1BusyRef.current); return; }
     if (audioPlaybackActive) {
       audio.stop();
       return;
     }
     void audio.start();
-  }, [audioPlaybackActive, audio.start, audio.stop]);
+  }, [fm1Mode, audioPlaybackActive, audio.start, audio.stop]);
 
   const toggleAudioRecording = useCallback(() => {
     if (audioRecordingActive) {
@@ -1662,7 +1671,7 @@ function NodeEditorInner() {
     const ports = side === 'input'
       ? relatedNode.data.patchNode.inputs ?? []
       : relatedNode.data.patchNode.outputs ?? [];
-    const nextPort = uniqueBoundaryPortName(requestedPort, port, ports.map((entry) => entry.name));
+    const nextPort = uniqueBoundaryPortName(requestedPort, port, ports.map((entry) => entry.name), relatedNode.data.patchNode.type === 'Params');
     if (!nextPort || nextPort === port) return;
 
     commitHistory(`port-name:${nodeId}:${side}:${port}`);
@@ -3116,6 +3125,8 @@ function NodeEditorInner() {
       } }
       : {}),
   }), [areas, editingStack, materializedGraph, midiClockOutputEnabled, rootPatchName, selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds]);
+  const fm1LiveState = useFm1LiveEdit(patch, fm1Mode && fm1Live, fm1Preset, () => setFm1Live(false));
+  fm1BusyRef.current = fm1LiveState.busy;
   const trimmedRootPatchName = rootPatchName.trim();
   const selectedLocalPatch = localPatchLibrary?.patches.find((entry) => entry.name === localPatchLibrary.selectedPatchName) ?? null;
   const selectedSample = sampleLibrary?.samples.find((sample) => sample.url === sampleLibrary.selectedUrl) ?? null;
@@ -3135,6 +3146,7 @@ function NodeEditorInner() {
     const state = flowToEditorState(materializedGraph.nodes, materializedGraph.edges, {
       patchName: rootPatchName,
       viewport: viewportRef.current,
+      fm1Mode,
       ...(selectedMidiInputDeviceIds.length > 0 || selectedMidiOutputDeviceIds.length > 0 || midiClockOutputEnabled
         ? { midiInput: {
           selectedDeviceIds: selectedMidiInputDeviceIds,
@@ -3146,7 +3158,7 @@ function NodeEditorInner() {
     state.areas = areas;
     state.buffers = referencedBufferAssets;
     return JSON.stringify(state);
-  }, [areas, materializedGraph, midiClockOutputEnabled, referencedBufferAssets, rootPatchName, selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds]);
+  }, [areas, fm1Mode, materializedGraph, midiClockOutputEnabled, referencedBufferAssets, rootPatchName, selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds]);
   persistedEditorStateJsonRef.current = persistedEditorStateJson;
   const dspDiagnostics = useMemo(
     () => classifyDspErrors(audioGraph.errors, dspPatch),
@@ -5743,6 +5755,7 @@ function NodeEditorInner() {
             addNodeAt(event);
           }}
         >
+          <Fm1ModeContext.Provider value={fm1Mode}>
           <ReactFlow
             nodes={displayNodes}
             edges={displayEdges}
@@ -6006,6 +6019,7 @@ function NodeEditorInner() {
               </div>
             </Controls>
           </ReactFlow>
+          </Fm1ModeContext.Provider>
           {resumedSelectionBounds ? (
             <div
               className="editor-selection-marquee"
@@ -6015,6 +6029,7 @@ function NodeEditorInner() {
           ) : null}
           <div ref={setEdgeOverlayElement} className="edge-overlay-layer" />
           <div className="viewport-buttons">
+            {fm1Mode && fm1LiveState.message && <span className="fm1-live-status" role="status">{fm1LiveState.message}</span>}
             <input
               className="patch-name-input"
               value={patchName}
@@ -6027,6 +6042,16 @@ function NodeEditorInner() {
             {isEditingSubpatch ? (
               <button className="viewport-button viewport-button-history" type="button" onClick={exitSubpatch} aria-label="Exit subpatch" title="Exit subpatch">EXIT</button>
             ) : null}
+            {fm1Mode ? <>
+              <button className="viewport-button" type="button" role="switch" aria-checked={fm1Live}
+                disabled={!fm1Live && fm1LiveState.busy} onClick={() => setFm1Live(value => !value)} title={fm1LiveState.message}>LIVE EDIT</button>
+              <button className="viewport-button" type="button" disabled={fm1Live || fm1LiveState.busy}
+                onClick={() => setFm1Patch(patch)} aria-label="Send patch to FM-1" title="FM-1 limits and upload">SEND TO FM1</button>
+              <select className="viewport-button" aria-label="FM1 live preset" value={fm1Preset} disabled={fm1Live || fm1LiveState.busy}
+                onChange={event => setFm1Preset(Number(event.target.value))}>
+                <option value={1}>PRESET 1</option><option value={2}>PRESET 2</option>
+              </select>
+            </> : <>
             <button
               className="viewport-button"
               type="button"
@@ -6049,6 +6074,7 @@ function NodeEditorInner() {
             >
               {recordingButtonLabel}
             </button>
+            </>}
             <button className="viewport-button" type="button" onClick={newPatch} aria-label="New patch" title="New patch">NEW</button>
             <button
               className={['viewport-button', saveFeedbackActive ? 'viewport-button-save-confirmed' : ''].filter(Boolean).join(' ')}
@@ -6063,12 +6089,30 @@ function NodeEditorInner() {
             <button className="viewport-button" type="button" onClick={requestPatchLoad} aria-label="Load patch" title="Load patch">LOAD</button>
             <button className="viewport-button viewport-button-history" type="button" onClick={undo} disabled={history.past.length === 0} aria-label="Undo" title="Undo">UNDO</button>
             <button className="viewport-button viewport-button-history" type="button" onClick={redo} disabled={history.future.length === 0} aria-label="Redo" title="Redo">REDO</button>
-            <div className="viewport-more">
-              <button className="viewport-button viewport-more-trigger" type="button" aria-haspopup="menu" aria-label="More actions" title="More actions">MORE ˆ</button>
-              <div className="viewport-more-menu" role="menu" aria-label="More actions">
+            <div className="viewport-more" data-open={moreMenuOpen}
+              onMouseEnter={() => setMoreMenuOpen(true)} onMouseLeave={() => setMoreMenuOpen(false)}
+              onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setMoreMenuOpen(false); }}
+              onKeyDown={event => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  moreMenuTriggerRef.current?.focus();
+                  setMoreMenuOpen(false);
+                }
+              }}>
+              <button ref={moreMenuTriggerRef} className="viewport-button viewport-more-trigger" type="button"
+                aria-haspopup="menu" aria-expanded={moreMenuOpen} aria-label="More actions" title="More actions"
+                onFocus={() => setMoreMenuOpen(true)} onClick={() => setMoreMenuOpen(true)}>MORE ˆ</button>
+              <div className="viewport-more-menu" role="menu" aria-label="More actions"
+                onClick={event => {
+                  if (!(event.target instanceof Element) || !event.target.closest('button')) return;
+                  if (event.currentTarget.contains(document.activeElement)) moreMenuTriggerRef.current?.focus();
+                  setMoreMenuOpen(false);
+                }}>
                 <button className="viewport-button" type="button" onClick={() => setMidiSettingsOpen(true)} aria-label="MIDI settings" title="MIDI settings" role="menuitem">MIDI SETTINGS</button>
                 <button className="viewport-button" type="button" onClick={() => void exportPatchPackage()} aria-label="Export patch package" title="Export patch package" role="menuitem">EXPORT PATCH</button>
-                <button className="viewport-button" type="button" onClick={() => setFm1Patch(patch)} aria-label="Send patch to FM-1" title="FM-1 limits and upload" role="menuitem">SEND TO FM1</button>
+                <button className="viewport-button" type="button" role="menuitemcheckbox" aria-checked={fm1Mode}
+                  disabled={fm1LiveState.busy} onClick={() => { audio.stopRecording(); audio.stop(); setFm1Live(false); setFm1Mode(value => !value); }}>FM1 MODE</button>
+                {!fm1Mode && <button className="viewport-button" type="button" disabled={fm1Live || fm1LiveState.busy} onClick={() => setFm1Patch(patch)} aria-label="Send patch to FM-1" title="FM-1 limits and upload" role="menuitem">SEND TO FM1</button>}
                 <button className="viewport-button" type="button" onClick={() => scaleSelectedNodes(2)} disabled={!canScaleSelection} aria-label="Increase selected node scale" title="Increase selected node scale" role="menuitem">SCALE UP SELECTION</button>
                 <button className="viewport-button" type="button" onClick={() => scaleSelectedNodes(0.5)} disabled={!canScaleSelection} aria-label="Decrease selected node scale" title="Decrease selected node scale" role="menuitem">SCALE DOWN SELECTION</button>
                 <button className="viewport-button" type="button" onClick={groupSelectedNodes} disabled={!canGroupSelection || isEditingSubpatch} aria-label="Group to subpatch" title="Group to subpatch" role="menuitem">GROUP TO SUBPATCH</button>
@@ -9357,8 +9401,8 @@ function normalizePortName(value: string): string {
     .replace(/^[-_]+|[-_]+$/g, '');
 }
 
-function uniqueBoundaryPortName(requestedPort: string, currentPort: string, ports: string[]): string | null {
-  const normalized = normalizePortName(requestedPort);
+function uniqueBoundaryPortName(requestedPort: string, currentPort: string, ports: string[], preserveText = false): string | null {
+  const normalized = preserveText ? requestedPort.trim().replace(/[\u0000-\u001f\u007f-\u009f]/gu, '') : normalizePortName(requestedPort);
   if (!normalized) return null;
   if (normalized === currentPort) return currentPort;
 

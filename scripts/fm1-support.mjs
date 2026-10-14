@@ -19,7 +19,11 @@ const watched = [
   'editor/src/graph/types.ts', 'editor/src/graph/nodeTypes.ts',
   'editor/src/graph/subpatch.ts', 'editor/src/graph/spread.ts', 'editor/src/graph/expression.ts',
   'editor/src/audio/dspProgram.ts', 'editor/src/audio/dspOpcodes.ts',
-  'editor/src/audio/fm1Package.ts', 'editor/src/audio/fm1Optimizer.ts', 'editor/src/audio/fm1Upload.ts', 'editor/src/audio/fm1Support.ts', 'editor/src/audio/fm1Capabilities.ts',
+  'editor/src/audio/fm1Package.ts', 'editor/src/audio/fm1Optimizer.ts', 'editor/src/audio/fm1Upload.ts',
+  'editor/src/audio/useFm1LiveEdit.ts',
+  'editor/src/editor/NodeEditor.tsx',
+  'editor/src/editor/ShaderNode.tsx',
+  'editor/src/editor/Fm1ModeContext.ts', 'editor/src/audio/fm1Support.ts', 'editor/src/audio/fm1Capabilities.ts',
   'editor/src/editor/Fm1SupportPage.tsx', 'editor/src/App.tsx', 'editor/src/styles.css',
   'firmware/fm1/runtime.h', 'firmware/fm1/app.c', 'firmware/fm1/upload.h',
   'firmware/fm1/export-patch.mjs',
@@ -53,6 +57,11 @@ for (const op of registry.protocol.instructions) {
   require(op.since <= Number(registry.firmware.split('_')[1]), `Instruction ${op.code} needs a future firmware`);
   require(registry.protocol.packages.some(p => p.version === op.minimumPackageVersion), `Instruction ${op.code} has an unknown package version`);
 }
+const delay = registry.compiler.delay;
+require(delay.maxNodes <= registry.limits.states, 'Delay count exceeds available DSP states');
+require(delay.instruction !== delay.legacyInstruction, 'New delay instruction must reject older firmware');
+require(registry.protocol.instructions.some(op => op.code === delay.instruction && op.since === delay.since), 'Delay instruction/version differs from resource contract');
+require(instructionCodes.has(delay.legacyInstruction), 'Legacy delay instruction missing');
 for (const code of [...Object.values(registry.compiler.filterModes), ...Object.values(registry.compiler.distortionModes)]) {
   require(instructionCodes.has(code), `Lowered instruction ${code} is absent from protocol`);
 }
@@ -134,6 +143,7 @@ lines.push('## Machine-readable contract', '',
   '- `features`: stable category/id, status, evidence and notes; node entries also declare blockedInputs/blockedOutputs. Unknown or unsupported nodes block export. A partial status is not a blanket prohibition: compiler and port rules define the available subset.',
   '- `drift`: optional webBehavior, firmwareBehavior and requiredWork on any feature. Record newly introduced differences here and lower the status; frontend warnings and this reference display the gap.',
   '- `compiler`: accepted browser opcodes, oscillator modes, filter/distortion lowering maps and expression function IDs/arities. Backend code implements the operations; adding a JSON entry alone cannot implement firmware support.',
+  '- `compiler.delay`: node count, duration, sample rate, storage precision, time smoothing and instruction/version policy. Export generates the firmware constants; editor/CLI lowering and both upload preflights use this same resource contract.',
   '- `protocol`: accepted package layouts and firmware instruction codes, minimum package version and first firmware version. Both uploaders preflight these rules before MIDI access. Binary packages contain no original node inventory, so node eligibility is enforced during export.',
   '- `limits`: resource ceilings and the current encoder format. The exporter uses these to generate firmware limit headers.', '',
   'The device currently advertises package-format compatibility, not a feature set or exact firmware build. A successful connection check does not establish support for every instruction in this registry; an older device can still reject a graph at commit without activating it.', '',

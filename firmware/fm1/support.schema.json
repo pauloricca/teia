@@ -278,6 +278,94 @@
             "additionalProperties": false
           },
           "uniqueItems": true
+        },
+        "delay": {
+          "type": "object",
+          "properties": {
+            "maxNodes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32
+            },
+            "maxSeconds": {
+              "const": 1
+            },
+            "sampleRate": {
+              "const": 44100
+            },
+            "storageBits": {
+              "const": 16
+            },
+            "storageFractionBits": {
+              "const": 12
+            },
+            "smoothingSamples": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65536
+            },
+            "instruction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "legacyInstruction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "since": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "maxNodes",
+            "maxSeconds",
+            "sampleRate",
+            "storageBits",
+            "storageFractionBits",
+            "smoothingSamples",
+            "instruction",
+            "legacyInstruction",
+            "since"
+          ],
+          "additionalProperties": false
+        },
+        "repeat": {
+          "type": "object",
+          "properties": {
+            "maxInstances": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxContainers": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "eventQueue": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "since": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "blockedOpcodes": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "maxInstances",
+            "maxContainers",
+            "eventQueue",
+            "since",
+            "blockedOpcodes"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -285,7 +373,8 @@
         "oscillatorModes",
         "filterModes",
         "distortionModes",
-        "functions"
+        "functions",
+        "delay"
       ],
       "additionalProperties": false
     },
@@ -320,6 +409,10 @@
               "values": {
                 "type": "integer",
                 "minimum": 1
+              },
+              "since": {
+                "type": "integer",
+                "minimum": 902
               }
             },
             "required": [
@@ -365,6 +458,34 @@
             "additionalProperties": false
           },
           "uniqueItems": true
+        },
+        "liveEdit": {
+          "type": "object",
+          "properties": {
+            "since": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "probeCommand": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "updateCommand": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxUpdates": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "since",
+            "probeCommand",
+            "updateCommand",
+            "maxUpdates"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

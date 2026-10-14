@@ -1,0 +1,181 @@
+{
+  "name": "MIDI Spawn",
+  "nodes": [
+    {
+      "id": "on",
+      "type": "MidiNoteOn",
+      "params": {}
+    },
+    {
+      "id": "off",
+      "type": "MidiNoteOff",
+      "params": {}
+    },
+    {
+      "id": "voices",
+      "type": "Spawn",
+      "params": {},
+      "spreadNodeIds": [
+        "pitch",
+        "velocity",
+        "osc",
+        "env"
+      ]
+    },
+    {
+      "id": "pitch",
+      "type": "SampleHoldOsc",
+      "params": {}
+    },
+    {
+      "id": "velocity",
+      "type": "SampleHoldOsc",
+      "params": {}
+    },
+    {
+      "id": "osc",
+      "type": "SineOsc",
+      "params": {}
+    },
+    {
+      "id": "env",
+      "type": "Envelope",
+      "params": {
+        "attack": 0.01,
+        "decay": 0.1,
+        "sustain": 0.7,
+        "release": 0.2
+      }
+    },
+    {
+      "id": "out",
+      "type": "AudioOut",
+      "params": {
+        "level": 0.1
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": {
+        "node": "on",
+        "port": "note"
+      },
+      "to": {
+        "node": "voices",
+        "port": "trigger"
+      }
+    },
+    {
+      "from": {
+        "node": "off",
+        "port": "note"
+      },
+      "to": {
+        "node": "voices",
+        "port": "release trigger"
+      }
+    },
+    {
+      "from": {
+        "node": "on",
+        "port": "frequency"
+      },
+      "to": {
+        "node": "pitch",
+        "port": "signal"
+      }
+    },
+    {
+      "from": {
+        "node": "on",
+        "port": "velocity"
+      },
+      "to": {
+        "node": "velocity",
+        "port": "signal"
+      }
+    },
+    {
+      "from": {
+        "node": "voices",
+        "port": "instance gate"
+      },
+      "to": {
+        "node": "pitch",
+        "port": "trigger"
+      }
+    },
+    {
+      "from": {
+        "node": "voices",
+        "port": "instance gate"
+      },
+      "to": {
+        "node": "velocity",
+        "port": "trigger"
+      }
+    },
+    {
+      "from": {
+        "node": "voices",
+        "port": "instance gate"
+      },
+      "to": {
+        "node": "env",
+        "port": "gate"
+      }
+    },
+    {
+      "from": {
+        "node": "pitch",
+        "port": "signal"
+      },
+      "to": {
+        "node": "osc",
+        "port": "frequency"
+      }
+    },
+    {
+      "from": {
+        "node": "osc",
+        "port": "signal"
+      },
+      "to": {
+        "node": "env",
+        "port": "signal"
+      }
+    },
+    {
+      "from": {
+        "node": "env",
+        "port": "end trigger"
+      },
+      "to": {
+        "node": "voices",
+        "port": "kill trigger"
+      }
+    },
+    {
+      "from": {
+        "node": "env",
+        "port": "signal"
+      },
+      "to": {
+        "node": "out",
+        "port": "both"
+      }
+    },
+    {
+      "from": {
+        "node": "velocity",
+        "port": "signal"
+      },
+      "to": {
+        "node": "env",
+        "port": "signal"
+      },
+      "mode": "multiply"
+    }
+  ]
+}

@@ -184,6 +184,7 @@ export interface PersistedEditorState {
       zoom: number;
     };
     midiInput?: Patch['midiInput'];
+    fm1Mode?: boolean;
   };
   nodes: Array<{
     id: string;

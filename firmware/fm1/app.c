@@ -6,7 +6,7 @@
 #define FELUCCA_CDC 0
 #define FELUCCA_UAC 0
 #define FELUCCA_OTA 1
-#define FELUCCA_ID "FM-1_915"
+#define FELUCCA_ID "FM-1_921"
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #include "fm1_time.h"
 #include "fm1_sys.h"
@@ -29,29 +29,45 @@
 #define HALF_WORDS (HALF_FRAMES * 2u)
 #define BOOT_MAGIC 0x54454941u
 struct { uint32_t magic, failed, pending; } bootguard __attribute__((section(".noinit")));
-static union { uint64_t align; uint8_t bytes[16384]; teia_runtime_t runtime; } arena __attribute__((section(".pool")));
-_Static_assert(sizeof(teia_runtime_t) <= 16384, "Teia runtime exceeds arena");
+static struct { teia_runtime_t runtime; } arena __attribute__((section(".pool")));
+_Static_assert(sizeof(teia_runtime_t) <= 192u*1024u, "Teia runtime exceeds pool budget");
 static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
 static volatile uint32_t in_audio, halves, max_ticks, late, overflow_count;
 static teia_upload_t patches __attribute__((section(".pool")));
 static volatile int32_t master_target;
 static uint32_t switch_faded, switch_gain = TEIA_Q;
 static int32_t master_smooth;
-static uint8_t held[128], keyboard_ready, flash_ok;
+static uint8_t held[16][128], keyboard_ready, flash_ok;
 static uint32_t physical_notes;
+static uint8_t physical_pitch[27];
+static uint32_t extra_parameter[2];
 /* The physical keyboard is transposed independently from incoming MIDI. */
 static volatile int32_t keyboard_octave;
+static uint32_t display_epoch;
 static uint16_t text_pixels[240u * 14u];
-static void text_line(uint32_t y, const char *text)
+static void render_text(const char *text)
 {
-    uint32_t x, row, n = str_len(text); if (n > 30) n = 30;
+    uint32_t x, row, n = 0, at = 0, cells[30];
+    while (text[at] && n < 30) {
+        uint32_t c = (uint8_t)text[at++];
+        if (c >= 0xc2 && c <= 0xf4) {
+            uint32_t remaining = c < 0xe0 ? 1 : c < 0xf0 ? 2 : 3;
+            c &= (1u << (6 - remaining)) - 1u;
+            while (remaining-- && text[at]) c = (c << 6) | ((uint8_t)text[at++] & 63u);
+        }
+        cells[n++] = c >= 32 && c <= 255 ? c : '?';
+    }
     lcd_sync();
     for (row = 0; row < 14; ++row)
         for (x = 0; x < 240; ++x) {
-            uint32_t c = x / 8 < n ? (uint8_t)text[x / 8] : 32;
-            uint16_t ink = c >= 32 && c <= 126 && (teia_font[c - 32][row] & (1u << (7u - x % 8u))) ? 0xFFFFu : 0;
+            uint32_t c = x / 8 < n ? cells[x / 8] : 32;
+            uint16_t ink = c >= 32 && c <= 255 && (teia_font[c - 32][row] & (1u << (7u - x % 8u))) ? 0xFFFFu : 0;
             text_pixels[row * 240u + x] = ink;
         }
+}
+static void text_line(uint32_t y, const char *text)
+{
+    render_text(text);
     lcd_blit(0, y, 240, 14, text_pixels); lcd_sync();
 }
 static void number_line(uint32_t y, const char *label, uint32_t n)
@@ -65,15 +81,25 @@ static void number_line(uint32_t y, const char *label, uint32_t n)
 /* Params values are Q16.16. Show the declared-unit value rather than a
  * normalized encoder position. Four decimal places retain useful precision
  * while still fitting alongside the longest permitted Params label. */
-static void parameter_line(uint32_t y, const char *label, int32_t value)
+static void parameter_line(uint32_t slot, const char *label, int32_t value, int32_t minimum, int32_t maximum)
 {
+    static struct { char label[40]; int32_t value, minimum, maximum; uint32_t epoch; uint8_t valid; } previous[5];
+    uint32_t y = 58 + slot * 14, same = previous[slot].valid && previous[slot].epoch == display_epoch, i;
     char line[31], digits[12];
+    for (i = 0; i < sizeof previous[slot].label; ++i) {
+        if (previous[slot].label[i] != label[i]) { same = 0; break; }
+        if (!label[i]) break;
+    }
+    if (same && previous[slot].value == value && previous[slot].minimum == minimum && previous[slot].maximum == maximum) return;
+    str_cpy(previous[slot].label, label, sizeof previous[slot].label);
+    previous[slot].value = value; previous[slot].minimum = minimum; previous[slot].maximum = maximum; previous[slot].valid = 1; previous[slot].epoch = display_epoch;
+    if (!label[0]) { text_line(y, ""); return; }
     uint64_t magnitude = value < 0 ? (uint64_t)-(int64_t)value : (uint64_t)value;
     uint32_t whole = (uint32_t)(magnitude / TEIA_Q);
     uint32_t fraction = (uint32_t)(((magnitude % TEIA_Q) * 10000u + TEIA_Q / 2u) / TEIA_Q);
     uint32_t len, k = 0, fractional_digits = 4;
     if (fraction == 10000u) { ++whole; fraction = 0; }
-    str_cpy(line, label, sizeof line); len = str_len(line);
+    len = 0;
     if (value < 0 && (whole || fraction) && len < 30) line[len++] = '-';
     do { digits[k++] = (char)('0' + whole % 10u); whole /= 10u; } while (whole && k < sizeof digits);
     while (k && len < 30) line[len++] = digits[--k];
@@ -84,21 +110,56 @@ static void parameter_line(uint32_t y, const char *label, int32_t value)
         do { digits[k++] = (char)('0' + fraction % 10u); fraction /= 10u; } while (k < fractional_digits);
         while (k && len < 30) line[len++] = digits[--k];
     }
-    line[len] = 0; text_line(y, line);
+    line[len] = 0;
+    /* Crop the UTF-8 name by display cells, preserving room for the full value.
+     * Values end at x=184; every bar occupies x=192..237. */
+    {
+        char combined[80];
+        uint32_t at = 0, bytes = 0, cells = 0, name_cells = 22u - len;
+        while (label[at] && cells < name_cells) {
+            uint8_t c = (uint8_t)label[at];
+            uint32_t count = c < 128 ? 1 : c < 0xe0 ? 2 : c < 0xf0 ? 3 : 4;
+            while (count-- && label[at]) combined[bytes++] = label[at++];
+            ++cells;
+        }
+        while (cells < 23u - len) { combined[bytes++] = ' '; ++cells; }
+        for (at = 0; at < len; ++at) combined[bytes++] = line[at];
+        combined[bytes] = 0;
+        render_text(combined);
+    }
+    {
+        uint32_t x, row;
+        int64_t range = (int64_t)maximum - minimum;
+        int64_t position = (int64_t)value - minimum;
+        uint32_t fill = 0;
+        int64_t scaled = (position < 0 ? 0 : position > range ? range : position) * 44;
+        /* At most 44 subtractions; avoid a 64-bit division runtime helper. */
+        while (range > 0 && scaled >= range && fill < 44) { scaled -= range; ++fill; }
+        for (row = 0; row < 14; ++row) for (x = 192; x < 240; ++x) {
+            uint32_t edge = (row == 2 || row == 11) && x >= 192 && x <= 237;
+            edge |= (x == 192 || x == 237) && row >= 2 && row <= 11;
+            text_pixels[row * 240 + x] = edge || (row >= 3 && row <= 10 && x >= 193 && x < 193 + fill) ? 0xffff : 0;
+        }
+        lcd_blit(0, y, 240, 14, text_pixels); lcd_sync();
+    }
 }
-/* Params are ordered to match the six physical controls.  Keep the control
+/* The first four Params have fixed controls; ALG edits the selected extra.  Keep the control
  * reference on screen so a patch's labels can be read without consulting the
  * panel layout. */
 static void parameter_label(char *line, const char *control, const char *label)
 {
     uint32_t len = 0, k;
-    for (k = 0; control[k] && len < 30; ++k) line[len++] = control[k];
-    if (len < 30) line[len++] = ' ';
-    for (k = 0; label[k] && len < 30; ++k) line[len++] = label[k];
-    if (len < 30) line[len++] = ' ';
+    for (k = 0; control[k]; ++k) line[len++] = control[k];
+    if (len) line[len++] = ' ';
+    for (k = 0; label[k] && len < 39; ++k) line[len++] = label[k];
     line[len] = 0;
 }
-static void clear_notes(void) { uint32_t i; for (i = 0; i < 128; ++i) held[i] = 0; }
+static void clear_notes(void) {
+    for (unsigned channel=0;channel<16;channel++) for(unsigned note=0;note<128;note++) {
+        if(held[channel][note]) teia_queue_note(&arena.runtime,channel+1,note,0,0);
+        held[channel][note]=0;
+    }
+}
 static void octave_leds(void)
 {
     /* Match the stock UI: a steady light points back towards octave zero. */
@@ -124,7 +185,10 @@ static void inputs_audio(void)
     uint32_t i, notes = fm1_in.notes, triggered = 0; int note = -1;
     if (reset_seen != usb.resets) {
         reset_seen = usb.resets;
-        for (i = 0; i < 128; ++i) held[i] &= (uint8_t)~1u;
+        for(unsigned channel=0;channel<16;channel++) for (i = 0; i < 128; ++i) {
+            if(held[channel][i]&1u) teia_queue_note(&arena.runtime,channel+1,i,0,0);
+            held[channel][i] &= (uint8_t)~1u;
+        }
     }
     if (midi_in_overflow) {
         clear_notes(); mi_r = mi_w; midi_in_overflow = 0; ++overflow_count;
@@ -134,20 +198,36 @@ static void inputs_audio(void)
         uint8_t source = midi_in_source[at] == 2u ? 2u : 1u;
         uint32_t a = (packet >> 16) & 127u, b = (packet >> 24) & 127u;
         RING_PUBLISH(); ++mi_r;
-        /* One mono voice, channel 1. Other channels and clock have no musical side effects. */
-        if (status == 0x90u && b) { held[a] |= source; triggered = 1; }
-        if (status == 0x80u || (status == 0x90u && !b)) held[a] &= (uint8_t)~source;
-        if (status == 0xB0u && (a == 120u || a == 123u))
-            for (i = 0; i < 128; ++i) held[i] &= (uint8_t)~source;
+        unsigned channel=status&15u, command=status&0xf0u;
+        if(command==0x90u && b) {
+            held[channel][a]|=source;
+            teia_queue_note(&arena.runtime,channel+1,a,b,1);
+            if(!channel) triggered=1;
+        }
+        if(command==0x80u || (command==0x90u && !b)) {
+            held[channel][a]&=(uint8_t)~source;
+            teia_queue_note(&arena.runtime,channel+1,a,0,0);
+        }
+        if(command==0xb0u && (a==120u || a==123u)) for(i=0;i<128;i++) {
+            if(held[channel][i]&source) teia_queue_note(&arena.runtime,channel+1,i,0,0);
+            held[channel][i]&=(uint8_t)~source;
+        }
     }
     if (!notes) keyboard_ready = 1; /* Keys held while booting never make a surprise note. */
     if (keyboard_ready) {
         if (notes & ~physical_notes) triggered = 1;
-        for (i = 0; i < 27; ++i) if (notes & (1u << i))
-            note = teia_clamp((int32_t)i + 53 + 12 * keyboard_octave, 0, 127);
+        for (i = 0; i < 27; ++i) {
+            uint32_t mask=1u<<i;
+            if((notes&mask) && !(physical_notes&mask)) {
+                physical_pitch[i]=(uint8_t)teia_clamp((int32_t)i+53+12*keyboard_octave,0,127);
+                teia_queue_note(&arena.runtime,1,physical_pitch[i],127,1);
+            }
+            if(!(notes&mask) && (physical_notes&mask)) teia_queue_note(&arena.runtime,1,physical_pitch[i],0,0);
+            if(notes&mask) note=teia_clamp((int32_t)i+53+12*keyboard_octave,0,127);
+        }
     }
     physical_notes = notes;
-    for (i = 0; i < 128; ++i) if (held[i] && (int)i > note) note = (int)i;
+    for (i = 0; i < 128; ++i) if (held[0][i] && (int)i > note) note = (int)i;
     {
         teia_patch_t *p = patches.slots[patches.active];
         if (!p->valid) return;
@@ -183,6 +263,7 @@ void fm1_alnk0_irq(void)
         int32_t *out = abuf + half * HALF_WORDS;
         uint32_t fading;
         teia_patch_t *p;
+        if (patches.pending == 3) teia_apply(&patches, &arena.runtime);
         if (patches.pending && switch_faded) { teia_apply(&patches, &arena.runtime); switch_faded = 0; switch_gain = 0; }
         fading = patches.pending != 0;
         p = patches.slots[patches.active];
@@ -255,6 +336,7 @@ static int ota_fread(uint32_t off, void *p, uint32_t n)
 }
 static void ota_show(uint32_t step, int32_t code)
 {
+    ++display_epoch;
     number_line(168, "UPDATE STEP ", step);
     if (code < 0) number_line(184, "UPDATE ERROR ", (uint32_t)-code);
 }
@@ -284,7 +366,7 @@ static int patch_service(void)
         command = frame[4]; token = frame[5]; last_rx = fm1_ms;
         decoded = ota_unpack7(frame+6, n-6, body, sizeof body);
         status = decoded > sizeof body || (decoded * 8u + 6u) / 7u != n-6 ? 1 : teia_request(&patches, command, body, decoded);
-        if (!status && (command == 3 || command == 4)) { waiting = 1; return 1; }
+        if (!status && (command == 3 || command == 4 || command == TEIA_LIVE_UPDATE_COMMAND)) { waiting = 1; return 1; }
     }
     reply[0]=0xf0; reply[1]=0x7d; reply[2]=0x54; reply[3]=0x45; reply[4]=1;
     reply[5]=command | 0x40; reply[6]=token; reply[7]=status;
@@ -344,13 +426,20 @@ static void main_loop(void)
                 if (patches.destination != patches.active) { RING_PUBLISH(); patches.pending = 2; }
             }
             { uint32_t k;
-                static const uint8_t control_encoders[6] = {2, 3, 4, 5, 0, 1};
-                for (k = 0; k < 6; ++k) {
+                static const uint8_t control_encoders[5] = {2, 3, 4, 5, 1};
+                teia_patch_t *selected = patches.slots[patches.active];
+                uint32_t *extra = &extra_parameter[patches.active];
+                if (selected->knob_count <= 4 || *extra >= selected->knob_count - 4u) *extra = 0;
+                delta = fm1_enc_take(0); /* SELECT browses, never changes values. */
+                if (delta && !patches.pending && selected->valid && selected->knob_count > 4)
+                    *extra = (uint32_t)teia_clamp((int32_t)*extra + delta, 0, selected->knob_count - 5);
+                for (k = 0; k < 5; ++k) {
                     delta = fm1_enc_take(control_encoders[k]);
                     if (delta && !patches.pending) {
                         teia_patch_t *p = patches.slots[patches.active];
-                        if (!p->valid || k >= p->knob_count) continue;
-                        teia_knob_t *knob = &p->knobs[k];
+                        uint32_t index = k < 4 ? k : 4 + *extra;
+                        if (!p->valid || index >= p->knob_count) continue;
+                        teia_knob_t *knob = &p->knobs[index];
                         int64_t v = (int64_t)p->program.values[knob->value] + (int64_t)delta * knob->step;
                         p->program.values[knob->value] = v < knob->min ? knob->min : v > knob->max ? knob->max : (int32_t)v;
                     }
@@ -364,7 +453,7 @@ static void main_loop(void)
             {
                 uint32_t k; teia_patch_t *p = patches.slots[patches.active];
                 char header[31], digits[2];
-                static const char *control_names[6] = {"K1", "K2", "K3", "K4", "SEL", "ALG"};
+                static const char *control_names[5] = {"K1", "K2", "K3", "K4", ""};
                 digits[0] = (char)('1' + patches.active); digits[1] = 0;
                 str_cpy(header, digits, sizeof header);
                 { uint32_t len = str_len(header); header[len++] = ' '; header[len] = 0; }
@@ -375,12 +464,14 @@ static void main_loop(void)
                 }
                 text_line(30, header);
                 text_line(44, "");
-                for (k = 0; k < 6; ++k) {
-                    char label[31];
-                    if (p->valid && k < p->knob_count) {
-                        parameter_label(label, control_names[k], p->knobs[k].label);
-                        parameter_line(58 + 14*k, label, p->program.values[p->knobs[k].value]);
-                    } else text_line(58 + 14*k, "");
+                for (k = 0; k < 5; ++k) {
+                    char label[40];
+                    uint32_t index = k < 4 ? k : 4 + extra_parameter[patches.active];
+                    if (p->valid && k < 5 && index < p->knob_count) {
+                        teia_knob_t *knob = &p->knobs[index];
+                        parameter_label(label, control_names[k], knob->label);
+                        parameter_line(k, label, p->program.values[knob->value], knob->min, knob->max);
+                    } else parameter_line(k, "", 0, 0, 0);
                 }
             }
             number_line(150, "MAX RENDER US ", max_ticks / 24u);

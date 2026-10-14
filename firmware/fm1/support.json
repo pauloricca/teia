@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "firmware": "FM-1_915",
+  "firmware": "FM-1_921",
   "reviewedOn": "2026-10-11",
   "reviewedSources": {
     "editor/src/graph/types.ts": "d151a68c85539525df1abc869e07378c17c9c21a3dd5d265bc9b4fe7ce72536a",
@@ -8,22 +8,26 @@
     "editor/src/graph/subpatch.ts": "56fd60b9c664479761eefaa1e4d5264160156974687bc529aba01716ed2fbeb5",
     "editor/src/graph/spread.ts": "58bec3d980343612b1fc6e31059ab2926b50455f7a547129ffd24b071d81a0da",
     "editor/src/graph/expression.ts": "3d9ffced8af6611ed9b59414f2917895aa21fbf2d0f145d59eeab71a9ab34995",
-    "editor/src/audio/dspProgram.ts": "7dc99dcea11d98893e94b12bac5785cb852c2a4ed2377f8d03de78c94a1e4ddc",
+    "editor/src/audio/dspProgram.ts": "e80593f688090f148d30478807ed82fedbdc1447dcbd0be3d8a7a70f546f06c3",
     "editor/src/audio/dspOpcodes.ts": "3e605442a356c87dd1c6aef58ce0d00d762c5ed31da0499b90e962181fed55ee",
-    "editor/src/audio/fm1Package.ts": "018a4bf19ea421dcb05bbe0b6f1b9fd3bd87bcde22f66585eed50a41ab89662b",
-    "editor/src/audio/fm1Optimizer.ts": "d0a630bedd42cbd5e51341f5142f00f743326445943ab044e5f037574f0b069a",
-    "editor/src/audio/fm1Upload.ts": "352c53da3d8880cb83a0f3fb2f3f4d7c073de89ec007b1d5d55b7534658f0446",
-    "editor/src/audio/fm1Support.ts": "dbb414526f456897f11548daf582d2201c58ef169aa48cc5140cc8dec1cb4c40",
-    "editor/src/audio/fm1Capabilities.ts": "9dce2bb5869752fa79a06f37d5b2954a6cd28b23dd2486aee40ce35f69ccbb1b",
+    "editor/src/audio/fm1Package.ts": "f63cff9f1feaf41aef939d0c540684ee1cb7dd99601204af693bc007cbe27c9c",
+    "editor/src/audio/fm1Optimizer.ts": "c4aefb17286a0f80a2dcc2553b3e4c5bbe8fcb8f302c4e9eec095c1b3a03e9f0",
+    "editor/src/audio/fm1Upload.ts": "77e2e199f523b95bb047e9dada2aa4725e03d8b9eb112d66a9d0c412fb0f0b96",
+    "editor/src/audio/useFm1LiveEdit.ts": "f713142b090b52bd6f8322e9fda1648dbf2f7a3dde08aa99a4c5c657776fdb7e",
+    "editor/src/editor/NodeEditor.tsx": "23f419165d12ff77014d3c032b1c11d143824b3b2550dd0af184d6767e445572",
+    "editor/src/editor/ShaderNode.tsx": "327d932dcc09fe744e10055a6096c72ab4028d5045f98a1cb8f7441715508e24",
+    "editor/src/editor/Fm1ModeContext.ts": "cc1bc130ec1638f62f27ce14997e86f8dae35e3a891d44702cab054b496fc5fd",
+    "editor/src/audio/fm1Support.ts": "c7bc3b9979a76822aaf3b72acb914ce2e75e1abf37ff761c965e6e07e7ae363d",
+    "editor/src/audio/fm1Capabilities.ts": "7a29929da790792dc3e54b3139cda2a4230e8f971fc5e101dade126a33a556cd",
     "editor/src/editor/Fm1SupportPage.tsx": "4f634b0db59887bc62a1a8a0dbe811e563683ee4cfa534a3a4aa8a1760264f49",
     "editor/src/App.tsx": "a7ab18f0eea1c2c9e395d4c01b34d58621d483f7e9069b4325e82ff3a7da4eee",
-    "editor/src/styles.css": "c3fc07b6de0507a4b086b6bcbdf47a474e612cf57ecf189d1ebf99d9dfcc4bc1",
-    "firmware/fm1/runtime.h": "97f1000a478b42eb016ee4af395baf83befeb6acc0e94837b6985c9e9e9c8e57",
-    "firmware/fm1/app.c": "645dc926a626be0a66c1d0c73e09e81abccc0843e3da32e06c9fe26f2bf93930",
-    "firmware/fm1/upload.h": "1c1c9452c85940a1f03337115a6b40b0727784481d241bcb6e2ddb8d89a1d776",
-    "firmware/fm1/export-patch.mjs": "49d1d91558a849c8f8e71980dd38881083541b33b7c21850c261810d05acc6b6",
-    "scripts/fm1-runtime-spike.py": "8bb0e3402fb66385e1cfa369d2184e34a4fec78b4ca469b018fd14b350d84d57",
-    "scripts/fm1-send-patch.py": "ac9f2d5aa2e845dd89660cecbe959f7f490a4bf2fa1aeb2b8f61e89428408c8d",
+    "editor/src/styles.css": "de2840b10ba9ba93cc59bcc2063ea0ab4487171f1a4c7ac781411a0d253b4278",
+    "firmware/fm1/runtime.h": "7537b66a1045b93e2d5db70cb42c37d90a123322b687073a4fd1527c3c2480ad",
+    "firmware/fm1/app.c": "3d32135afb8c1f704f3cee8266386ca56b78e8b285633fa7ce8b24b4c5075c00",
+    "firmware/fm1/upload.h": "fe5d2b0469e85b0ae7af404089885b4f50561a0fd7f7dd3e5b1f80a19433b266",
+    "firmware/fm1/export-patch.mjs": "f4080ecd3b6e5c20490cba612cc582a1396527ef5d9cfd4c85fc60e191645e55",
+    "scripts/fm1-runtime-spike.py": "c1456307c522e6d52494e1f6d51921bc196482d6b5946b1dadde0405378ae958",
+    "scripts/fm1-send-patch.py": "8dff7e8ae136c2fce5ef04c8d0b3d15f745f971cf6d94418d7f393f4b1623cad",
     "scripts/fm1-install.py": "cb0b4d51615e40b164fd767964d845a65f3931c194d698c650b724f9825f228c"
   },
   "features": [
@@ -59,30 +63,42 @@
     {
       "id": "Spread",
       "category": "node",
-      "status": "unsupported",
-      "since": null,
+      "status": "partial",
+      "since": 921,
       "verification": "source reviewed",
-      "notes": "No supported FM-1 lowering for this node operation or resource; browser support does not imply device support.",
+      "notes": "Since 921, independent bounded DSP instances, boundary sum/product collectors and internal item index or instance gate. Up to eight containers and eight instances each; the compiler lowers capacity to fit 32 shared state records. Spread count is latched per audio block and clamped to capacity; shrinking clears removed item state. Spawn uses rising trigger edges, matching release tags and per-instance rising kill edges; full containers drop new triggers. Delay and Tempo must be outside containers; nested containers remain unsupported. Package reload resets instances. Hardware timing and audio unverified.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
-        "editor/src/audio/dspProgram.ts"
+        "firmware/fm1/runtime.h",
+        "firmware/fm1/app.c"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Dynamically allocated instance counts, independent effect resources and state migration during live recompilation.",
+        "firmwareBehavior": "Fixed capacity from the shared state budget; Delay and Tempo are rejected inside templates. Stable pool-slot rendering order, no migration on package reload.",
+        "requiredWork": "Verify voice lifecycle and real-time deadlines on hardware; additional voices and per-instance delays require a larger resource budget."
+      }
     },
     {
       "id": "Spawn",
       "category": "node",
-      "status": "unsupported",
-      "since": null,
+      "status": "partial",
+      "since": 921,
       "verification": "source reviewed",
-      "notes": "No supported FM-1 lowering for this node operation or resource; browser support does not imply device support.",
+      "notes": "Since 921, independent bounded DSP instances, boundary sum/product collectors and internal item index or instance gate. Up to eight containers and eight instances each; the compiler lowers capacity to fit 32 shared state records. Spread count is latched per audio block and clamped to capacity; shrinking clears removed item state. Spawn uses rising trigger edges, matching release tags and per-instance rising kill edges; full containers drop new triggers. Delay and Tempo must be outside containers; nested containers remain unsupported. Package reload resets instances. Hardware timing and audio unverified.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
-        "editor/src/audio/dspProgram.ts"
+        "firmware/fm1/runtime.h",
+        "firmware/fm1/app.c"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Dynamically allocated instance counts, independent effect resources and state migration during live recompilation.",
+        "firmwareBehavior": "Fixed capacity from the shared state budget; Delay and Tempo are rejected inside templates. Stable pool-slot rendering order, no migration on package reload.",
+        "requiredWork": "Verify voice lifecycle and real-time deadlines on hardware; additional voices and per-instance delays require a larger resource budget."
+      }
     },
     {
       "id": "Ins",
@@ -102,9 +118,9 @@
       "id": "Params",
       "category": "node",
       "status": "partial",
-      "since": null,
+      "since": 916,
       "verification": "source reviewed",
-      "notes": "One enabled Params node may expose zero to six outputs. Their saved order maps directly to Knob 1, Knob 2, Knob 3, Knob 4, Select and Algorithm; each output supplies its screen label, default and range.",
+      "notes": "K1–K4 edit the first four Params outputs. Select browses remaining outputs in saved order, clamping at either end; Algorithm edits the single visible extra parameter. Each value is retained when browsing. Parameters share the 128-value patch budget. Five screen rows show labels, declared-unit values and aligned outlined range bars. Requires firmware 916 and package v5 for more than six outputs; v1–v4 remain readable with the new control layout. Hardware validation pending. 919 removes the ALG prefix, supports longer names, and redraws parameter rows only when their displayed content changes. Names accept spaces, punctuation and Unicode without a length limit in the source patch; the UTF-8 screen preview is cropped to 31 bytes at a character boundary. Latin-1 glyphs render directly; other glyphs appear as ?. Package v6 uses 32-byte label fields; versions 1–5 remain readable. 920 puts the cropped name, complete value and aligned 46-pixel bar on one row, retaining change-only redraws. Hardware display verification pending.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "firmware/fm1/runtime.h",
@@ -470,12 +486,15 @@
     {
       "id": "Send",
       "category": "node",
-      "status": "unknown",
+      "status": "supported",
       "since": null,
-      "verification": "unverified",
-      "notes": "Not individually audited. May be flattened, compiled to basic operations, or omitted by the compiler; do not claim device support yet.",
+      "verification": "source reviewed",
+      "notes": "Resolved by the shared graph compiler using channel numbers 1–10 and patch/Group routing scopes. One matching Send reuses its signal register; multiple enabled Sends are summed with existing add instructions; no matching Send yields zero. Fan-out and chained routes need no dedicated firmware instruction. Normal FM-1 fixed-point arithmetic, graph limits and connected-node restrictions apply. No firmware change; hardware unverified.",
       "evidence": [
-        "editor/src/audio/dspProgram.ts"
+        "editor/src/audio/dspProgram.ts",
+        "editor/src/graph/subpatch.ts",
+        "editor/src/audio/fm1Package.ts",
+        "firmware/fm1/runtime.h"
       ],
       "blockedInputs": [],
       "blockedOutputs": []
@@ -483,12 +502,15 @@
     {
       "id": "Receive",
       "category": "node",
-      "status": "unknown",
+      "status": "supported",
       "since": null,
-      "verification": "unverified",
-      "notes": "Not individually audited. May be flattened, compiled to basic operations, or omitted by the compiler; do not claim device support yet.",
+      "verification": "source reviewed",
+      "notes": "Resolved by the shared graph compiler using channel numbers 1–10 and patch/Group routing scopes. One matching Send reuses its signal register; multiple enabled Sends are summed with existing add instructions; no matching Send yields zero. Fan-out and chained routes need no dedicated firmware instruction. Normal FM-1 fixed-point arithmetic, graph limits and connected-node restrictions apply. No firmware change; hardware unverified.",
       "evidence": [
-        "editor/src/audio/dspProgram.ts"
+        "editor/src/audio/dspProgram.ts",
+        "editor/src/graph/subpatch.ts",
+        "editor/src/audio/fm1Package.ts",
+        "firmware/fm1/runtime.h"
       ],
       "blockedInputs": [],
       "blockedOutputs": []
@@ -496,15 +518,22 @@
     {
       "id": "Slider",
       "category": "node",
-      "status": "unknown",
+      "status": "partial",
       "since": null,
-      "verification": "unverified",
-      "notes": "Not individually audited. May be flattened, compiled to basic operations, or omitted by the compiler; do not claim device support yet.",
+      "verification": "source reviewed",
+      "notes": "Compiles to existing FM-1 value, arithmetic, clamp and power instructions. Saved value is used unless connected; value, curve, min, max, signal and inverse signal remain live, with complementary outputs. No manual UI or MIDI CC interaction. Curves use approximate Q16.16 power; hardware unverified.",
       "evidence": [
-        "editor/src/audio/dspProgram.ts"
+        "editor/src/audio/dspProgram.ts",
+        "editor/src/audio/fm1Package.ts",
+        "firmware/fm1/runtime.h"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Interactive slider with MIDI CC, live input modulation, range mapping and curved signal crossfades.",
+        "firmwareBehavior": "Retains saved value and all connected DSP inputs, range mapping and crossfades, using existing fixed-point instructions. UI and MIDI CC bindings are omitted; power curves are approximate.",
+        "requiredWork": "Add device interaction and MIDI CC bindings if desired; verify dynamic inputs and curve precision on hardware."
+      }
     },
     {
       "id": "Joystick",
@@ -522,15 +551,22 @@
     {
       "id": "Button",
       "category": "node",
-      "status": "unknown",
+      "status": "partial",
       "since": null,
-      "verification": "unverified",
-      "notes": "Not individually audited. May be flattened, compiled to basic operations, or omitted by the compiler; do not claim device support yet.",
+      "verification": "source reviewed",
+      "notes": "Compiles saved gate/toggle state to a constant using existing FM-1 instructions; trigger mode stays idle without replaying saved clicks. Signal and inverse signal inputs remain live and route to complementary outputs. No manual UI or MIDI CC interaction; hardware unverified.",
       "evidence": [
-        "editor/src/audio/dspProgram.ts"
+        "editor/src/audio/dspProgram.ts",
+        "editor/src/audio/fm1Package.ts",
+        "firmware/fm1/runtime.h"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Interactive gate, toggle or trigger button with MIDI CC and short signal crossfades on later state changes.",
+        "firmwareBehavior": "Uses the saved pressed state for gate/toggle modes and zero for trigger mode. Connected signals remain live; no events change the gate, so no transition smoothing is emitted.",
+        "requiredWork": "Add device events and MIDI CC handling if desired; verify saved-state routing on hardware."
+      }
     },
     {
       "id": "Keys",
@@ -599,7 +635,7 @@
       "status": "partial",
       "since": 911,
       "verification": "source reviewed",
-      "notes": "Optional monophonic source for note, frequency, velocity, gate and a pending note-on trigger consumed by exactly one rendered sample for physical keys and USB/TRS channel 1. Patches without MIDI Note are valid for fixed-frequency or continuously gated drones. The trigger is independent of the held gate. Channels 2–16 produce zero; per-note event nodes remain unsupported.",
+      "notes": "Optional monophonic source for note, frequency, velocity, gate and a pending note-on trigger consumed by exactly one rendered sample for physical keys and USB/TRS channel 1. Patches without MIDI Note are valid for fixed-frequency or continuously gated drones. The trigger is independent of the held gate. Channels 2–16 produce zero; separate MIDI Note On/Off nodes support channels 1–16 since 921.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "editor/src/audio/dspProgram.ts",
@@ -615,30 +651,42 @@
     {
       "id": "MidiNoteOn",
       "category": "node",
-      "status": "unsupported",
-      "since": null,
+      "status": "partial",
+      "since": 921,
       "verification": "source reviewed",
-      "notes": "No supported FM-1 lowering for this node operation or resource; browser support does not imply device support.",
+      "notes": "Since 921, USB/TRS events on channels 1–16, live channel filter (0 means all), physical keys on channel 1, zero-velocity Note On treated as Note Off. One aligned event sample followed by a zero sample; Note On exposes note/frequency/velocity and Note Off note/frequency. Note zero shares the idle tag, matching web behavior. Queue bounded to 256 events; overflow releases Spawn gates and discards queued events. Hardware unverified.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
-        "editor/src/audio/dspProgram.ts"
+        "firmware/fm1/runtime.h",
+        "firmware/fm1/app.c"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Queued sample-aligned MIDI events supplied by the browser.",
+        "firmwareBehavior": "USB/TRS input is ingested at audio-block boundaries, with a 256-event queue; overflow drops events and releases Spawn gates.",
+        "requiredWork": "Verify USB/TRS bursts, channel filtering, physical key releases and hardware deadlines."
+      }
     },
     {
       "id": "MidiNoteOff",
       "category": "node",
-      "status": "unsupported",
-      "since": null,
+      "status": "partial",
+      "since": 921,
       "verification": "source reviewed",
-      "notes": "No supported FM-1 lowering for this node operation or resource; browser support does not imply device support.",
+      "notes": "Since 921, USB/TRS events on channels 1–16, live channel filter (0 means all), physical keys on channel 1, zero-velocity Note On treated as Note Off. One aligned event sample followed by a zero sample; Note On exposes note/frequency/velocity and Note Off note/frequency. Note zero shares the idle tag, matching web behavior. Queue bounded to 256 events; overflow releases Spawn gates and discards queued events. Hardware unverified.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
-        "editor/src/audio/dspProgram.ts"
+        "firmware/fm1/runtime.h",
+        "firmware/fm1/app.c"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Queued sample-aligned MIDI events supplied by the browser.",
+        "firmwareBehavior": "USB/TRS input is ingested at audio-block boundaries, with a 256-event queue; overflow drops events and releases Spawn gates.",
+        "requiredWork": "Verify USB/TRS bursts, channel filtering, physical key releases and hardware deadlines."
+      }
     },
     {
       "id": "MidiNoteOnSend",
@@ -840,14 +888,20 @@
       "status": "partial",
       "since": 910,
       "verification": "source reviewed",
-      "notes": "One live time/feedback/mix delay is supported per patch. Its shared 2,048-sample Q16.16 line limits time to about 46 ms at 44.1 kHz and uses integer-sample taps.",
+      "notes": "Since 917, up to two independent mono delays per patch, each 0–1 second at 44.1 kHz. Signed 16-bit storage has 12 fractional bits (range −8 to just below +8); dry signals retain Q16.16 precision. Linear fractional reads and a 256-sample one-pole time smoother (about 5.8 ms time constant) support continuous pitch-bending modulation. Initial time is applied immediately; changes toward zero smoothly reach bypass. Feedback 0–2 and mix 0–1. Opcode 53 requires 917; legacy opcode 44 uses the upgraded delay on 917. Earlier firmware supports only one approximately 46 ms delay.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "editor/src/audio/dspProgram.ts",
-        "firmware/fm1/runtime.h"
+        "firmware/fm1/runtime.h",
+        "firmware/fm1/test-delay.c"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Floating-point delay storage, up to 1.5 seconds per node within the shared effect-slot budget; fractional reads, immediate time changes and immediate zero-time bypass.",
+        "firmwareBehavior": "Two mono nodes maximum, each one second with signed 16-bit storage and ±8 headroom. Time changes use a 256-sample one-pole smoother, including the transition to zero; sub-sample times blend current input with the previous stored sample.",
+        "requiredWork": "The firmware intentionally trades duration, capacity and precision for bounded memory and adds tape-style smoothing. Align web smoothing and zero-transition semantics if matching playback is required; longer or additional firmware delays need a new memory budget."
+      }
     },
     {
       "id": "Chorus",
@@ -911,7 +965,7 @@
       "status": "partial",
       "since": null,
       "verification": "source reviewed",
-      "notes": "Linear ADSR, delay, trigger and timed gate; a trigger-only envelope releases after decay unless gate length is set, while the independent gate input holds sustain. End trigger unsupported. Live durations 0–60 seconds, minimum attack 45 samples. The firmware measures a trigger-only gate length after decay; the web engine measures it from the trigger edge. 915 uses an exact quotient/remainder ramp for unchanged durations, refreshing immediately after time modulation or elapsed-position changes; ADSR timing and existing drift are unchanged.",
+      "notes": "Linear ADSR, delay, trigger and timed gate; a trigger-only envelope releases after decay unless gate length is set, while the independent gate input holds sustain. Since 921, end trigger emits a one-sample pulse on release completion. Live durations 0–60 seconds, minimum attack 45 samples. The firmware measures a trigger-only gate length after decay; the web engine measures it from the trigger edge. 915 uses an exact quotient/remainder ramp for unchanged durations, refreshing immediately after time modulation or elapsed-position changes; ADSR timing and existing drift are unchanged.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "firmware/fm1/runtime.h",
@@ -919,13 +973,11 @@
         "firmware/fm1/README.md"
       ],
       "blockedInputs": [],
-      "blockedOutputs": [
-        "end trigger"
-      ],
+      "blockedOutputs": [],
       "drift": {
         "webBehavior": "Provides an end trigger output when the envelope finishes and measures trigger-only gate length from the trigger edge, including delay, attack, and decay.",
-        "firmwareBehavior": "Renders the envelope signal but does not implement end trigger output; it begins a trigger-only gate-length hold after decay reaches sustain.",
-        "requiredWork": "Implement and validate the envelope completion operation in firmware and lowering, and align trigger-only gate-length timing with the web engine, then remove the blocked output rule."
+        "firmwareBehavior": "Renders signal and a one-sample completion pulse; trigger-only gate-length hold still begins after decay reaches sustain.",
+        "requiredWork": "Align trigger-only gate-length timing with the web engine and verify completion timing on hardware."
       }
     },
     {
@@ -1235,13 +1287,14 @@
     {
       "id": "envelope end trigger",
       "category": "dsp",
-      "status": "unsupported",
-      "since": null,
+      "status": "supported",
+      "since": 921,
       "verification": "source reviewed",
-      "notes": "The end trigger output is not implemented.",
+      "notes": "Since 921, opcode 54 reads the envelope completion flag for exactly the sample that release reaches idle; idle envelopes and retriggers do not emit a completion pulse. Works with instance-local envelopes and Spawn kill trigger. Hardware unverified.",
       "evidence": [
-        "firmware/fm1/README.md",
-        "firmware/fm1/UPLOAD.md"
+        "editor/src/audio/fm1Package.ts",
+        "firmware/fm1/runtime.h",
+        "firmware/fm1/app.c"
       ]
     },
     {
@@ -1284,9 +1337,9 @@
       "id": "knobs",
       "category": "hardware",
       "status": "partial",
-      "since": 912,
+      "since": 916,
       "verification": "source reviewed",
-      "notes": "Up to six Params outputs map in order to Knobs 1–4, Select and Algorithm. The screen prefixes each output name and its actual declared-unit value (rounded to up to four decimal places) with its control reference: K1–K4, SEL or ALG.",
+      "notes": "K1–K4 edit the first four Params outputs. Select browses remaining outputs in saved order, clamping at either end; Algorithm edits the single visible extra parameter. Each value is retained when browsing. Parameters share the 128-value patch budget. Five screen rows show labels, declared-unit values and aligned outlined range bars. Requires firmware 916 and package v5 for more than six outputs; v1–v4 remain readable with the new control layout. Hardware validation pending. 919 removes the ALG prefix, supports longer names, and redraws parameter rows only when their displayed content changes. Names accept spaces, punctuation and Unicode without a length limit in the source patch; the UTF-8 screen preview is cropped to 31 bytes at a character boundary. Latin-1 glyphs render directly; other glyphs appear as ?. Package v6 uses 32-byte label fields; versions 1–5 remain readable. 920 puts the cropped name, complete value and aligned 46-pixel bar on one row, retaining change-only redraws. Hardware display verification pending.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md"
@@ -1296,9 +1349,9 @@
       "id": "other musical controls",
       "category": "hardware",
       "status": "partial",
-      "since": 911,
+      "since": 916,
       "verification": "source reviewed",
-      "notes": "Algorithm and Select encoders control the fifth and sixth ordered Params outputs. Musical buttons remain unassigned.",
+      "notes": "K1–K4 edit the first four Params outputs. Select browses remaining outputs in saved order, clamping at either end; Algorithm edits the single visible extra parameter. Each value is retained when browsing. Parameters share the 128-value patch budget. Five screen rows show labels, declared-unit values and aligned outlined range bars. Requires firmware 916 and package v5 for more than six outputs; v1–v4 remain readable with the new control layout. Hardware validation pending. Musical buttons remain unassigned.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md"
@@ -1322,7 +1375,7 @@
       "status": "partial",
       "since": null,
       "verification": "source reviewed",
-      "notes": "USB and TRS channel 1 note on/off, zero-velocity note off, CC 120/123; source ownership tracked separately. Physical keys and channel 1 feed the FM-1 MIDI Note lowering as one monophonic source.",
+      "notes": "USB and TRS channel 1 note on/off, zero-velocity note off, CC 120/123; source ownership tracked separately. Physical keys and channel 1 feed the FM-1 MIDI Note lowering as one monophonic source. Since 921, separate MIDI Note On/Off event nodes receive all 16 USB/TRS channels with velocity and queued events; the legacy mono source remains channel 1.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md"
@@ -1346,7 +1399,7 @@
       "status": "supported",
       "since": 902,
       "verification": "source reviewed",
-      "notes": "USB MIDI SysEx upload; two RAM slots; PRESETS selects slots; switching fades and resets DSP state.",
+      "notes": "USB MIDI SysEx upload; two RAM slots; PRESETS selects slots; switching fades and resets DSP state. Browser data-timeout recovery uses the existing status offset to confirm acceptance or permit one resend; unexpected offsets stop transfer. No protocol or firmware version change. Recovery hardware verification is pending.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md"
@@ -1382,7 +1435,7 @@
       "status": "supported",
       "since": 911,
       "verification": "source reviewed",
-      "notes": "911 reads package versions 1–4; the compiler emits version 4 with an ordered six-control Params descriptor list. Opcode 52 is MIDI Note. Opcodes 29–31 require 905, 32–37 require 906, 38–40 require 907, 41 (bend scaling) requires 908, 42–43 (feedback read/write) require 909, and 44–51 require 910. Older firmware rejects unfamiliar opcodes before replacing a preset.",
+      "notes": "911 reads package versions 1–4; the compiler emits version 4 with an ordered six-control Params descriptor list. Opcode 52 is MIDI Note. Opcodes 29–31 require 905, 32–37 require 906, 38–40 require 907, 41 (bend scaling) requires 908, 42–43 (feedback read/write) require 909, and 44–51 require 910. Older firmware rejects unfamiliar opcodes before replacing a preset. 916 reads versions 1–5; exports use v5 with 128 reserved parameter records and unchanged opcodes. 921 adds instructions 54–63 for envelope completion, MIDI events and bounded repeat execution, retaining package layouts.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md"
@@ -1416,9 +1469,9 @@
       "id": "status display",
       "category": "hardware",
       "status": "supported",
-      "since": 912,
+      "since": 916,
       "verification": "source reviewed",
-      "notes": "The first line contains the selected patch number and name without a slot label, followed by an empty line. Up to six ordered Params lines then show K1–K4, SEL or ALG, their labels and declared-unit values rounded to up to four decimal places; maximum render time, late-buffer and MIDI-overflow counts follow.",
+      "notes": "K1–K4 edit the first four Params outputs. Select browses remaining outputs in saved order, clamping at either end; Algorithm edits the single visible extra parameter. Each value is retained when browsing. Parameters share the 128-value patch budget. Five screen rows show labels, declared-unit values and aligned outlined range bars. Requires firmware 916 and package v5 for more than six outputs; v1–v4 remain readable with the new control layout. Hardware validation pending. 919 removes the ALG prefix, supports longer names, and redraws parameter rows only when their displayed content changes. Names accept spaces, punctuation and Unicode without a length limit in the source patch; the UTF-8 screen preview is cropped to 31 bytes at a character boundary. Latin-1 glyphs render directly; other glyphs appear as ?. Package v6 uses 32-byte label fields; versions 1–5 remain readable. 920 puts the cropped name, complete value and aligned 46-pixel bar on one row, retaining change-only redraws. Hardware display verification pending.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md"
@@ -1430,7 +1483,7 @@
       "status": "partial",
       "since": 904,
       "verification": "source reviewed",
-      "notes": "915 source identity assigned; installation and reboot unverified. Prior 904 installation evidence is historical only; return to stock and interrupted-update recovery unverified. The fm1:install wrapper audits sources, rebuilds changed/missing packages, checks package hashes and invokes the pinned installer with post-reboot identity verification; wrapper execution remains unverified.",
+      "notes": "916 source identity assigned; installation and reboot unverified. Prior 904 installation evidence is historical only; return to stock and interrupted-update recovery unverified. The fm1:install wrapper audits sources, rebuilds changed/missing packages, checks package hashes and invokes the pinned installer with post-reboot identity verification; wrapper execution remains unverified.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md",
@@ -1525,8 +1578,8 @@
       "category": "dsp",
       "status": "supported",
       "since": 915,
-      "verification": "host verified",
-      "notes": "Single-assignment programs split into dependency-ordered control and audio instruction lists on load. Pure calculations depending only on values are prepared after inputs are copied at each 128-frame half-buffer boundary and reused until values change. Stateful DSP, audio-derived arithmetic, feedback and all MIDI outputs remain per sample. Packages reassigning registers retain original-order execution; legacy level smoothing uses the sample-compatible entry point. Exact envelope quotient/remainder progression avoids repeated fractional division without changing samples. No package-format, opcode, resource-limit or knob-interpolation change. Host tests establish equivalence for their fixtures, not hardware performance.",
+      "verification": "source reviewed",
+      "notes": "Single-assignment programs split into dependency-ordered control and audio instruction lists on load. Pure calculations depending only on values are prepared after inputs are copied at each 128-frame half-buffer boundary and reused until values change. Stateful DSP, audio-derived arithmetic, feedback and all MIDI outputs remain per sample. Packages reassigning registers retain original-order execution; legacy level smoothing uses the sample-compatible entry point. Exact envelope quotient/remainder progression avoids repeated fractional division without changing samples. No package-format, opcode, resource-limit or knob-interpolation change. Host tests establish equivalence for their fixtures, not hardware performance. Since 921, repeat programs retain original instruction order and execute per sample; Spread count alone is latched at block start.",
       "evidence": [
         "firmware/fm1/runtime.h",
         "firmware/fm1/app.c",
@@ -1541,7 +1594,7 @@
       "category": "dsp",
       "status": "supported",
       "since": 915,
-      "verification": "host verified",
+      "verification": "source reviewed",
       "notes": "FM-1 export simplifies the lowered Q16.16 instruction stream: immutable value folding, bounded arithmetic identities, duplicate pure calculations and unused pure operations. Mutable Params values remain live, intermediate clipping is retained, and stateful/feedback execution order is preserved. Constant folding uses integer arithmetic with firmware rounding, not browser floating-point evaluation. Register numbering and asset/control value indices stay stable. This is a compiler change for firmware 915; no new firmware or package protocol. Hardware timing has not been measured.",
       "evidence": [
         "editor/src/audio/fm1Optimizer.ts",
@@ -1549,6 +1602,25 @@
         "scripts/test-fm1-optimizer.mjs",
         "firmware/fm1/test-optimizer-render.c"
       ]
+    },
+    {
+      "id": "live patch editing",
+      "category": "protocol",
+      "status": "supported",
+      "since": 918,
+      "verification": "source reviewed",
+      "notes": "Editor FM1 mode replaces PLAY/REC with LIVE EDIT. Serialized updates compile the latest root patch; identical lowered layouts send changed Q16.16 values, while layout changes upload a new patch. Live compilation keeps value bindings mutable. Command 7 probes support; command 6 validates preset, original package CRC and up to 18 indexed values, applies them between audio buffers without resetting DSP state, and acknowledges application. Errors stop sending; invalid graphs wait for correction. RAM only. Source implemented for 918; hardware and timing are not yet verified. The mode menu filters node selection to supported/partial registry entries and colors existing unsupported/unknown nodes red, even when disabled. Browser transport now leaves 10 ms after matched replies and retries timed-out read-only probes once with a fresh token. This mitigates a possible receive-mailbox release race in existing firmware; the reported capabilities timeout has not been reproduced or hardware-verified. Patch-data timeouts now query the existing status offset: continue at the chunk end, resend once at the chunk start, and stop on any other offset or a second data timeout. Begin, activation, selection and value updates are never automatically retried. Recovery is source reviewed; hardware verification remains pending. No DSP, package format or firmware version change. FM1 mode persists in the editor local state; LIVE EDIT remains off on reload. This UI persistence change does not change firmware or DSP behavior.",
+      "evidence": [
+        "editor/src/audio/useFm1LiveEdit.ts",
+        "editor/src/audio/fm1Upload.ts",
+        "editor/src/audio/fm1Package.ts",
+        "firmware/fm1/upload.h",
+        "firmware/fm1/app.c",
+        "editor/src/editor/ShaderNode.tsx",
+        "editor/src/editor/NodeEditor.tsx"
+      ],
+      "blockedInputs": [],
+      "blockedOutputs": []
     }
   ],
   "evidenceLog": [
@@ -1589,6 +1661,12 @@
       ],
       "scope": "23 regression patches rendered before/after compiler optimization for 700 blocks of 128 frames with knob changes and MIDI events. ASan/UBSan renderer verifies exact stereo PCM, DSP state, feedback and delay contents. Arithmetic guards cover rounding, intermediate clipping, independent mutable controls, stateful ordering and full value pools. Feedback bend reduces from 72 to 30 instructions; no hardware performance claim.",
       "source": "scripts/test-fm1-optimizer.mjs"
+    },
+    {
+      "date": "2026-10-11",
+      "firmware": "FM-1_917",
+      "scope": "Two one-second 16-bit delays, fractional interpolation and time smoothing. Pinned linker/MMIO/ROM-call checks passed; runtime arena is 182652 bytes and pool total 226140 of 368640 bytes. Static checks do not establish audio quality or real-time performance. New delay regression assertions compile but have not been executed.",
+      "source": "docs/spikes/fm1-results/delay-917.json"
     }
   ],
   "$schema": "./support.schema.json",
@@ -1597,7 +1675,7 @@
     "registers": 256,
     "values": 128,
     "states": 32,
-    "packageVersion": 4,
+    "packageVersion": 6,
     "operationBytes": 24
   },
   "compiler": {
@@ -1609,26 +1687,35 @@
       4,
       5,
       6,
+      7,
       8,
       9,
+      12,
       15,
       16,
       17,
       18,
       19,
+      20,
+      21,
       23,
       26,
       27,
       29,
-      49,
-      51,
-      55,
-      7,
-      12,
-      20,
-      21,
       32,
-      40
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      55
     ],
     "oscillatorModes": [
       0,
@@ -1743,7 +1830,28 @@
         "name": "not",
         "arity": 1
       }
-    ]
+    ],
+    "delay": {
+      "maxNodes": 2,
+      "maxSeconds": 1,
+      "sampleRate": 44100,
+      "storageBits": 16,
+      "storageFractionBits": 12,
+      "smoothingSamples": 256,
+      "instruction": 53,
+      "legacyInstruction": 44,
+      "since": 917
+    },
+    "repeat": {
+      "maxInstances": 8,
+      "maxContainers": 8,
+      "eventQueue": 256,
+      "since": 921,
+      "blockedOpcodes": [
+        12,
+        32
+      ]
+    }
   },
   "protocol": {
     "packages": [
@@ -1778,6 +1886,24 @@
         "operations": 256,
         "registers": 256,
         "values": 128
+      },
+      {
+        "version": 5,
+        "headerBytes": 3237,
+        "operationBytes": 24,
+        "operations": 256,
+        "registers": 256,
+        "values": 128,
+        "since": 916
+      },
+      {
+        "version": 6,
+        "headerBytes": 5797,
+        "operationBytes": 24,
+        "operations": 256,
+        "registers": 256,
+        "values": 128,
+        "since": 919
       }
     ],
     "instructions": [
@@ -2014,7 +2140,79 @@
         "name": "midi note",
         "since": 911,
         "minimumPackageVersion": 4
+      },
+      {
+        "code": 53,
+        "name": "smoothed delay",
+        "since": 917,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 54,
+        "name": "envelope end trigger",
+        "since": 921,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 55,
+        "name": "midi note event",
+        "since": 921,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 56,
+        "name": "spread begin",
+        "since": 921,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 57,
+        "name": "spread index",
+        "since": 921,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 58,
+        "name": "repeat collect",
+        "since": 921,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 59,
+        "name": "spread end",
+        "since": 921,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 60,
+        "name": "spawn begin",
+        "since": 921,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 61,
+        "name": "spawn end",
+        "since": 921,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 62,
+        "name": "spawn instance gate",
+        "since": 921,
+        "minimumPackageVersion": 3
+      },
+      {
+        "code": 63,
+        "name": "block latch",
+        "since": 921,
+        "minimumPackageVersion": 3
       }
-    ]
+    ],
+    "liveEdit": {
+      "since": 918,
+      "probeCommand": 7,
+      "updateCommand": 6,
+      "maxUpdates": 18
+    }
   }
 }

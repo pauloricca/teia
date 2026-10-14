@@ -1,14 +1,15 @@
 import { compilePatchToDspProgram, type DspProgram, type DspOp } from './dspProgram';
 import { optimizeFm1Ops } from './fm1Optimizer';
 import type { Patch } from '../graph/types';
-import { fm1Capabilities, fm1Limits as limits, fm1FilterModes, fm1DistortionModes, fm1FunctionArity, inspectFm1Package } from './fm1Capabilities';
+import { fm1Capabilities, fm1Delay, fm1Limits as limits, fm1FilterModes, fm1DistortionModes, fm1FunctionArity, inspectFm1Package } from './fm1Capabilities';
 import { getFm1SupportErrors } from './fm1Support';
 export { limits as fm1Limits };
 export type Fm1Patch = Patch;
 export interface Fm1Usage { operations: number; registers: number; values: number; states: number; bytes: number }
 export interface Fm1Compiled { program: DspProgram; ops: number[][]; parameters: Record<string, number>; bytes: Uint8Array }
 export interface Fm1Analysis { usage: Fm1Usage | null; errors: string[]; compiled: Fm1Compiled | null }
-export const fm1MaximumBytes = 187 + limits.operations * limits.operationBytes + limits.values * 4;
+const fm1HeaderBytes = fm1Capabilities.protocol.packages.find(p => p.version === limits.packageVersion)!.headerBytes;
+export const fm1MaximumBytes = fm1HeaderBytes + limits.operations * limits.operationBytes + limits.values * 4;
 export function q16(n: number): number {
   const value = Math.round(n * 65536);
   if (!Number.isFinite(n) || n < -32768 || value < -2147483648 || value > 2147483647) throw new Error('Value outside Q16.16 range');
@@ -18,16 +19,16 @@ function writeOperand(view: DataView, at: number, value: number) {
   if (!Number.isInteger(value) || value < -32768 || value > 32767) throw new Error('Invalid compiled operand');
   view.setInt16(at, value, true);
 }
-export function analyzeFm1Patch(patch: Fm1Patch): Fm1Analysis {
+export function analyzeFm1Patch(patch: Fm1Patch, live = false): Fm1Analysis {
   let usage: Fm1Usage | null = null;
   try {
     const fm1Patch = migrateLegacyKeyboardControls(patch);
     const eligibilityErrors = getFm1SupportErrors(fm1Patch);
     if (eligibilityErrors.length) return { usage, errors: eligibilityErrors, compiled: null };
-    const program = compilePatchToDspProgram(fm1Patch, { deduplicateLoads: false, foldConstants: false, eliminateDeadPureOps: false, analyzeSchedule: false });
+    const program = compilePatchToDspProgram(fm1Patch, { target: 'fm1', deduplicateLoads: false, foldConstants: false, eliminateDeadPureOps: false, analyzeSchedule: false });
     usage = { operations: program.ops.length, registers: program.registerCount, values: program.values.length, states: program.stateCount, bytes: 187 + program.ops.length * limits.operationBytes + program.values.length * 4 };
     if (program.errors.length) return { usage, errors: program.errors, compiled: null };
-    const compiled = lowerFm1Patch(fm1Patch, program);
+    const compiled = lowerFm1Patch(fm1Patch, program, live);
     usage = { operations: compiled.ops.length, registers: program.registerCount, values: program.values.length, states: program.stateCount, bytes: compiled.bytes.length };
     return { usage, errors: [], compiled };
   } catch (error) {
@@ -58,13 +59,13 @@ export function compileFm1Patch(patch: Fm1Patch): Fm1Compiled {
   if (!result.compiled) throw new Error(result.errors.join('\n'));
   return result.compiled;
 }
-function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
+function lowerFm1Patch(patch: Fm1Patch, program: DspProgram, live = false): Fm1Compiled {
   const controls = patch.nodes.filter(node => node.type === 'Params' && node.enabled !== false);
   if (controls.length > 1) throw new Error('FM-1 patches can use one enabled Params node so its output order maps to the device controls.');
   const controlsNode = controls[0];
   const controlsId = controlsNode?.id;
   const controlOutputs = controlsNode?.outputs ?? [];
-  if (controlOutputs.length > 6) throw new Error('FM-1 supports at most six Params outputs: Knob 1, Knob 2, Knob 3, Knob 4, Select, Algorithm.');
+  if (controlOutputs.length > limits.values) throw new Error(`FM-1 Params share the ${limits.values}-value patch budget.`);
   for (const node of patch.nodes.filter(node => node.enabled !== false && node.type === 'MidiNote')) {
     if ((node.params.channel ?? 0) !== 0 && (node.params.channel ?? 0) !== 1) {
       throw new Error(`MIDI Note ${node.id}: FM-1 supports only channel 1 or all channels.`);
@@ -82,7 +83,31 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
   let fm1DelayCount = 0;
   // The browser's Tempo opcode has no state because its transport is global.
   // FM-1 patches are self-contained, so reserve one state entry per output.
-  let fm1StateCount = program.stateCount;
+  // Scalar WASM slots are packed into firmware state records, then repeated
+  // templates reserve independent records within the shared fixed pool.
+  const stateMap = new Map<number, number>();
+  const tempoStates = new Map<number, number>();
+  let fm1StateCount = 0;
+  program.ops.forEach((op, index) => { if (op.opcode === 32) tempoStates.set(index, fm1StateCount++); });
+  const repeatRanges = program.repeatBindings;
+  const stateOps = program.ops.filter(o => o.state !== undefined && o.state >= 0 && ![42, 45, 46, 47, 48].includes(o.opcode));
+  for (const o of stateOps) {
+    if (!repeatRanges.some(r => o.state! >= r.stateStart && o.state! < r.stateStart + r.stateCount)
+      && !stateMap.has(o.state!)) stateMap.set(o.state!, fm1StateCount++);
+  }
+  const repeatStates = repeatRanges.map(r => [...new Set(stateOps.filter(o => o.state! >= r.stateStart && o.state! < r.stateStart + r.stateCount).map(o => o.state!))]);
+  const totalRepeatStates = repeatStates.reduce((n, states) => n + states.length, 0);
+  const capacity = Math.min(fm1Capabilities.compiler.repeat.maxInstances, totalRepeatStates ? Math.floor((limits.states - fm1StateCount) / totalRepeatStates) : fm1Capabilities.compiler.repeat.maxInstances);
+  if (repeatRanges.length > fm1Capabilities.compiler.repeat.maxContainers || capacity < 1) throw new Error('FM-1 repeat templates exceed the container or state budget.');
+  const repeatLayout = repeatStates.map(states => {
+    const start = fm1StateCount;
+    states.forEach((state, i) => stateMap.set(state, start + i));
+    fm1StateCount += states.length * capacity;
+    return { start, count: states.length };
+  });
+  const repeatBounds = program.ops.flatMap((op, index) => [42, 46].includes(op.opcode) ? [{ start: index, end: op.b! }] : []);
+  const sourceIndices = new Map<number, number>();
+  const repeatJumps: { op: number[]; end: number }[] = [];
   const appendCustomWaveAsset = (bindingIndex: number) => {
     const binding = program.customWaveBindings[bindingIndex];
     if (!binding) throw new Error(`${context}: missing Custom Wave data`);
@@ -95,12 +120,15 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
     return { first, points: binding.customWave.points.length };
   };
   let context = '';
-  for (const source of program.ops) {
-    const o = source as Required<DspOp>;
-    context = program.stateBindings.find(binding => binding.state === o.state)?.nodeId ?? `operation ${o.opcode}`;
+  for (const [sourceIndex, source] of program.ops.entries()) {
+    sourceIndices.set(sourceIndex, ops.length);
+    const o = { ...source, state: stateMap.get(source.state!) ?? source.state } as Required<DspOp>;
+    context = program.stateBindings.find(binding => binding.state === source.state)?.nodeId ?? `operation ${o.opcode}`;
     if (!fm1Capabilities.compiler.opcodes.includes(o.opcode)) {
       throw new Error(`Unsupported opcode ${o.opcode} (${context}) for ${fm1Capabilities.firmware}`);
     }
+    const inRepeat = repeatBounds.some(range => sourceIndex > range.start && sourceIndex < range.end);
+    if (inRepeat && fm1Capabilities.compiler.repeat.blockedOpcodes.includes(o.opcode)) throw new Error(`${context}: FM-1 Delay and Tempo must be outside repeat containers.`);
     switch (o.opcode) {
       case 0:
         ops.push([0, o.out, o.a, 0, 0, 0]);
@@ -169,17 +197,31 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
         break;
       }
       case 27:
-        if (o.a < 0 || o.a > 4) throw new Error(`${context}: FM-1 supports the MIDI Note node, not MIDI Note On or MIDI Note Off.`);
-        ops.push([52, o.out, o.a, o.b, 0, 0]);
+        if (o.a < 0 || o.a > 9) throw new Error(`${context}: unsupported MIDI output`);
+        ops.push([o.a > 4 ? 55 : 52, o.out, o.a, o.b, 0, 0]);
         break;
       case 29: ops.push([39, o.out, o.a, o.b, o.c, o.state, o.d, o.e, o.value]); break;
       case 7: ops.push([46, o.out, o.a, o.b, o.c, 0, o.d, o.e]); break;
       case 12:
-        if (++fm1DelayCount > 1) throw new Error('FM-1 supports one Delay node per patch');
-        ops.push([44, o.out, o.a, o.b, o.c, o.state, o.d]);
+        if (++fm1DelayCount > fm1Delay.maxNodes) throw new Error(`FM-1 supports at most ${fm1Delay.maxNodes} Delay nodes per patch`);
+        ops.push([fm1Delay.instruction, o.out, o.a, o.b, o.c, o.state, o.d]);
         break;
       case 20: ops.push([45, o.out, o.a, o.b, o.c, o.state]); break;
-      case 32: ops.push([49, o.out, o.a, o.c, o.e, fm1StateCount++]); break;
+      case 32:
+        ops.push([49, o.out, o.a, o.c, o.e, tempoStates.get(sourceIndex)!]); break;
+      case 41: ops.push([63, o.out, o.a, 0, 0, o.state]); break;
+      case 42: case 46: {
+        const layout = repeatLayout[o.value];
+        const op = [o.opcode === 42 ? 56 : 60, o.opcode === 42 ? 0 : o.out, o.a, 0, o.c, layout.start, o.d, layout.count, capacity, o.value];
+        repeatJumps.push({ op, end: o.b }); ops.push(op); break;
+      }
+      case 43: ops.push([57, o.out, 0, 0, 0, 0]); break;
+      case 44: ops.push([58, o.out, o.a, o.b, 0, 0]); break;
+      case 45: case 47: ops.push([o.opcode === 45 ? 59 : 61, 0, 0, 0, 0, 0]); break;
+      case 48:
+        if (o.value !== 0 || stateMap.get(o.a) === undefined) throw new Error('FM-1 end trigger currently supports Envelope only.');
+        ops.push([54, o.out, stateMap.get(o.a)!, 0, 0, 0]); break;
+      case 50: ops.push([62, o.out, 0, 0, 0, 0]); break;
       case 40: ops.push([48, o.out, o.a, o.b, o.c, 0]); break;
       case 49: ops.push([40, o.out, o.b, o.c, o.a, o.state]); break;
       case 55: ops.push([41, o.out, o.a, 0, 0, 0]); break;
@@ -188,9 +230,11 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
       default: throw new Error(`Unsupported opcode ${o.opcode}`);
     }
   }
+  for (const jump of repeatJumps) jump.op[3] = sourceIndices.get(jump.end)!;
   const fixedValues = program.values.map(q16);
-  const mutableValues = new Set(program.valueBindings.filter(b => b.nodeId === controlsId && controlsId !== undefined).map(b => b.valueIndex));
-  ops = optimizeFm1Ops(ops, fixedValues, mutableValues, limits.values);
+  const mutableValues = new Set(program.valueBindings.filter(b => (live || (b.nodeId === controlsId && controlsId !== undefined))).map(b => b.valueIndex));
+  // Bracket targets are instruction offsets; preserve template order and collectors.
+  if (!repeatJumps.length) ops = optimizeFm1Ops(ops, fixedValues, mutableValues, limits.values);
   for (let i = program.values.length; i < fixedValues.length; i++) program.values.push(fixedValues[i] / 65536);
   for (const [label, used, maximum] of [
     ['operations', ops.length, limits.operations], ['registers', program.registerCount, limits.registers],
@@ -200,7 +244,7 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
   const parameters: Record<string, number> = {};
   // Portable little-endian package, independent of the C compiler's structure layout.
   for (const op of ops) while (op.length < 12) op.push(0);
-  const bytes = new Uint8Array(187 + ops.length * limits.operationBytes + program.values.length * 4);
+  const bytes = new Uint8Array(fm1HeaderBytes + ops.length * limits.operationBytes + program.values.length * 4);
   const view = new DataView(bytes.buffer);
   const text = (value: string, at: number) => bytes.set(new TextEncoder().encode(value), at);
   text('TGP1', 0); view.setUint16(4, limits.packageVersion, true);
@@ -214,15 +258,21 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram): Fm1Compiled {
     const binding = program.valueBindings.find(b => b.nodeId === controlsId && b.port === output.name);
     if (!binding || usedKnobs.has(binding.valueIndex)) throw new Error(`Invalid or duplicate Params output "${output.name}".`);
     usedKnobs.add(binding.valueIndex);
-    if (!/^[a-z]+(?: [a-z]+)*$/.test(output.name) || output.name.length > 11) throw new Error('FM-1 Params labels use lowercase English words, at most 11 characters.');
+    if (!output.name.trim() || /[\u0000-\u001f\u007f-\u009f]/u.test(output.name)) throw new Error('FM-1 Params names must be nonempty and contain no control characters.');
+    // Preserve full names/bindings in the patch; only the screen preview is cropped.
+    let screenLabel = '';
+    for (const character of output.name.normalize('NFC')) {
+      if (new TextEncoder().encode(screenLabel + character).length > 31) break;
+      screenLabel += character;
+    }
     const lo = q16(output.min ?? 0), hi = q16(output.max ?? 1);
     const step = Math.max(1, Math.round((hi - lo) / 100));
     if (lo >= hi || program.values[binding.valueIndex] < (output.min ?? 0) || program.values[binding.valueIndex] > (output.max ?? 1)) throw new Error(`Invalid range or default for Params output "${output.name}".`);
     parameters[output.name] = binding.valueIndex;
-    const at = 37 + i * 25; bytes[at] = binding.valueIndex; text(output.name, at + 1);
-    view.setInt32(at + 13, lo, true); view.setInt32(at + 17, hi, true); view.setInt32(at + 21, step, true);
+    const at = 37 + i * 45; bytes[at] = binding.valueIndex; text(screenLabel, at + 1);
+    view.setInt32(at + 33, lo, true); view.setInt32(at + 37, hi, true); view.setInt32(at + 41, step, true);
   });
-  let at = 187;
+  let at = fm1HeaderBytes;
   for (const op of ops) for (const v of op) { writeOperand(view, at, v); at += 2; }
   for (const v of program.values) { view.setInt32(at, q16(v), true); at += 4; }
   inspectFm1Package(bytes);

@@ -11,10 +11,18 @@ await fs.mkdir(out, { recursive: true });
 await fs.rm(path.join(out, 'patch.tgp'), { force: true });
 await build({ stdin: { contents: 'export {compileFm1Patch, fm1Limits, q16} from "./editor/src/audio/fm1Package.ts";', resolveDir: root, loader: 'ts' }, bundle: true, platform: 'node', format: 'esm', outfile: path.join(out, 'compiler.mjs') });
 const { compileFm1Patch, fm1Limits: limits, q16 } = await import(pathToFileURL(path.join(out, 'compiler.mjs')));
+const { compiler: { delay, repeat }, protocol: { liveEdit } } = JSON.parse(await fs.readFile(path.join(root, 'firmware/fm1/support.json'), 'utf8'));
 await fs.writeFile(path.join(out, 'teia_limits.h'), Object.entries({
+  TEIA_LIVE_PROBE_COMMAND: liveEdit.probeCommand, TEIA_LIVE_UPDATE_COMMAND: liveEdit.updateCommand,
+  TEIA_LIVE_MAX_UPDATES: liveEdit.maxUpdates,
+  TEIA_MAX_INSTANCES: repeat.maxInstances, TEIA_MAX_CONTAINERS: repeat.maxContainers, TEIA_EVENT_QUEUE: repeat.eventQueue,
   TEIA_MAX_OPS: limits.operations, TEIA_MAX_REGS: limits.registers,
   TEIA_MAX_VALUES: limits.values, TEIA_MAX_STATES: limits.states,
   TEIA_PACKAGE_VERSION: limits.packageVersion, TEIA_OP_BYTES: limits.operationBytes,
+  TEIA_MAX_DELAYS: delay.maxNodes, TEIA_MAX_DELAY_SAMPLES: delay.maxSeconds * delay.sampleRate + 1,
+  TEIA_DELAY_SMOOTHING_SAMPLES: delay.smoothingSamples, TEIA_DELAY_SAMPLE_RATE: delay.sampleRate,
+  TEIA_DELAY_FRACTION_BITS: delay.storageFractionBits,
+  TEIA_DELAY_OPCODE: delay.instruction, TEIA_LEGACY_DELAY_OPCODE: delay.legacyInstruction,
 }).map(([name, value]) => `#define ${name} ${value}u\n`).join(''));
 const patchPath = path.resolve(process.argv[3] ?? path.join(root, 'firmware/fm1/patches/sine.json'));
 const patch = JSON.parse(await fs.readFile(patchPath, 'utf8'));
@@ -25,7 +33,7 @@ const filterSine = Array.from({ length: 1025 }, (_, i) => Math.round(Math.sin(i 
 const bendRatios = Array.from({ length: 257 }, (_, i) => Math.round(2 ** (i / 256) * 1073741824));
 const pitches = Array.from({ length: 128 }, (_, i) => q16(440 * 2 ** ((i - 69) / 12)));
 const header = `/* Generated from patches/sine.json by the Teia compiler. */\n`
-  + Object.entries(parameters).map(([k,v]) => `#define PARAM_${k.toUpperCase()} ${v}u\n`).join('')
+  + Object.entries(parameters).map(([k,v], i) => `#define PARAM_INDEX_${i} ${v}u\n` + (/^[a-z]+$/.test(k) ? `#define PARAM_${k.toUpperCase()} ${v}u\n` : '')).join('')
   + `static const int32_t sine_table[1025] = {${sine.join(',')}};\n`
   + `static const int32_t filter_sine[1025] = {${filterSine.join(',')}};\n`
   + `static const uint32_t bend_ratio_table[257] = {${bendRatios.map(value => `${value}u`).join(',')}};\n`

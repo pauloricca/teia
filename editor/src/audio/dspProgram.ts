@@ -180,7 +180,7 @@ interface CompileContext {
   constantValueIndexes: Map<number, number>;
   constantRegisters: Map<string, number>;
   deduplicatedLoads: number;
-  optimizationOptions: DspOptimizationOptions;
+  optimizationOptions: DspCompileOptions;
   errors: string[];
   feedbackLinkIds: string[];
   monitorIds: Record<string, number>;
@@ -270,7 +270,11 @@ const EXPRESSION_LOGIC_FUNCTIONS = {
   not: 27,
 } as const;
 
-export function compilePatchToDspProgram(patch: Patch, optimizationOptions: DspOptimizationOptions = {}): DspProgram {
+export interface DspCompileOptions extends DspOptimizationOptions {
+  target?: 'web' | 'fm1';
+}
+
+export function compilePatchToDspProgram(patch: Patch, optimizationOptions: DspCompileOptions = {}): DspProgram {
   const spreadExpansion = expandSpreads(patch);
   // Materialize strength inputs before group boundaries disappear, so they
   // participate in the same boundary rewiring as every other input.
@@ -1925,7 +1929,9 @@ function resolveSliderUnitValue(node: PatchNode, context: CompileContext): numbe
     register = resolveInput(node, 'value', 0.5, context);
   } else {
     const valueIndex = valueIndexForNodeParam(node, 'value', 0.5, context);
-    addMidiControlBinding(node, 'slider', valueIndex, context);
+    if (context.optimizationOptions.target !== 'fm1') {
+      addMidiControlBinding(node, 'slider', valueIndex, context);
+    }
     register = emitValue(valueIndex, context);
   }
 
@@ -2002,6 +2008,16 @@ function resolveJoystickUnitValue(node: PatchNode, axis: 'x' | 'y', context: Com
 function resolveButtonGateOutput(node: PatchNode, context: CompileContext): number {
   const cached = context.buttonGateOutputByNodeId.get(node.id);
   if (cached !== undefined) return cached;
+
+  if (context.optimizationOptions.target === 'fm1') {
+    // UI/MIDI events are unavailable on the device. Keep the saved gate or
+    // toggle state; trigger mode starts idle and must not replay saved clicks.
+    const mode = Math.round(finiteNumber(node.params.mode, 0));
+    const gate = mode !== 1 && finiteNumber(node.params.pressed, 0) >= 0.5 ? 1 : 0;
+    const output = constantRegister(gate, context);
+    context.buttonGateOutputByNodeId.set(node.id, output);
+    return output;
+  }
 
   const output = nextRegister(context);
   const state = nextState(context, 3);

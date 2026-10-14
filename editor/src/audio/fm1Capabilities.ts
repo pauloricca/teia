@@ -3,6 +3,7 @@ import support from '../../../firmware/fm1/support.json';
 /** Shared capability contract. DSP implementations stay in their respective backends. */
 export const fm1Capabilities = support;
 export const fm1Limits = support.limits;
+export const fm1Delay = support.compiler.delay;
 export const fm1SupportFirmware = support.firmware;
 export const fm1FilterModes: Readonly<Record<number, number>> = support.compiler.filterModes;
 export const fm1DistortionModes: Readonly<Record<number, number>> = support.compiler.distortionModes;
@@ -23,7 +24,8 @@ export function inspectFm1Package(bytes: Uint8Array): { version: number; require
   if (!count || count > Math.min(format.operations, fm1Limits.operations) || !registers
     || registers > Math.min(format.registers, fm1Limits.registers) || values > Math.min(format.values, fm1Limits.values)
     || bytes.length !== format.headerBytes + count * format.operationBytes + values * 4) invalid('invalid length or resource counts');
-  let requiredFirmware = 902;
+  let requiredFirmware = format.since ?? 902;
+  let delays = 0;
   for (let i = 0; i < count; i++) {
     const offset = format.headerBytes + i * format.operationBytes;
     const operand = (index: number) => view.getInt16(offset + index * 2, true);
@@ -31,6 +33,10 @@ export function inspectFm1Package(bytes: Uint8Array): { version: number; require
     const instruction = support.protocol.instructions.find(op => op.code === code);
     if (!instruction || version < instruction.minimumPackageVersion) return invalid(`unsupported instruction ${code} at operation ${i}`);
     requiredFirmware = Math.max(requiredFirmware, instruction.since);
+    if (code === fm1Delay.instruction || code === fm1Delay.legacyInstruction) {
+      if (++delays > fm1Delay.maxNodes) invalid(`at most ${fm1Delay.maxNodes} Delay nodes per patch`);
+      if (delays > 1) requiredFirmware = Math.max(requiredFirmware, fm1Delay.since);
+    }
     if (code === 25 && (!support.compiler.oscillatorModes.includes(operand(9)) || operand(9) === 6)) invalid('unsupported oscillator waveform');
     if (code === 38 && !fm1FunctionArity(operand(6))) invalid('unsupported expression function');
   }

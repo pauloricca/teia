@@ -1,7 +1,10 @@
+import { Fm1ModeContext } from './Fm1ModeContext';
+import { isFm1NodeImplemented } from '../audio/fm1Support';
 import { Handle, Position, useConnection, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import {
   memo,
   useEffect,
+  useContext,
   useId,
   useLayoutEffect,
   useMemo,
@@ -95,6 +98,8 @@ const FFT_ANALYSIS_MAX_FREQUENCY = 20000;
 
 export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selected, dragging }: NodeProps<ShaderFlowNode>) {
   const node = data.patchNode;
+  const fm1Mode = useContext(Fm1ModeContext);
+  const fm1Unsupported = fm1Mode && node.type !== null && !isFm1NodeImplemented(node.type);
   const connectionInProgress = useConnection((connection) => connection.inProgress);
   const isCanvasLocked = data.isCanvasLocked === true;
   const scopeGradientId = `scope-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -415,6 +420,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
     isExpression ? 'shader-node-expression' : '',
     isGroup ? 'shader-node-group' : '',
     hasDspErrors ? 'shader-node-dsp-error' : '',
+    fm1Unsupported ? 'shader-node-fm1-unsupported' : '',
     selected ? 'shader-node-selected' : '',
     dragging ? 'shader-node-dragging' : '',
     compactPorts ? 'shader-node-compact' : '',
@@ -1056,6 +1062,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
         ref={nodeElementRef}
         className={[
           'routing-node-marker',
+          fm1Unsupported ? 'shader-node-fm1-unsupported' : '',
           `routing-node-marker-${isSend ? 'send' : 'receive'}`,
           connectionInProgress ? 'routing-node-drop-active' : '',
           data.routingHighlighted === true ? 'routing-node-marker-highlighted' : '',
@@ -1182,6 +1189,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
             />
           </button>
         ) : null}
+        {fm1Unsupported ? <span className="node-dsp-error-marker" title="This node is not implemented or verified on FM1" aria-label="Not supported on FM1">!</span> : null}
         {hasDspErrors ? (
           <span
             className="node-dsp-error-marker"
@@ -5530,6 +5538,7 @@ function NodeTypePicker({
   onConvertToArea,
   onCustomLabelCommit,
 }: NodeTypePickerProps) {
+  const fm1Mode = useContext(Fm1ModeContext);
   const nodeTypeLabel = nodeType ? getNodeTypeLabel(nodeType) : 'type';
   const pickerLabel = displayLabel ?? nodeTypeLabel;
   const [query, setQuery] = useState<string>(nodeType ? pickerLabel : '');
@@ -5547,6 +5556,7 @@ function NodeTypePicker({
 
     return [...NODE_TYPE_LIST, 'Area' as const]
       .filter((option) => {
+        if (fm1Mode && option !== 'Area' && !isFm1NodeImplemented(option)) return false;
         if ((!isEditingSubpatch && (option === 'Ins' || option === 'Outs')) || (isEditingSubpatch && option === 'Params')) return false;
         const label = option === 'Area' ? 'Area' : getNodeTypeLabel(option);
         return (
@@ -5568,7 +5578,7 @@ function NodeTypePicker({
 
         return Number(rightStartsWithQuery) - Number(leftStartsWithQuery);
       });
-  }, [isEditingSubpatch, searchQuery]);
+  }, [fm1Mode, isEditingSubpatch, searchQuery]);
   useEffect(() => {
     if (!open) {
       setQuery(nodeType ? pickerLabel : '');

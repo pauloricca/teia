@@ -1,10 +1,11 @@
 /*
  * Theme tokens
  *
- * Add a :root[data-theme='name'] block to create another theme. Keep the
- * token names stable so component styles never need theme-specific rules.
+ * Add matching :root[data-theme='name'] and .teia-themed-editor[data-theme='name']
+ * selectors for standalone and embedded themes. Keep token names stable.
  */
-:root {
+:root,
+.teia-themed-editor {
   --font-main: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 
   --color-main: #f5f5f5;
@@ -44,6 +45,10 @@
   --color-foreground-90: rgba(255, 255, 255, 0.9);
   --color-foreground-95: rgba(255, 255, 255, 0.95);
 
+  --color-frame: var(--color-foreground);
+  --color-node-title-background: var(--color-foreground);
+  --color-node-title-text: var(--color-background);
+  --color-node-selection-outline: var(--color-foreground);
   --color-border-subtle: #333;
   --color-text-muted: #777;
   --color-accent: #2fd061;
@@ -69,7 +74,8 @@
   --color-edge-error-underlay: #2a0505;
 }
 
-:root[data-theme='console'] {
+:root[data-theme='console'],
+.teia-themed-editor[data-theme='console'] {
   --font-main: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 
   --color-main: #d6f5d2;
@@ -127,7 +133,8 @@
   --color-edge-error-underlay: #2a0808;
 }
 
-:root[data-theme='amber'] {
+:root[data-theme='amber'],
+.teia-themed-editor[data-theme='amber'] {
   --font-main: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 
   --color-main: #ffe0b0;
@@ -185,7 +192,8 @@
   --color-edge-error-underlay: #341007;
 }
 
-:root[data-theme='ocean'] {
+:root[data-theme='ocean'],
+.teia-themed-editor[data-theme='ocean'] {
   --font-main: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 
   --color-main: #d3f1ff;
@@ -243,4 +251,76 @@
   --color-sample-phase-attack: #57f287;
   --color-edge-underlay: #02090e;
   --color-edge-error-underlay: #2b0910;
+}
+
+/* Vira: blue-black instrument panels, cyan deck A and orange deck B. */
+:root[data-theme='vira'],
+.teia-themed-editor[data-theme='vira'] {
+  color-scheme: dark;
+  --font-main: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  --color-main: #c8d2d6;
+  --color-background: #0e191e;
+  --color-background-42: rgba(14, 25, 30, 0.42);
+  --color-background-54: rgba(14, 25, 30, 0.54);
+  --color-background-62: rgba(14, 25, 30, 0.62);
+  --color-background-72: rgba(14, 25, 30, 0.72);
+  --color-background-82: rgba(14, 25, 30, 0.82);
+  --color-background-90: rgba(14, 25, 30, 0.9);
+  --color-surface: #121e24;
+  --color-control: #152329;
+  --color-menu: #17262d;
+  --select-arrow-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M1 1 4 4 7 1' fill='none' stroke='%23c8d2d6' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.25'/%3E%3C/svg%3E");
+  --select-arrow-icon-hover: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cpath d='M1 1 4 4 7 1' fill='none' stroke='%230e191e' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.25'/%3E%3C/svg%3E");
+
+  --color-foreground: #c8d2d6;
+  --color-foreground-08: rgba(200, 210, 214, 0.08);
+  --color-foreground-10: rgba(200, 210, 214, 0.1);
+  --color-foreground-12: rgba(200, 210, 214, 0.12);
+  --color-foreground-15: rgba(200, 210, 214, 0.15);
+  --color-foreground-18: rgba(200, 210, 214, 0.18);
+  --color-foreground-20: rgba(200, 210, 214, 0.2);
+  --color-foreground-28: rgba(200, 210, 214, 0.28);
+  --color-foreground-32: rgba(200, 210, 214, 0.32);
+  --color-foreground-34: rgba(200, 210, 214, 0.34);
+  --color-foreground-44: rgba(200, 210, 214, 0.44);
+  --color-foreground-52: rgba(200, 210, 214, 0.52);
+  --color-foreground-56: rgba(200, 210, 214, 0.56);
+  --color-foreground-62: rgba(200, 210, 214, 0.62);
+  --color-foreground-66: rgba(200, 210, 214, 0.66);
+  --color-foreground-72: rgba(200, 210, 214, 0.72);
+  --color-foreground-76: rgba(200, 210, 214, 0.76);
+  --color-foreground-82: rgba(200, 210, 214, 0.82);
+  --color-foreground-85: rgba(200, 210, 214, 0.85);
+  --color-foreground-86: rgba(200, 210, 214, 0.86);
+  --color-foreground-90: rgba(200, 210, 214, 0.9);
+  --color-foreground-95: rgba(200, 210, 214, 0.95);
+
+  --color-frame: #3a4f59;
+  --color-node-title-background: #192a32;
+  --color-node-title-text: #fff;
+  --color-node-selection-outline: #5ec8e9;
+  --color-border-subtle: #2d414a;
+  --color-text-muted: #8ba0aa;
+  --color-accent: #5ec8e9;
+  --color-accent-glow: rgba(94, 200, 233, 0.24);
+  --color-selection: #5ec8e9;
+  --color-record: #ef7c83;
+  --color-warning: #f4a259;
+  --color-error: #f08289;
+  --color-error-bright: #ff9ca2;
+  --color-error-text: #ffc4c8;
+
+  --color-add-link: #5ec8e9;
+  --color-add-link-active: #a0e5f6;
+  --color-add-link-end: #f4a259;
+  --color-sample-boundary-start: #5ec8e9;
+  --color-sample-boundary-end: #f4a259;
+  --color-sample-phase-attack: #5ec8e9;
+  --color-link-set: #b4c8d1;
+  --color-link-add: #f4a259;
+  --color-link-multiply: #5ec8e9;
+  --color-link-bend: #be9bd9;
+  --color-edge-underlay: #0b1418;
+  --color-edge-error-underlay: #32191f;
 }

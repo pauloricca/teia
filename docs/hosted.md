@@ -49,8 +49,16 @@ The root `@pauloricca/teia-hosted` entrypoint exports document/compiler APIs,
 are separate assets. React and React DOM 19.1+, React Flow 12.8+ and
 `@xyflow/system` 0.0.77 are peers. Import those CSS files in that order and give
 the mounting element a width and height. CSS is global; a dedicated editor window
-or host CSS isolation is recommended. Set the existing Teia theme using the root
-`data-theme` attribute when desired. Icons are embedded; hosted mode needs no
+or host CSS isolation is recommended. For Vira, pass `theme="vira"` to
+`HostedNodeEditor`: blue-black panels, slate borders, pale monospace text, cyan
+selection/active accents and orange additive links/sample ends. Unselected node
+titles use white text; selected titles retain dark text on cyan. Theme tokens are
+scoped to a full-size editor wrapper; the host document's `data-theme` is untouched.
+The optional `theme` prop also accepts `console`, `amber`, `ocean` and `default`.
+Omit it to inherit the document theme with the original unwrapped mounting behavior.
+This scopes palette/font tokens, not the global component styles; host CSS
+isolation is still recommended. Rebuild the hosted package and reload/rebuild the
+host's editor bundle after changing the theme assets. Icons are embedded; hosted mode needs no
 Teia development-server URLs or standalone worklet/kernel assets.
 
 The manifest records source HEAD and dirty status, all package versions,
@@ -71,7 +79,7 @@ const session = new HostedSession(editorSessionId, initialPatch, {
   save: true, saveAs: true, profile: NATIVE_PROFILE,
   transport: false, feedback: ['parameters'],
 }, bridge, currentRuntimeGeneration);
-root.render(<HostedNodeEditor session={session} />);
+root.render(<HostedNodeEditor session={session} theme="vira" />);
 // Host keeps session/drafts across React remounts and coordinates close:
 // if (await session.close()) { root.unmount(); session.dispose(); }
 ```

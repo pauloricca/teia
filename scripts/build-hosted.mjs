@@ -31,7 +31,7 @@ await copyFile(join(root, 'editor/src/styles.css'), join(output, 'styles.css'));
 await copyFile(join(root, 'editor/src/themes.css'), join(output, 'themes.css'));
 await copyFile(join(root, 'node_modules/@xyflow/react/dist/style.css'), join(output, 'flow.css'));
 await mkdir(join(output, 'native/teia-kernel/src'), { recursive: true });
-for (const path of ['Cargo.toml', 'src/lib.rs', 'src/native_state.rs', 'src/state_fields.rs', 'src/runtime-capabilities.json', 'src/runtime_preparation.rs', 'src/hosted_resources.rs', 'src/hosted_observation.rs', 'src/bounded_repeats.rs', 'src/hosted.rs', 'src/parallel.rs']) await copyFile(join(root, 'rust/teia-kernel', path), join(output, 'native/teia-kernel', path));
+for (const path of ['Cargo.toml', 'src/lib.rs', 'src/native_state.rs', 'src/state_fields.rs', 'src/runtime-capabilities.json', 'src/runtime_preparation.rs', 'src/hosted_resources.rs', 'src/hosted_observation.rs', 'src/bounded_repeats.rs', 'src/hosted.rs', 'src/parallel.rs', 'src/reverb.rs']) await copyFile(join(root, 'rust/teia-kernel', path), join(output, 'native/teia-kernel', path));
 await mkdir(join(output, 'native/teia-kernel/tests/fixtures'), { recursive: true });
 for (const name of ['shared.rs', 'shared.json']) await copyFile(join(root, 'rust/teia-kernel/tests/fixtures', name), join(output, 'native/teia-kernel/tests/fixtures', name));
 execFileSync(process.execPath, ['scripts/build-hosted-conformance.mjs'], { cwd: root, stdio: 'inherit' });

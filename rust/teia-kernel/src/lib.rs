@@ -4,6 +4,7 @@
 )]
 
 use std::collections::VecDeque;
+mod reverb;
 const ENGINE_CAPABILITIES_JSON: &str = include_str!("runtime-capabilities.json");
 #[no_mangle]
 pub extern "C" fn engineCapabilitiesPtr() -> *const u8 {
@@ -3071,6 +3072,7 @@ fn valid_engine_op(op: DspOp) -> bool {
             _ => 4,
         },
         DSP_OP_SELECT => 4,
+        DSP_OP_REVERB if op.value2 >= 1.0 => reverb::STATE_COUNT,
         DSP_OP_FEEDBACK_READ
         | DSP_OP_FEEDBACK_WRITE
         | DSP_OP_DELAY
@@ -3136,6 +3138,20 @@ fn valid_hot_dsp_op(
     value4: f64,
 ) -> bool {
     match opcode {
+        DSP_OP_REVERB => {
+            valid_dsp_register(out)
+                && valid_dsp_register(a)
+                && valid_dsp_register(b)
+                && valid_dsp_register(c)
+                && valid_dsp_register(d)
+                && if value2 == 0.0 {
+                    valid_dsp_state_range(state, 1)
+                } else {
+                    valid_dsp_register(e)
+                        && valid_dsp_register_value(value2 - 1.0)
+                        && valid_dsp_state_range(state, reverb::STATE_COUNT)
+                }
+        }
         DSP_OP_VALUE => valid_dsp_register(out) && valid_dsp_value(a),
         DSP_OP_ADD | DSP_OP_MUL | DSP_OP_SUB | DSP_OP_DIV => {
             valid_dsp_register(out) && valid_dsp_register(a) && valid_dsp_register(b)
@@ -7662,6 +7678,43 @@ fn render_dsp_reverb(op: DspOp, sample_rate: f64) -> f64 {
         let size = dsp_reg(op.b).clamp(0.1, 1.0);
         let decay = dsp_reg(op.c).clamp(0.0, 0.96);
         let mix = dsp_reg(op.d).clamp(0.0, 1.0);
+        if op.value2 >= 1.0 {
+            let mode = dsp_reg(op.value2.round() as i32 - 1)
+                .round()
+                .clamp(0.0, 2.0) as usize;
+            unsafe {
+                let state = core::slice::from_raw_parts_mut(
+                    dsp_state_ptr(op.state as usize), reverb::STATE_COUNT,
+                );
+                #[cfg(feature = "parallel")]
+                let effect = active_repeat_effect(slot);
+                #[cfg(feature = "parallel")]
+                let buffer = if parallel::active_repeat_context().is_null() {
+                    kernel_global!(DSP_EFFECT_BUFFERS)[slot].as_mut()
+                } else if effect.is_null() {
+                    None
+                } else {
+                    (*effect).buffer.as_mut()
+                };
+                #[cfg(not(feature = "parallel"))]
+                let buffer = kernel_global!(DSP_EFFECT_BUFFERS)[slot].as_mut();
+                if let Some(buffer) = buffer {
+                    if mode != 0 {
+                        let (left, right) = reverb::process(
+                            buffer, state, mode, sample, size, decay, sample_rate,
+                        );
+                        set_dsp_reg(op.e, sanitize_sample(sample * (1.0 - mix) + right * mix, 8.0));
+                        return sanitize_sample(sample * (1.0 - mix) + left * mix, 8.0);
+                    }
+                    if state[31] != 1.0 {
+                        buffer.fill(0.0);
+                        state.fill(0.0);
+                        state[31] = 1.0;
+                        set_dsp_effect_index(slot, 0);
+                    }
+                }
+            }
+        }
         let index = dsp_effect_index(slot);
         let scale = 0.45 + size * 0.9;
         let wet = (read_dsp_effect_delay(slot, index, 0.029 * scale * sample_rate.max(1.0))
@@ -7671,7 +7724,11 @@ fn render_dsp_reverb(op: DspOp, sample_rate: f64) -> f64 {
             * 0.25;
         write_dsp_effect_buffer(slot, index, sanitize_sample(sample + wet * decay, 8.0));
         set_dsp_effect_index(slot, (index + 1) % MAX_DSP_DELAY_SAMPLES);
-        sanitize_sample(sample * (1.0 - mix) + wet * mix, 8.0)
+        let output = sanitize_sample(sample * (1.0 - mix) + wet * mix, 8.0);
+        if op.value2 >= 1.0 {
+            set_dsp_reg(op.e, output);
+        }
+        output
     }
 }
 

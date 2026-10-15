@@ -1651,6 +1651,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
             <div
               className={[
                 'shader-port shader-port-input',
+                node.type === 'Reverb' && input.name === 'mode' ? 'shader-port-reverb-mode' : '',
                 input.preview ? 'shader-port-preview' : '',
               ].filter(Boolean).join(' ')}
               key={`${input.preview ? 'preview' : 'port'}:${input.name}`}
@@ -1698,6 +1699,35 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
                 >
                   {input.name}
                 </button>
+              ) : node.type === 'Reverb' && input.name === 'mode' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={input.name}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="Reverb mode"
+                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, 'mode', Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">original</option>
+                    <option value="1">dattorro plate</option>
+                    <option value="2">feedback delay network</option>
+                  </select>
+                </>
               ) : showKeysDisplay && input.name === 'mode' && !input.preview ? (
                 <>
                   <PortNameLabel

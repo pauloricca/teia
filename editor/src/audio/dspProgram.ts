@@ -2556,17 +2556,28 @@ function compileReverb(node: PatchNode, port: string, context: CompileContext): 
     return constantRegister(0, context);
   }
 
-  const sharedOutputKey = inputKey(node.id, 'reverb');
-  const cached = context.outputCache.get(sharedOutputKey);
+  const cached = context.outputCache.get(inputKey(node.id, port));
   if (cached !== undefined) return cached;
 
-  const output = compileEffect(node, DSP_OP.Reverb, [
-    ['size', 0.55],
-    ['decay', 0.45],
-    ['mix', 0.25],
-  ], context);
-  context.outputCache.set(sharedOutputKey, output);
-  return output;
+  const left = nextRegister(context);
+  const right = nextRegister(context);
+  const state = nextState(context, 64);
+  context.stateBindings.push({ id: `${node.id}:effect`, state, count: 64, kind: 'effect', nodeId: node.id });
+  context.ops.push({
+    opcode: DSP_OP.Reverb,
+    out: left,
+    e: right,
+    a: resolveInput(node, 'signal', 0, context),
+    b: resolveInput(node, 'size', 0.55, context),
+    c: resolveInput(node, 'decay', 0.45, context),
+    d: resolveInput(node, 'mix', 0.25, context),
+    // Zero retains the legacy single-output bytecode format.
+    value2: valueRegisterForNodeParam(node, 'mode', 0, context, 'immediate') + 1,
+    state,
+  });
+  context.outputCache.set(inputKey(node.id, 'left'), left);
+  context.outputCache.set(inputKey(node.id, 'right'), right);
+  return port === 'left' ? left : right;
 }
 
 type ExpressionToken =

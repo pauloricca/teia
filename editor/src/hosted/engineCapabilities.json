@@ -1,6 +1,6 @@
 {
   "apiVersion": 1,
-  "executionRevision": 3,
+  "executionRevision": 4,
   "validation": "shared Rust program validator",
   "channels": 2,
   "maxBlockFrames": 2048,

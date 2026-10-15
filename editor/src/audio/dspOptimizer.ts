@@ -90,6 +90,9 @@ function snapshot(program: OptimizableProgram): DspOptimizationSnapshot {
 }
 
 function inputs(op: DspOp): number[] {
+  if (op.opcode === DSP_OP.Reverb) {
+    return [op.a ?? -1, op.b ?? -1, op.c ?? -1, op.d ?? -1, (op.value2 ?? 0) - 1];
+  }
   if (op.opcode === DSP_OP.Value) return [];
   if (BINARY.has(op.opcode)) return [op.a ?? -1, op.b ?? -1];
   if (UNARY.has(op.opcode)) return [op.a ?? -1];

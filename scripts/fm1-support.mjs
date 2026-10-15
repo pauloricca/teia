@@ -42,6 +42,7 @@ const watched = [
   'rust/teia-kernel/src/hosted_resources.rs', 'rust/teia-kernel/src/hosted_observation.rs', 'rust/teia-kernel/src/bounded_repeats.rs', 'rust/teia-kernel/src/runtime-capabilities.json',
   'editor/src/hosted/engineCapabilities.json', 'scripts/engine-capabilities.mjs',
   'rust/teia-kernel/src/lib.rs', 'rust/teia-kernel/src/native_state.rs', 'rust/teia-kernel/src/hosted.rs',
+  'rust/teia-kernel/src/reverb.rs', 'rust/teia-kernel/src/parallel.rs', 'editor/src/audio/dspOptimizer.ts',
   'editor/public/audio/audio-worklet-wasm.js',
 ];
 const errors = validateSchema(registry, JSON.parse(read('firmware/fm1/support.schema.json')));

@@ -1,7 +1,8 @@
 import type { Patch, SampleAsset, ImageAsset } from '../graph/types';
 import { patchToJson } from '../graph/serialize';
 import { readDocument, withParameterIds, type Diagnostic } from './document';
-import { classifyEdit, preparePatch, type PreparedPatch } from './compiler';
+import { classifyEdit, preparePatch, type PreparedPatch, type ParameterMetadata } from './compiler';
+import { normalizeParameterValue } from './parameters';
 import type { Capabilities, Context, HostBridge, HostCommand, HostEvent, HostReply } from './bridge';
 
 export interface SessionState {
@@ -14,6 +15,8 @@ export interface SessionState {
   applying: boolean;
   diagnostics: Diagnostic[];
   saveDiagnostics?: Diagnostic[];
+  parameters: ParameterMetadata[];
+  parameterValues: Record<string, number>;
   feedback?: Extract<HostEvent, { type: 'feedback' }>;
 }
 /** One controller per editor session. Source, saved baseline and installed artifact
@@ -31,17 +34,19 @@ export class HostedSession {
   private listeners = new Set<() => void>();
   private unsubscribe: () => void;
   private lastFeedback = -Infinity;
+  private parameterWrites = new Map<string, string>();
   private state: SessionState;
   constructor(readonly sessionId: string, initial: Patch, readonly capabilities: Capabilities, readonly bridge: HostBridge, generation: string | null = null) {
     const read = readDocument(initial);
     if (!read.patch || read.diagnostics.some(d => d.severity === 'error' || d.code === 'discarded-content')) throw new Error('Initial hosted document is invalid.');
     this.document = withParameterIds(read.patch);
     this.saved = patchToJson(this.document);
-    this.state = { revision: 0, savedRevision: 0, installedRevision: generation === null ? null : 0, generation, dirty: false, connected: true, applying: false, diagnostics: read.diagnostics };
+    this.state = { revision: 0, savedRevision: 0, installedRevision: generation === null ? null : 0, generation, dirty: false, connected: true, applying: false, diagnostics: read.diagnostics, parameters: [], parameterValues: {} };
     if (generation !== null) {
       const prepared = preparePatch(this.document, { profile: capabilities.profile });
       if ('program' in prepared && !prepared.diagnostics.some(d => d.severity === 'error')) this.installed = prepared;
     }
+    this.state.parameters = this.installed?.parameters ?? [];
     this.unsubscribe = bridge.subscribe(event => this.receive(event));
   }
   getSnapshot = (): SessionState => this.state;
@@ -112,8 +117,14 @@ export class HostedSession {
     this.releaseGestures('graph swap');
     this.lastFeedback = -Infinity;
     this.installed = pending.prepared;
+    this.parameterWrites.clear();
+    const parameterValues: Record<string, number> = {};
+    for (const parameter of this.installed.parameters) {
+      const value = this.state.parameterValues[parameter.id];
+      if (value !== undefined) parameterValues[parameter.id] = normalizeParameterValue(parameter, value);
+    }
     for (const [id, application] of this.pending) if (application.revision <= context.revision) this.pending.delete(id);
-    this.publish({ generation: context.generation, installedRevision: context.revision, applying: context.revision === this.state.revision ? false : this.state.applying, feedback: undefined });
+    this.publish({ parameters: this.installed.parameters, parameterValues, generation: context.generation, installedRevision: context.revision, applying: context.revision === this.state.revision ? false : this.state.applying, feedback: undefined });
   }
   private receive(event: HostEvent) {
     if (this.disposed || event.sessionId !== this.sessionId) return;
@@ -121,6 +132,7 @@ export class HostedSession {
       this.epoch++;
       this.pending.clear();
       this.gestureValues.clear();
+      this.parameterWrites.clear();
       this.publish({ connected: event.connected, applying: false, feedback: undefined });
       return;
     }
@@ -136,7 +148,14 @@ export class HostedSession {
     if (now - this.lastFeedback < 1000 / hz || !boundedFeedback(event)) return;
     this.lastFeedback = now;
     const allowed = this.capabilities.feedback ?? [];
-    this.publish({ feedback: structuredClone({ ...event,
+    const parameterValues = { ...this.state.parameterValues };
+    if (allowed.includes('parameters') && event.parameters) {
+      for (const parameter of this.state.parameters) {
+        const value = event.parameters[parameter.id];
+        if (Number.isFinite(value) && !this.parameterWrites.has(parameter.id)) parameterValues[parameter.id] = normalizeParameterValue(parameter, value);
+      }
+    }
+    this.publish({ parameterValues, feedback: structuredClone({ ...event,
       meters: allowed.includes('meters') ? event.meters : undefined,
       scopes: allowed.includes('scopes') ? event.scopes : undefined,
       playheads: allowed.includes('playheads') ? event.playheads : undefined,
@@ -197,7 +216,8 @@ export class HostedSession {
     const reply = await this.bridge.request(command);
     if (epoch !== this.epoch || this.disposed || !this.matching(command, reply) || reply.status !== 'connected') return false;
     this.installed = undefined;
-    this.publish({ connected: true, generation: reply.generation, installedRevision: null, feedback: undefined });
+    this.parameterWrites.clear();
+    this.publish({ connected: true, generation: reply.generation, installedRevision: null, feedback: undefined, parameters: [], parameterValues: {} });
     // Force working revision through the host's supersession gate.
     const document = this.getDocument();
     await this.edit(document, true);
@@ -205,14 +225,26 @@ export class HostedSession {
   }
   /** An instance override; never changes working document defaults. */
   async setParameter(parameterId: string, value: number): Promise<boolean> {
-    if (!Number.isFinite(value) || !parameterId || !this.state.connected || this.state.generation === null || this.disposed) return false;
-    const command: HostCommand = { ...this.context(), type: 'parameter', parameterId, value };
+    const parameter = this.state.parameters.find(p => p.id === parameterId);
+    if (!parameter || !Number.isFinite(value) || !this.state.connected || this.state.generation === null || this.disposed) return false;
+    const normalized = normalizeParameterValue(parameter, value);
+    const command: HostCommand = { ...this.context(), type: 'parameter', parameterId, value: normalized };
     const epoch = this.epoch;
+    this.parameterWrites.set(parameterId, command.requestId);
+    let accepted = false;
     try {
       const reply = await this.bridge.request(command);
-      return epoch === this.epoch && !this.disposed && this.matching(command, reply) && reply.status === 'updated' && reply.generation === command.generation && this.state.generation === command.generation;
+      accepted = epoch === this.epoch && !this.disposed && this.matching(command, reply) && reply.status === 'updated' && reply.generation === command.generation && this.state.generation === command.generation;
+      if (accepted && this.parameterWrites.get(parameterId) === command.requestId) {
+        this.publish({ parameterValues: { ...this.state.parameterValues, [parameterId]: normalized } });
+      }
+      return accepted;
     } catch { return false; }
+    finally {
+      if (this.parameterWrites.get(parameterId) === command.requestId) this.parameterWrites.delete(parameterId);
+    }
   }
+
   async selectMedia(request: { kind: 'sample' | 'image'; nodeId: string; current?: SampleAsset | ImageAsset }): Promise<SampleAsset | ImageAsset | null> {
     const select = this.bridge.assets?.selectMedia;
     if (!select || !this.state.connected || this.disposed) { this.reportUnavailable('Media selection requires a supplied host asset adapter.'); return null; }
@@ -283,7 +315,7 @@ export class HostedSession {
   requestFeedback(scopes: Extract<HostCommand, { type: 'feedback' }>['scopes']): void {
     if (this.capabilities.feedback?.length && this.state.connected) void this.bridge.request({ ...this.context(), type: 'feedback', scopes: scopes.slice(0, 32).map(s => ({ ...s, length: Number.isFinite(s.length) ? Math.max(0.0001, Math.min(30, s.length)) : 0.08, points: Number.isFinite(s.points) ? Math.max(1, Math.min(1024, Math.floor(s.points!))) : 256 })) }).catch(() => undefined);
   }
-  dispose(): void { this.releaseGestures('dispose'); this.disposed = true; this.epoch++; this.unsubscribe(); this.listeners.clear(); this.pending.clear(); }
+  dispose(): void { this.releaseGestures('dispose'); this.disposed = true; this.epoch++; this.unsubscribe(); this.listeners.clear(); this.pending.clear(); this.parameterWrites.clear(); }
 }
 function boundedFeedback(event: Extract<HostEvent, { type: 'feedback' }>): boolean {
   for (const map of [event.meters, event.scopes, event.playheads, event.buffers, event.parameters]) if (map && Object.keys(map).length > 128) return false;

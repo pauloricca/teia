@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { HostedParameters } from '../hosted/HostedParameters';
 import { HostedSession } from '../hosted/session';
 import { useHostedAudio } from '../hosted/useHostedAudio';
 import { HostedModeContext } from '../hosted/HostedModeContext';
@@ -6257,9 +6258,8 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
           <input ref={sampleFileInputRef} className="file-input" type="file" accept="audio/*,video/mp4,.wav,.mp3,.aiff,.aif,.flac,.ogg,.m4a,.mp4" onChange={uploadSampleFile} />
           <input ref={imageFileInputRef} className="file-input" type="file" accept="image/avif,image/gif,image/jpeg,image/png,image/webp,.avif,.gif,.jpg,.jpeg,.png,.webp" onChange={uploadImageFile} />
           {fm1Patch && <Fm1UploadDialog patch={fm1Patch} onClose={() => setFm1Patch(null)} />}
-          {hostedState && <p className="import-error-floating" aria-live="polite">{hostedState.connected ? `revision ${hostedState.revision}; installed ${hostedState.installedRevision ?? 'host initial'}; generation ${hostedState.generation ?? 'unknown'}` : 'Host disconnected; working document retained.'}{hostedState.diagnostics.filter(d => d.severity !== 'info').map(d => ` · ${d.message}`).join('')}</p>}
-          {hostedState?.feedback?.tempo && <output className="hosted-tempo-feedback" aria-label="Host tempo">{hostedState.feedback.tempo.bpm} beats per minute · {hostedState.feedback.tempo.running ? 'running' : 'stopped'}</output>}
-          {hostedState?.feedback?.parameters && <output className="hosted-parameter-feedback" aria-label="Host instance parameters">{Object.entries(hostedState.feedback.parameters).map(([id, value]) => <span key={id}>{hosted?.getParameterLabel(id)}: {value} </span>)}</output>}
+          {hostedState && (!hostedState.connected || hostedState.diagnostics.some(d => d.severity !== 'info')) && <p className="import-error-floating" aria-live="polite">{[...(!hostedState.connected ? ['Host disconnected; working document retained.'] : []), ...hostedState.diagnostics.filter(d => d.severity !== 'info').map(d => d.message)].join(' · ')}</p>}
+          {hosted && <HostedParameters session={hosted} />}
           {importError ? <p className="import-error-floating">{importError}</p> : null}
           {audioGraph.errors.length > 0 ? (
             <section className="dsp-error-panel" aria-live="polite" aria-label="DSP compile errors">

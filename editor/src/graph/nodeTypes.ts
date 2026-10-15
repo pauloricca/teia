@@ -513,6 +513,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     type: 'Reverb',
     inputs: [
       { name: 'signal', valueEditor: false },
+      { name: 'mode', defaultValue: 0, min: 0, max: 2, integer: true, connectable: false, valueEditor: false },
       { name: 'size', defaultValue: 0.55, min: 0.1, max: 1 },
       { name: 'decay', defaultValue: 0.45, min: 0, max: 0.94 },
       { name: 'mix', defaultValue: 0.25, min: 0, max: 1 },
@@ -821,6 +822,14 @@ export function getNodeDefinition(node: PatchNode): NodeDefinition {
       inputs: node.inputs ?? getDefinition(node.type).inputs,
       outputs: sequencerOutputDefinitions(sequencerShape(node.params).rows),
     };
+  }
+
+  if (node.type === 'Reverb') {
+    const definition = getDefinition(node.type);
+    const mode = definition.inputs.find((input) => input.name === 'mode')!;
+    const inputs = (node.inputs ?? definition.inputs).filter((input) => input.name !== 'mode');
+    inputs.splice(1, 0, mode);
+    return { ...definition, inputs, outputs: node.outputs ?? definition.outputs };
   }
 
   if (node.type === 'Roll') {

@@ -296,7 +296,7 @@
   --color-foreground-90: rgba(200, 210, 214, 0.9);
   --color-foreground-95: rgba(200, 210, 214, 0.95);
 
-  --color-frame: #3a4f59;
+  --color-frame: var(--color-foreground);
   --color-node-title-background: #192a32;
   --color-node-title-text: #fff;
   --color-node-selection-outline: #5ec8e9;

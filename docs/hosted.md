@@ -324,8 +324,14 @@ Feedback is normalized public data, not raw worklet messages. Subscriptions
 unsubscribe explicitly; matching installed revision/generation is required.
 Payloads are cloned/bounded to 128 node keys, 1024 scope/Buffer bins and 128
 playheads per node, at 1–60 Hz (default 30). Scope interest is bounded to 32
-scopes/1024 points. Meters/scopes/playheads/Buffer views, generic parameter readouts
-and host tempo readout use actual instance feedback. No second DSP preview is
+scopes/1024 points. Meters/scopes/playheads/Buffer views and the host parameter
+sliders use actual instance feedback. The sliders stay visible across graph updates, follow host
+parameter changes, and send instance overrides through the existing `parameter`
+command. They respect each installed parameter's bounds, step and integer setting;
+changing a slider never edits saved patch defaults. The panel requires the host's
+`parameters` feedback capability and is disabled while disconnected. Routine
+revision/generation and host tempo overlays are hidden; connection failures and
+compiler warnings/errors remain visible. No second DSP preview is
 instantiated and feedback never overwrites patch defaults. Host CPU is not
 fabricated from the standalone backend.
 

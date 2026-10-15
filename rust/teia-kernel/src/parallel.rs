@@ -321,7 +321,7 @@ fn repeat_plan(ops: &[DspOp], start: usize, end: usize) -> Option<RepeatPlan> {
             }
             writes.push(op.out as usize);
         }
-        if op.opcode == DSP_OP_BUFFER {
+        if op.opcode == DSP_OP_BUFFER || (op.opcode == DSP_OP_REVERB && op.value2 >= 1.0) {
             if op.e < 0 || op.e as usize >= MAX_DSP_REGS {
                 return None;
             }
@@ -362,7 +362,9 @@ fn repeat_plan(ops: &[DspOp], start: usize, end: usize) -> Option<RepeatPlan> {
         if op.out >= 0 && !seen_writes.contains(&(op.out as usize)) {
             seen_writes.push(op.out as usize);
         }
-        if op.opcode == DSP_OP_BUFFER && !seen_writes.contains(&(op.e as usize)) {
+        if (op.opcode == DSP_OP_BUFFER || (op.opcode == DSP_OP_REVERB && op.value2 >= 1.0))
+            && !seen_writes.contains(&(op.e as usize))
+        {
             seen_writes.push(op.e as usize);
         }
     }
@@ -439,6 +441,10 @@ fn access(op: DspOp) -> Option<(Vec<i32>, usize)> {
         DSP_OP_FEEDBACK_READ => (vec![], 1),
         DSP_OP_FEEDBACK_WRITE => (vec![op.a], 1),
         DSP_OP_SELECT => (vec![op.a, op.b, op.c], 4),
+        DSP_OP_REVERB if op.value2 >= 1.0 => (
+            vec![op.a, op.b, op.c, op.d, op.value2.round() as i32 - 1],
+            reverb::STATE_COUNT,
+        ),
         DSP_OP_DELAY | DSP_OP_CHORUS | DSP_OP_REVERB => (vec![op.a, op.b, op.c, op.d], 1),
         DSP_OP_ENVELOPE | DSP_OP_COMPRESS => {
             let packed = op.value.round() as i32;

@@ -1481,8 +1481,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
               mode={node.params.mode ?? 0}
               activeNote={node.params.frequency > 0 ? Math.round(node.params.note ?? -1) : null}
               onNoteChange={(note) => {
-                data.onParamChange(node.id, 'note', note ?? 0);
-                data.onParamChange(node.id, 'frequency', note === null ? 0 : midiNoteToFrequency(note));
+                data.onParamsChange(node.id, { note: note ?? 0, frequency: note === null ? 0 : midiNoteToFrequency(note), ...(hostedMode?.bridgeVersion === 2 && hostedMode.gestures ? { gate: note === null ? 0 : 1, velocity: note === null ? 0 : 1 } : {}) });
               }}
             />
           ) : null}

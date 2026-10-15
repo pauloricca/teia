@@ -127,3 +127,16 @@ export function cloneParameterIds<T extends { id: string; type: string | null; o
   }
   return node;
 }
+
+/** Keep host-owned nested durable references when rebuilding editor graph
+ * presentations. Root Buffer references are supplied by the editor asset map. */
+export function retainNestedBufferReferences(source: Patch, authoritative: Patch): Patch {
+  const copy = structuredClone(source);
+  for (const node of copy.nodes) if (node.subpatch) {
+    const saved = authoritative.nodes.find(n => n.id === node.id)?.subpatch;
+    if (!saved) continue;
+    node.subpatch = retainNestedBufferReferences(node.subpatch, saved);
+    if (saved.buffers) node.subpatch.buffers = structuredClone(saved.buffers); else delete node.subpatch.buffers;
+  }
+  return copy;
+}

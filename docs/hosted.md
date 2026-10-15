@@ -18,7 +18,7 @@ No Vira checkout/process or package publication is changed by these builds.
 - Native resources: samples, images, custom waves, sequencers and Buffer
   snapshots through `Resources`/`Instance::new_with_resources`, using existing
   Rust resource setters. The host must decode/map the supplied bindings.
-- Shared bounded repeats: optional preallocated Spawn/Spread context-zero pools,
+- Shared bounded repeats: optional preallocated hierarchical Spawn/Spread pools (depth 4, 1024 total potential item slots),
   recycled instances, explicit exhaustion counts and preparation memory budget.
   Legacy standalone dynamic capacity remains unchanged unless explicitly opted in.
 - Still pending: FFT analysis runs in the JavaScript worklet today and is
@@ -200,16 +200,16 @@ Entire block/event/timeline validation occurs before DSP or output mutation.
 Maximum 4096 operations/registers/states, 2048 values, 256 input events and 256
 segments per block, 2048 distinct held MIDI keys and 4096 caller MIDI-output
 slots. Held notes and a per-sample 4096-event output queue are preallocated.
-No persistent input event queue grows during native rendering. Monophonic MIDI
-uses the shared held-note helper; event-pulse nodes use the existing current-event
-state. Exact host delivery applies all events at their supplied sample offset;
-legacy browser delivery retains its existing one-event/blank-sample separators.
-Simultaneous event-pulse inputs cannot express multiple distinct pulses in one
-scalar sample; a host must not invent delayed timestamps to hide that limitation.
-Polyphonic Spawn uses the shared scheduler and explicit finite native budget.
+An input FIFO of 4096 notes is also preallocated. Notes are enqueued at their
+supplied offsets, retaining caller order; the shared native/WASM dispatcher
+consumes one note every two samples, with an intervening blank sample for edge
+consumers such as Spawn. Mono held state changes when each note is delivered.
+Equal-offset notes therefore have explicit bounded spreading latency rather than
+simultaneous scalar fidelity. A full 4096-note queue takes at most 8191 additional
+rendered frames to deliver its last accepted event. CC, pitch bend, numeric
+Control events and host timeline segments keep their supplied sample offsets.
 
-
-All events at an offset apply in supplied order before that sample. Notes and CC
+Notes and CC
 accept channels 1–16, notes/controllers 0–127, velocities/CC values 0–1. Note On
 velocity zero releases. Monophonic Midi Note uses last-note priority while
 retaining all simultaneous held keys; releasing the latest restores the previous
@@ -217,7 +217,7 @@ held note. Pitch bend accepts 14-bit 0–16383 (center 8192) plus explicit 0–4
 semitone sensitivity, updating the selected channel's frequency at that offset.
 SysEx, aftertouch, program changes and MIDI clock bytes are explicitly rejected;
 timing comes from host segments. Pulse-event Midi Note On/Off and polyphonic Spawn use the existing evaluator;
-see the scalar-sample delivery limitation above. MIDI output supports note on/off and CC,
+see the ordered serialization policy above. MIDI output supports note on/off and CC,
 with exact graph-produced frame offsets and operation ordering. Output pitch bend
 is not advertised. Version-1 native numeric controls default to immediate mode; callers can select standalone value
 smoothing. This is explicit profile behavior.
@@ -369,3 +369,16 @@ and local storage mode. The user refreshes and inspects Audio Input left/right
 and legacy signal, then standalone/FM1 controls when functional testing is
 wanted. Consuming hosts must rebuild against the new local artifacts and recreate
 their editor session/window; this task does not install or restart a host app.
+
+
+## Execution revision 3 and bridge version 2
+
+The complete instance observation, staged Buffer, hierarchical repeat and
+negotiated gesture/Save contracts, with ownership examples and exact remaining
+FFT work, are specified in [the host handover](../../docs/host-handover.md) in the
+source checkout (`docs/host-handover.md`). Read that contract before advertising
+these optional facilities. `BRIDGE_VERSION` is now 2; legacy commands remain
+available, and absent v2 capability flags retain existing host behavior.
+Verification metadata lists the complete fixture corpus separately from the
+resource-free subset compared against Node WASM. Compiling fixtures alone is not
+verification. Import the whole matching `hosted/dist` tree and native source.

@@ -22,6 +22,8 @@ export class HostedSession {
   private document: Patch;
   private saved: string;
   private sequence = 0;
+  private gestureSequence = 0;
+  private gestureValues = new Map<string, Record<string, number>>();
   private epoch = 0;
   private disposed = false;
   private installed?: PreparedPatch;
@@ -36,6 +38,10 @@ export class HostedSession {
     this.document = withParameterIds(read.patch);
     this.saved = patchToJson(this.document);
     this.state = { revision: 0, savedRevision: 0, installedRevision: generation === null ? null : 0, generation, dirty: false, connected: true, applying: false, diagnostics: read.diagnostics };
+    if (generation !== null) {
+      const prepared = preparePatch(this.document, { profile: capabilities.profile });
+      if ('program' in prepared && !prepared.diagnostics.some(d => d.severity === 'error')) this.installed = prepared;
+    }
     this.unsubscribe = bridge.subscribe(event => this.receive(event));
   }
   getSnapshot = (): SessionState => this.state;
@@ -101,6 +107,9 @@ export class HostedSession {
     // still in transit. Track installation independently, but never roll back
     // after a newer installed revision has been confirmed.
     if (!pending?.prepared || context.revision !== pending.revision || context.generation === null || context.revision <= (this.state.installedRevision ?? -1)) return;
+    // Host MUST release old gestures atomically with graph retirement; an IPC
+    // cleanup against the old generation is supplementary, never authoritative.
+    this.releaseGestures('graph swap');
     this.lastFeedback = -Infinity;
     this.installed = pending.prepared;
     for (const [id, application] of this.pending) if (application.revision <= context.revision) this.pending.delete(id);
@@ -111,6 +120,7 @@ export class HostedSession {
     if (event.type === 'connection') {
       this.epoch++;
       this.pending.clear();
+      this.gestureValues.clear();
       this.publish({ connected: event.connected, applying: false, feedback: undefined });
       return;
     }
@@ -125,19 +135,35 @@ export class HostedSession {
     const hz = Math.max(1, Math.min(60, Number.isFinite(this.capabilities.maxFeedbackHz) ? this.capabilities.maxFeedbackHz! : 30));
     if (now - this.lastFeedback < 1000 / hz || !boundedFeedback(event)) return;
     this.lastFeedback = now;
-    this.publish({ feedback: structuredClone(event) });
+    const allowed = this.capabilities.feedback ?? [];
+    this.publish({ feedback: structuredClone({ ...event,
+      meters: allowed.includes('meters') ? event.meters : undefined,
+      scopes: allowed.includes('scopes') ? event.scopes : undefined,
+      playheads: allowed.includes('playheads') ? event.playheads : undefined,
+      buffers: allowed.includes('buffers') ? event.buffers : undefined,
+      parameters: allowed.includes('parameters') ? event.parameters : undefined,
+    }) });
   }
   async save(saveAs = false): Promise<boolean> {
     if (!this.capabilities.save || (saveAs && !this.capabilities.saveAs) || !this.state.connected || this.disposed) return false;
-    const document = this.getDocument();
+    let document = this.getDocument();
     const validation = readDocument(document);
     const errors = [...validation.diagnostics, ...(this.capabilities.requireExecutableToSave ? preparePatch(document, { profile: this.capabilities.profile }).diagnostics : [])].filter(d => d.severity === 'error');
     this.publish({ saveDiagnostics: errors });
     if (errors.length) { this.publish({ diagnostics: errors }); return false; }
-    const command: HostCommand = { ...this.context(), type: 'save', saveAs, document };
-    const snapshot = patchToJson(document);
+    const context = this.context();
     const epoch = this.epoch;
     try {
+      if (this.capabilities.bridgeVersion === 2 && this.capabilities.bufferCapture === 1) {
+        const capture: HostCommand = { ...context, type: 'capture save', version: 1, document, installedRevision: this.state.installedRevision };
+        const reply = await this.bridge.request(capture);
+        if (epoch !== this.epoch || this.disposed || !this.matching(capture, reply) || reply.generation !== context.generation || this.state.generation !== context.generation || reply.status !== 'captured' || !reply.capturedDocument) throw new Error('Host Buffer capture did not complete.');
+        const captured = readDocument(reply.capturedDocument);
+        if (!captured.patch || captured.diagnostics.some(d => d.severity === 'error' || d.code === 'discarded-content') || withoutBuffers(captured.patch) !== withoutBuffers(document)) throw new Error(`Capture must return the exact document with only durable Buffer references changed. ${JSON.stringify(captured.diagnostics)}`);
+        document = mergeCapturedBuffers(document, captured.patch);
+      }
+      const command: HostCommand = { ...context, requestId: `${context.requestId}:persist`, type: 'save', saveAs, document };
+      const snapshot = patchToJson(document);
       const reply = await this.bridge.request(command);
       if (epoch !== this.epoch || this.disposed || !this.matching(command, reply)) return false;
       if (reply.status === 'failed') {
@@ -147,6 +173,7 @@ export class HostedSession {
       }
       if (reply.status !== 'saved' || command.revision < this.state.savedRevision) return false;
       this.saved = snapshot;
+      if (this.state.revision === command.revision) this.document = structuredClone(document);
       this.publish({ savedRevision: command.revision, dirty: patchToJson(this.document) !== snapshot });
       return true;
     } catch (error) {
@@ -158,6 +185,7 @@ export class HostedSession {
     }
   }
   async close(): Promise<boolean> {
+    this.releaseGestures('close');
     const command: HostCommand = { ...this.context(), type: 'close', dirty: this.state.dirty, document: this.getDocument() };
     const epoch = this.epoch;
     const reply = await this.bridge.request(command);
@@ -193,6 +221,26 @@ export class HostedSession {
     if (this.disposed || epoch !== this.epoch || context.revision !== this.state.revision) return null;
     return asset;
   }
+  async captureBuffer(nodeId: string): Promise<import('../audio/useAudioEngine').BufferSnapshot | null> {
+    if (this.capabilities.bridgeVersion !== 2 || !this.capabilities.bufferCapture || !this.state.connected || !this.state.generation || this.disposed) { this.reportUnavailable('Buffer capture requires bridge v2 and a host capture adapter.'); return null; }
+    const command: HostCommand = { ...this.context(), type: 'capture buffer', version: 1, nodeId };
+    const epoch = this.epoch;
+    try {
+      const reply = await this.bridge.request(command);
+      const snapshot = reply.bufferSnapshot;
+      if (epoch !== this.epoch || this.disposed || !this.matching(command, reply) || reply.generation !== command.generation || this.state.generation !== command.generation || reply.status !== 'captured' || !snapshot || !(snapshot.samples instanceof Float32Array) || snapshot.samples.length < 2 || snapshot.samples.length > 960000 || !Number.isFinite(snapshot.sampleRate) || snapshot.sampleRate <= 0 || !snapshot.samples.every(Number.isFinite)) return null;
+      return snapshot;
+    } catch { return null; }
+  }
+  async restoreBuffer(nodeId: string, snapshot: import('../audio/useAudioEngine').BufferSnapshot): Promise<boolean> {
+    if (this.capabilities.bridgeVersion !== 2 || !this.capabilities.bufferCapture || !this.capabilities.bufferMutation || !this.state.connected || !this.state.generation || this.disposed || snapshot.samples.length < 2 || snapshot.samples.length > 960000 || !snapshot.samples.every(Number.isFinite) || !Number.isFinite(snapshot.sampleRate) || snapshot.sampleRate <= 0) return false;
+    const command: HostCommand = { ...this.context(), type: 'restore buffer', version: 1, nodeId, snapshot };
+    const epoch = this.epoch;
+    try {
+      const reply = await this.bridge.request(command);
+      return epoch === this.epoch && !this.disposed && this.matching(command, reply) && reply.status === 'updated' && reply.generation === command.generation && this.state.generation === command.generation;
+    } catch { return false; }
+  }
   async mutateBuffer(action: 'clear' | 'copy', nodeId: string, targetNodeId?: string): Promise<boolean> {
     if (!this.capabilities.bufferMutation || !this.state.connected || !this.state.generation || this.disposed) {
       this.reportUnavailable('Buffer mutation requires a supplied host capability.'); return false;
@@ -204,12 +252,38 @@ export class HostedSession {
       return epoch === this.epoch && !this.disposed && this.matching(command, reply) && reply.status === 'updated' && reply.generation === command.generation && this.state.generation === command.generation;
     } catch { return false; }
   }
+  /** Ordered transient controls bypass document edits and graph supersession.
+   * Host validates bindings against layout, schedules in sequence order, and
+   * acknowledges updated only after acceptance in its bounded render queue.
+   * Queue overflow must cancel/release the generation, never discard a release.
+   */
+  gesture(nodeId: string, values: Record<string, number>): void {
+    if (!this.capabilities.gestures || this.capabilities.bridgeVersion !== 2) return;
+    if (!this.state.connected || !this.state.generation || !this.installed || this.disposed) { this.reportUnavailable('Gestures require an installed, connected host graph.'); return; }
+    if (!Object.values(values).every(Number.isFinite)) return;
+    const previous = this.gestureValues.get(nodeId) ?? {};
+    if ('clicks' in values) values = { ...values, clicks: (previous.clicks ?? 0) + 1 };
+    this.gestureValues.set(nodeId, { ...previous, ...values });
+    const command: HostCommand = { ...this.context(), type: 'gesture', version: 1, sequence: ++this.gestureSequence, layout: this.installed.layout, nodeId, values, timestamp: performance.now() };
+    const epoch = this.epoch;
+    void this.bridge.request(command).then(reply => {
+      if (epoch !== this.epoch || this.disposed || this.state.generation !== command.generation) return;
+      if (!this.matching(command, reply) || reply.generation !== command.generation || reply.status !== 'updated') {
+        this.releaseGestures('focus loss'); this.reportUnavailable('Host rejected a transient gesture; held controls were cancelled.');
+      }
+    }).catch(() => { if (epoch === this.epoch && !this.disposed) { this.releaseGestures('focus loss'); this.reportUnavailable('Gesture transport failed; host must release controls on disconnect.'); } });
+  }
+  releaseGestures(reason: 'focus loss' | 'close' | 'dispose' | 'graph swap'): void {
+    this.gestureValues.clear();
+    if (this.capabilities.bridgeVersion !== 2 || !this.capabilities.gestures || !this.state.connected || !this.state.generation || this.disposed) return;
+    try { void this.bridge.request({ ...this.context(), type: 'release gestures', version: 1, sequence: ++this.gestureSequence, reason }).catch(() => undefined); } catch { /* Host owns disconnect fencing. */ }
+  }
   reportUnavailable(message: string): void { this.publish({ diagnostics: [{ severity: 'warning', code: 'host-adapter-required', message }] }); }
   async toggleTransport(): Promise<void> { if (this.capabilities.transport && this.state.connected) await this.bridge.request({ ...this.context(), type: 'transport', action: 'toggle' }); }
   requestFeedback(scopes: Extract<HostCommand, { type: 'feedback' }>['scopes']): void {
     if (this.capabilities.feedback?.length && this.state.connected) void this.bridge.request({ ...this.context(), type: 'feedback', scopes: scopes.slice(0, 32).map(s => ({ ...s, length: Number.isFinite(s.length) ? Math.max(0.0001, Math.min(30, s.length)) : 0.08, points: Number.isFinite(s.points) ? Math.max(1, Math.min(1024, Math.floor(s.points!))) : 256 })) }).catch(() => undefined);
   }
-  dispose(): void { this.disposed = true; this.epoch++; this.unsubscribe(); this.listeners.clear(); this.pending.clear(); }
+  dispose(): void { this.releaseGestures('dispose'); this.disposed = true; this.epoch++; this.unsubscribe(); this.listeners.clear(); this.pending.clear(); }
 }
 function boundedFeedback(event: Extract<HostEvent, { type: 'feedback' }>): boolean {
   for (const map of [event.meters, event.scopes, event.playheads, event.buffers, event.parameters]) if (map && Object.keys(map).length > 128) return false;
@@ -219,4 +293,22 @@ function boundedFeedback(event: Extract<HostEvent, { type: 'feedback' }>): boole
   if (Object.values(event.playheads ?? {}).some(s => s.length > 128)) return false;
   if (Object.values(event.buffers ?? {}).some(s => s.bins.length > 1024)) return false;
   return true;
+}
+
+function withoutBuffers(patch: Patch): string {
+  const copy = structuredClone(patch);
+  const strip = (p: Patch) => { delete p.buffers; for (const node of p.nodes) if (node.subpatch) strip(node.subpatch); };
+  strip(copy);
+  const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, entry]) => [key, canonical(entry)])) : value;
+  return JSON.stringify(canonical(JSON.parse(patchToJson(copy))));
+}
+
+function mergeCapturedBuffers(source: Patch, captured: Patch): Patch {
+  const copy = structuredClone(source);
+  if (captured.buffers) copy.buffers = structuredClone(captured.buffers); else delete copy.buffers;
+  for (const node of copy.nodes) if (node.subpatch) {
+    const matched = captured.nodes.find(n => n.id === node.id)?.subpatch;
+    if (matched) node.subpatch = mergeCapturedBuffers(node.subpatch, matched);
+  }
+  return copy;
 }

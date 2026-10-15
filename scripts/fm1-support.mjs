@@ -39,7 +39,7 @@ const watched = [
   'hosted/package.json', 'runtime/package.json', 'rust/teia-kernel/Cargo.toml',
   'scripts/build-hosted.mjs', 'scripts/build-hosted-conformance.mjs',
   'rust/teia-kernel/src/state_fields.rs', 'rust/teia-kernel/src/runtime_preparation.rs',
-  'rust/teia-kernel/src/hosted_resources.rs', 'rust/teia-kernel/src/runtime-capabilities.json',
+  'rust/teia-kernel/src/hosted_resources.rs', 'rust/teia-kernel/src/hosted_observation.rs', 'rust/teia-kernel/src/bounded_repeats.rs', 'rust/teia-kernel/src/runtime-capabilities.json',
   'editor/src/hosted/engineCapabilities.json', 'scripts/engine-capabilities.mjs',
   'rust/teia-kernel/src/lib.rs', 'rust/teia-kernel/src/native_state.rs', 'rust/teia-kernel/src/hosted.rs',
   'editor/public/audio/audio-worklet-wasm.js',

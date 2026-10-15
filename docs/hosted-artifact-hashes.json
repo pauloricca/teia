@@ -1,0 +1,448 @@
+{
+  "format": "teia-hosted-handover-receipt",
+  "version": 1,
+  "date": "2026-10-15",
+  "sourceCommit": "3e5ba9f2bf17673225e7eeff45efac7c14080aa2",
+  "sourceDirty": true,
+  "executionRevision": 3,
+  "bridgeVersion": 2,
+  "packageVersion": "0.1.0",
+  "rustSourceSha256": "c31c7a76bfc3159837ed2e4e4bb7576d455974a82a9a91d13a9dfb464f9ffb84",
+  "hashes": {
+    "hosted/dist/compatibility.json": "51646e3f647cfa296a7a1e1dc18b16d6c76bf5e4be7a2ca9338332f7119b5853",
+    "hosted/dist/verification.json": "0b88d365f064788d0ff4899465658ea81aaffdaa4e5eb05f328d817c94bd2193",
+    "editor/public/audio/teia-kernel.wasm": "4ce672655901278c8e39c17797c6b72fe898d1e2370a385bd82315fd1fe09366",
+    "editor/public/audio/teia-kernel-simd.wasm": "8c4809ff725aea01af2fb8cbfd40bd4a828a0eea057de1cd11073e11b6a34d36",
+    "editor/public/audio/teia-kernel-parallel.wasm": "017a68295bc874099bb5c3115df51685213c4f9b7424f2788291dd82c51d03c0",
+    "rust/teia-kernel/tests/hosted.rs": "90e81b0e3d3e4f2c79b776bdca3af6da38c1862b21f91d21a554916668ff71b8",
+    "hosted/conformance/contracts.test.ts": "572bf66fec41f301a44f7e8472a757ffe291998099305e97a21c97b9f01dfec0"
+  },
+  "artifacts": [
+    {
+      "path": "chunk-I4ZWORXK.js",
+      "bytes": 229444,
+      "sha256": "ce34f4bd2c4e9f697a579c0a22b670a16ecff88521151fed7fb548f0707f00cd"
+    },
+    {
+      "path": "conformance/contracts.test.mjs",
+      "bytes": 270525,
+      "sha256": "fc3168298a0f9d91745f61f3ad0c3f605a018a75425ebde4927721c6f6bab05b"
+    },
+    {
+      "path": "conformance/editor.html",
+      "bytes": 323,
+      "sha256": "6dcf2026a8115831c0b71751e740a8e20ccf95b5b873f8b4dde0852c107d0be7"
+    },
+    {
+      "path": "conformance/editor.js",
+      "bytes": 2727107,
+      "sha256": "73e7714f37a9d672a7b1153152034dea4528154401ca556b884981d6c443c406"
+    },
+    {
+      "path": "editor.js",
+      "bytes": 931591,
+      "sha256": "372958adb232791c1057457258d956214c46624512b26c9b7b2dfb9cbdb341e1"
+    },
+    {
+      "path": "flow.css",
+      "bytes": 18596,
+      "sha256": "124a885d4b166ae576701061156e10b1f08c36a73319e866f2e82badedc73591"
+    },
+    {
+      "path": "index.js",
+      "bytes": 27840,
+      "sha256": "117f7d08f27725c393cb46c341021e8401e60c6010ebcb2453a1ca98d608c940"
+    },
+    {
+      "path": "native/teia-kernel/Cargo.toml",
+      "bytes": 211,
+      "sha256": "bf4525d61264227f363fe583fc05d6da82b517487a8fa7418240f5ede6594ad7"
+    },
+    {
+      "path": "native/teia-kernel/src/bounded_repeats.rs",
+      "bytes": 14783,
+      "sha256": "2f3e45a04f788f95a12a58dd7f1b84207e5e1a5fa9b4c829f5ee4dfb2e4fb998"
+    },
+    {
+      "path": "native/teia-kernel/src/hosted_observation.rs",
+      "bytes": 27019,
+      "sha256": "ad005c16d4303329bcd938938484097324c9aaca038ed86a18e5c19953c75a1e"
+    },
+    {
+      "path": "native/teia-kernel/src/hosted_resources.rs",
+      "bytes": 8304,
+      "sha256": "51f57778dc523816f0e711ba4e5829c7d574ab4e853f4d410824cfcaa5d5e77b"
+    },
+    {
+      "path": "native/teia-kernel/src/hosted.rs",
+      "bytes": 37965,
+      "sha256": "5131a2be03b43f3f4fc1b2298d6f335416dda830a93e07da641b63617864c332"
+    },
+    {
+      "path": "native/teia-kernel/src/lib.rs",
+      "bytes": 454598,
+      "sha256": "d2d835d87a2a5f981a7dde5999c58ce01757f5975eb2ebf15653a36417c58a36"
+    },
+    {
+      "path": "native/teia-kernel/src/native_state.rs",
+      "bytes": 2282,
+      "sha256": "8a0824dc795694aed1f03ee73830d158debd70b6e59d44abd137d6d7f8897259"
+    },
+    {
+      "path": "native/teia-kernel/src/parallel.rs",
+      "bytes": 32958,
+      "sha256": "3a259727359611900d44c931f62b6b32fcb2042550408299114bb46a131db42e"
+    },
+    {
+      "path": "native/teia-kernel/src/runtime_preparation.rs",
+      "bytes": 1783,
+      "sha256": "2a066fdf79bc109459897fe7f0d22ccf4bacbf2631ede31b13d29115b02b577c"
+    },
+    {
+      "path": "native/teia-kernel/src/runtime-capabilities.json",
+      "bytes": 2343,
+      "sha256": "db1f595d6e7118c60c5a2c4ee0b36a7a99084958a2f15f86abad3145b3b36920"
+    },
+    {
+      "path": "native/teia-kernel/src/state_fields.rs",
+      "bytes": 16119,
+      "sha256": "e01c2ef270fb46a904c850c68a7cd6bcfc82436fad36cfc97751f4ddc5d037a9"
+    },
+    {
+      "path": "native/teia-kernel/tests/fixtures/shared.json",
+      "bytes": 207933,
+      "sha256": "bf895b393cbc10b961fa0ff467761e0e6dfce28f67a7e0f191d5800617f60429"
+    },
+    {
+      "path": "native/teia-kernel/tests/fixtures/shared.rs",
+      "bytes": 152455,
+      "sha256": "a5dc8e5a3c70500573bf35427c67d0ef461af1b8655c4647f0504490e0834fbd"
+    },
+    {
+      "path": "README.md",
+      "bytes": 25127,
+      "sha256": "62501483bfa38ecc31d84298d408c400483892c1700f4de8826d33b8f7371f13"
+    },
+    {
+      "path": "styles.css",
+      "bytes": 105816,
+      "sha256": "2a3573012aaf0a5b04e11aeb1c29b05127b15b8bb2f92327bc8ff3bc0d6ab14e"
+    },
+    {
+      "path": "themes.css",
+      "bytes": 14898,
+      "sha256": "0befbede6b79267fa6497f275e790701d7858537b44aaf12b9e106c55f7903c1"
+    },
+    {
+      "path": "types/audio/bufferStorage.d.ts",
+      "bytes": 554,
+      "sha256": "ee77508e25d60a2ce78e9d1b19c4f4b8fcc639d239910fc35f995a30e28f47b2"
+    },
+    {
+      "path": "types/audio/config.d.ts",
+      "bytes": 265,
+      "sha256": "6f18f6c1c7da5d88c8ceace4b54294dad24177992ba980122b691b99165f0cdd"
+    },
+    {
+      "path": "types/audio/dspEdit.d.ts",
+      "bytes": 427,
+      "sha256": "e5ea35dde0b1cb6b15381b277eb0d1b39338067b42bb82f6d12478e2ad63eb47"
+    },
+    {
+      "path": "types/audio/dspOpcodes.d.ts",
+      "bytes": 1499,
+      "sha256": "72c7d57109120e5f98b240c73f13f52e68c4d544995ec005f507dbc132e551cd"
+    },
+    {
+      "path": "types/audio/dspOptimizer.d.ts",
+      "bytes": 1323,
+      "sha256": "e3413d37d7cc7e09d17f5e571e01ebc1c88bf7a695c4d43e765476c8ed4019ce"
+    },
+    {
+      "path": "types/audio/dspProgram.d.ts",
+      "bytes": 3476,
+      "sha256": "f32c5a3a2f54d844b6eb8ff71516fdafd41595ecebe28fccb203ac77b31b4da9"
+    },
+    {
+      "path": "types/audio/dspSchedule.d.ts",
+      "bytes": 923,
+      "sha256": "5dd18a916ab5683b967fbb620b47d0425a7c6d1a09f65b0bfe6c2296640ea8fa"
+    },
+    {
+      "path": "types/audio/fm1Capabilities.d.ts",
+      "bytes": 9224,
+      "sha256": "0ffd7150e7d8368109ab1aec2296c5317dfca24b9ff0be62567b47f69ad26d31"
+    },
+    {
+      "path": "types/audio/fm1Optimizer.d.ts",
+      "bytes": 238,
+      "sha256": "39ba9629493a1e76b25920857ad38755d19d4ead41807f7e327e3c6f731a36ab"
+    },
+    {
+      "path": "types/audio/fm1Package.d.ts",
+      "bytes": 859,
+      "sha256": "81ec970f7adfc25b79306812702585a565a9b5acf8d513c51dcd2cd3f6dbcddf"
+    },
+    {
+      "path": "types/audio/fm1Support.d.ts",
+      "bytes": 716,
+      "sha256": "679fc367d80d1bd79f1385cc14183c2e194b7b5b1a768b9b44c33c2cf10d928b"
+    },
+    {
+      "path": "types/audio/fm1Upload.d.ts",
+      "bytes": 673,
+      "sha256": "59d5bb77a9fa41082d8049ed1795c35b3915a2d1d022c91fa24cbe2820375b06"
+    },
+    {
+      "path": "types/audio/parallelEngine.d.ts",
+      "bytes": 484,
+      "sha256": "14424142d4c6544e1dfd03f6b04fa55839099a6381e0c57cad49e7e45f9b7402"
+    },
+    {
+      "path": "types/audio/patchPackage.d.ts",
+      "bytes": 480,
+      "sha256": "dc6a672d932e3078d0df304f15247e94ae9f193a7cd6c89c7a8acb266b3ff690"
+    },
+    {
+      "path": "types/audio/sampleWaveformCache.d.ts",
+      "bytes": 411,
+      "sha256": "d93c62463bedca8e298ee550a1caa919872635d46dfa4083ab9de5d9912fb353"
+    },
+    {
+      "path": "types/audio/useAudioEngine.d.ts",
+      "bytes": 3487,
+      "sha256": "15f972d7b4f52b64307b1b050f83e0ea0659d9eb42e1f177a91cb008abefacc4"
+    },
+    {
+      "path": "types/audio/useFm1LiveEdit.d.ts",
+      "bytes": 196,
+      "sha256": "a4d05d4f2bd13f559a3915259056251388740422225dc446f6a54211d4dd285c"
+    },
+    {
+      "path": "types/diagnostics.d.ts",
+      "bytes": 363,
+      "sha256": "4dbc8c1b46b742cddcb419f2a12b43194c873d23cac3d29de6fdd69dcd797b00"
+    },
+    {
+      "path": "types/editor/canvasZoom.d.ts",
+      "bytes": 346,
+      "sha256": "98902e05a52d0dfd8b5b0357e4cbdd4ff1a3f01a9cbf0c0241672fe245809861"
+    },
+    {
+      "path": "types/editor/chartGrid.d.ts",
+      "bytes": 851,
+      "sha256": "faad7e015e52b035064c4a89779bf2dd22ee8c578648e05c9847302aa0ec0e8a"
+    },
+    {
+      "path": "types/editor/dspNodeScope.d.ts",
+      "bytes": 94,
+      "sha256": "ce7729e567cce2f6ac284e2003df7291b16b2741262db13c324cb3d4f2b53251"
+    },
+    {
+      "path": "types/editor/EdgeOverlayContext.d.ts",
+      "bytes": 337,
+      "sha256": "9373ba54110b19f2697c06c0ec5fe7c691a8d63c1e99f13ea43f26741f4d7acc"
+    },
+    {
+      "path": "types/editor/flowPatch.d.ts",
+      "bytes": 11793,
+      "sha256": "894e9ab9e528524301acd58cfc82a326995e01a184900576123769166660a01b"
+    },
+    {
+      "path": "types/editor/Fm1ModeContext.d.ts",
+      "bytes": 71,
+      "sha256": "4f7807db1c57801e0068f959303aeec585680a15606200f06de522a11f1c9cad"
+    },
+    {
+      "path": "types/editor/Fm1UploadDialog.d.ts",
+      "bytes": 183,
+      "sha256": "4278edffbf013b8a5836293741b8eb2eafd117c4624defdacd84c1f6c112d10d"
+    },
+    {
+      "path": "types/editor/NodeEditor.d.ts",
+      "bytes": 162,
+      "sha256": "f7bbc36d9046ad4e62180dbf44965d013c14a5949f4ff2d68bcd97a09548f8af"
+    },
+    {
+      "path": "types/editor/numericDisplay.d.ts",
+      "bytes": 67,
+      "sha256": "77472277e3f48fbe221853e5ef3c4635591f5bd46dab20e68a71e376377e83ab"
+    },
+    {
+      "path": "types/editor/ShaderEdge.d.ts",
+      "bytes": 786,
+      "sha256": "856c3180dbfd30fdcbbe1f5ad8e22770e21ca255741f85c28950dc0b0c38593f"
+    },
+    {
+      "path": "types/editor/ShaderNode.d.ts",
+      "bytes": 427,
+      "sha256": "b37c0192c66140a8411234ab1f5acf8141c1d8ac72ecca70cdb202e4bf5d43fb"
+    },
+    {
+      "path": "types/graph/customWave.d.ts",
+      "bytes": 1181,
+      "sha256": "3f40d9d24654657fc351b9a869df8263cc6dd98df17d5d5f57bd25bd331eb9f9"
+    },
+    {
+      "path": "types/graph/demoPatch.d.ts",
+      "bytes": 77,
+      "sha256": "be0c5650c3136161622b136c042a3abfec622a0e8010e127fe9789357d0cf141"
+    },
+    {
+      "path": "types/graph/expression.d.ts",
+      "bytes": 284,
+      "sha256": "835f70781c8d7998c32c79e85fc1c8ea7748184c3500f182360cbe70c3e7b7cf"
+    },
+    {
+      "path": "types/graph/musicScales.d.ts",
+      "bytes": 455,
+      "sha256": "ed5f5bd5202c797c4ade13b679a505fd00d4274ee9dc5d8079cdac2d08f013fa"
+    },
+    {
+      "path": "types/graph/nodeTypes.d.ts",
+      "bytes": 3855,
+      "sha256": "44d90f19a99ad76612b61fc67adc568bfd11a901069ea886a810ef893973b009"
+    },
+    {
+      "path": "types/graph/parse.d.ts",
+      "bytes": 924,
+      "sha256": "464f4efb1a2d5fe5619bc7e9dcf8a37d804ad73f766706c173c1df35d0f514b5"
+    },
+    {
+      "path": "types/graph/patchCompatibility.d.ts",
+      "bytes": 112,
+      "sha256": "1025dbba25ee595cf26dfde9437a82c4ab2d6608d332f131dcd59a7430ecc42f"
+    },
+    {
+      "path": "types/graph/serialize.d.ts",
+      "bytes": 158,
+      "sha256": "304af52e43277634d3a1213d7f934984066b4aa68c8c77a70eeac46ac41a8143"
+    },
+    {
+      "path": "types/graph/spread.d.ts",
+      "bytes": 1110,
+      "sha256": "745fb30fd9ce083093abfc5596e8587891bceea6db8c228ba06830c654520474"
+    },
+    {
+      "path": "types/graph/subpatch.d.ts",
+      "bytes": 97,
+      "sha256": "d6620f2220c2e3bdb9a6c55cdc8407c6f63e282c3c4ba370c697b3fda9f15d7b"
+    },
+    {
+      "path": "types/graph/types.d.ts",
+      "bytes": 5878,
+      "sha256": "716d0f9fa64d1424fe0a047e37402e0f424c38166ad0100e85dfadf46a99a7c7"
+    },
+    {
+      "path": "types/hosted/assets.d.ts",
+      "bytes": 798,
+      "sha256": "23ffaf4fc7bbc10e843956e2330bd362bd45b3f1f931dda6dad35d46afc15da9"
+    },
+    {
+      "path": "types/hosted/bridge.d.ts",
+      "bytes": 4764,
+      "sha256": "0126644fc5b21442b18d65a77f00cacdcff6879ddf47d5dcd0d8c32679e8376e"
+    },
+    {
+      "path": "types/hosted/compiler.d.ts",
+      "bytes": 2828,
+      "sha256": "623b5cfbaeec0297923a9823089c5d01351082ba0da14126b4db7124d0219a1a"
+    },
+    {
+      "path": "types/hosted/document.d.ts",
+      "bytes": 1630,
+      "sha256": "cd76928786d382cb9a6dc68af3d6d4c185e8c5c068625ddf00d2c4eb240569b8"
+    },
+    {
+      "path": "types/hosted/HostedModeContext.d.ts",
+      "bytes": 193,
+      "sha256": "a43ccb679db9e7c38d7f2368ebbb63eeeaceaf7e4c9e0558031488e3192dd8f8"
+    },
+    {
+      "path": "types/hosted/HostedNodeEditor.d.ts",
+      "bytes": 356,
+      "sha256": "435e73bf7ca79228a0fb659347b28077ba74d9be40ea229164223fbe9bc671c9"
+    },
+    {
+      "path": "types/hosted/index.d.ts",
+      "bytes": 426,
+      "sha256": "3710a528d2b8d38e3008983a1b63cdb8b1b4e50dcb80471afbe328c966cbc019"
+    },
+    {
+      "path": "types/hosted/mockBridge.d.ts",
+      "bytes": 934,
+      "sha256": "a344790cade188a4ec0492f28d149e5e024e43d1edf6aacd77d1b2a8cd907b8d"
+    },
+    {
+      "path": "types/hosted/native.d.ts",
+      "bytes": 3902,
+      "sha256": "8d15d005b968e27c4d247ea17dfb5dab4bc4166ff328ef67d98fe1601015b936"
+    },
+    {
+      "path": "types/hosted/package.d.ts",
+      "bytes": 380,
+      "sha256": "529c359c9d81acfc3b37c201088a25e6ad8c1908bf3eeab5b65d2e81f30adc09"
+    },
+    {
+      "path": "types/hosted/parameters.d.ts",
+      "bytes": 647,
+      "sha256": "2f6dcdc3a65e722d3db14fc2f7a85a79066b4253b87b2b7d937b23d172fc745c"
+    },
+    {
+      "path": "types/hosted/session.d.ts",
+      "bytes": 3073,
+      "sha256": "b6cf1ecce9c6f7551214226e57cd5ed50ab20042f6040d15b07d1c29fb61beeb"
+    },
+    {
+      "path": "types/hosted/useHostedAudio.d.ts",
+      "bytes": 278,
+      "sha256": "7fde9dbae2b280dca008749c180bc3d50f93b75db85e5e36abed1b66b2ea2c1b"
+    },
+    {
+      "path": "verification.json",
+      "bytes": 2112,
+      "sha256": "0b88d365f064788d0ff4899465658ea81aaffdaa4e5eb05f328d817c94bd2193"
+    }
+  ],
+  "checks": {
+    "native": {
+      "toolchain": "Rust 1.90, Linux ARM64 Docker",
+      "unitTests": 31,
+      "hostedIntegrationTests": 20,
+      "allocationGuards": "passed within the tested paths",
+      "packagedCrateCheck": "cargo check --tests, default lint policy"
+    },
+    "hostedContracts": {
+      "environment": "Node 22 Docker",
+      "tests": 20
+    },
+    "equivalence": {
+      "environment": "Linux ARM64 native container versus Node WASM",
+      "packagedCorpus": 62,
+      "nodeWasmSubset": 57,
+      "maxAbsoluteSampleError": 0,
+      "scope": "six blocks, controls and reset; explicit bounded repeat policy; named excluded resource fixtures in verification.json"
+    },
+    "wasmEvents": "scalar and SIMD ordered collisions, velocity-zero release, reset and overflow passed in Node Docker",
+    "typechecks": "editor and conformance checks passed in Docker; hosted declarations built",
+    "fm1Audit": "80 nodes, 29 other features; source review and generated matrix current",
+    "artifactIntegrity": "77 manifest-listed artifacts and source checksums verified in Docker",
+    "whitespace": "git diff --check passed in Docker",
+    "builds": "hosted declarations/ESM/CSS/themes/native fixtures; scalar/SIMD/shared-memory WASM; static editor bundle with configured empty theme and local storage"
+  },
+  "warnings": [
+    "Optional shared-memory Rust 1.87 atomics target feature is unstable; proc_macro future incompatibility notice remains",
+    "Vite reports a bundle chunk exceeding 500 kB"
+  ],
+  "remaining": [
+    "Native FFT remains unavailable; concrete migration plan in docs/host-handover.md",
+    "Buffer previews are point-sampled rather than full extrema bins",
+    "Repeated snapshot persistence requires a host concrete-item restore policy; Resources::buffers restores root snapshots, not complete live repeat trees",
+    "Resource-heavy repeat reuse/reset can clear storage in bulk; no macOS audio-deadline acceptance is established",
+    "No macOS-native, GUI isolation, audio-device or consuming-host integration verification"
+  ],
+  "visibility": {
+    "standalone": "Ordinary refresh of the existing app loads the rebuilt editor/WASM bundle. Theme and local save storage were preserved. No refresh was performed.",
+    "host": "Import the complete manifest-matched hosted/dist and native source; implement/opt in to bridge-v2 capabilities; rebuild the host frontend and native binary, then reopen its editor. No host source or process was inspected or modified."
+  }
+}

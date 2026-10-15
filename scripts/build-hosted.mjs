@@ -31,9 +31,9 @@ await copyFile(join(root, 'editor/src/styles.css'), join(output, 'styles.css'));
 await copyFile(join(root, 'editor/src/themes.css'), join(output, 'themes.css'));
 await copyFile(join(root, 'node_modules/@xyflow/react/dist/style.css'), join(output, 'flow.css'));
 await mkdir(join(output, 'native/teia-kernel/src'), { recursive: true });
-for (const path of ['Cargo.toml', 'src/lib.rs', 'src/native_state.rs', 'src/state_fields.rs', 'src/runtime-capabilities.json', 'src/runtime_preparation.rs', 'src/hosted_resources.rs', 'src/hosted.rs', 'src/parallel.rs']) await copyFile(join(root, 'rust/teia-kernel', path), join(output, 'native/teia-kernel', path));
+for (const path of ['Cargo.toml', 'src/lib.rs', 'src/native_state.rs', 'src/state_fields.rs', 'src/runtime-capabilities.json', 'src/runtime_preparation.rs', 'src/hosted_resources.rs', 'src/hosted_observation.rs', 'src/bounded_repeats.rs', 'src/hosted.rs', 'src/parallel.rs']) await copyFile(join(root, 'rust/teia-kernel', path), join(output, 'native/teia-kernel', path));
 await mkdir(join(output, 'native/teia-kernel/tests/fixtures'), { recursive: true });
-await copyFile(join(root, 'rust/teia-kernel/tests/fixtures/shared.rs'), join(output, 'native/teia-kernel/tests/fixtures/shared.rs'));
+for (const name of ['shared.rs', 'shared.json']) await copyFile(join(root, 'rust/teia-kernel/tests/fixtures', name), join(output, 'native/teia-kernel/tests/fixtures', name));
 execFileSync(process.execPath, ['scripts/build-hosted-conformance.mjs'], { cwd: root, stdio: 'inherit' });
 const files = [];
 async function visit(directory) {
@@ -46,7 +46,8 @@ async function visit(directory) {
 await visit(output);
 let evidence;
 try { evidence=JSON.parse(await readFile(join(root,'hosted/verification/shared-runtime.json'),'utf8')); } catch { /* Tests are intentionally separate from builds. */ }
-const evidenceMatches = evidence?.rustSourceSha256 === await runtimeFingerprint()
+const evidenceMatches = evidence?.fixtureRustSha256 === createHash('sha256').update(await readFile(join(root,'rust/teia-kernel/tests/fixtures/shared.rs'))).digest('hex')
+  && evidence?.rustSourceSha256 === await runtimeFingerprint()
   && evidence?.fixtureSha256 === createHash('sha256').update(await readFile(join(root,'rust/teia-kernel/tests/fixtures/shared.json'))).digest('hex')
   && evidence?.wasmSha256 === createHash('sha256').update(await readFile(join(root,'editor/public/audio/teia-kernel.wasm'))).digest('hex');
 if(evidenceMatches) {
@@ -58,7 +59,7 @@ const manifest = {
   format: 'teia-hosted-compatibility', version: 1,
   sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   sourceDirty: execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], { cwd: root, encoding: 'utf8' }).length > 0,
-  versions: { packages: Object.fromEntries(await Promise.all(['editor', 'runtime', 'kernel', 'hosted'].map(async path => [path, JSON.parse(await readFile(join(root, path, 'package.json'), 'utf8')).version]))), package: JSON.parse(await readFile(join(root, 'hosted/package.json'), 'utf8')).version, document: 1, legacyDocument: 0, program: 1, runtime: 1, bridge: 1, xpManifest: 2, engineApis: [1, 2] },
+  versions: { packages: Object.fromEntries(await Promise.all(['editor', 'runtime', 'kernel', 'hosted'].map(async path => [path, JSON.parse(await readFile(join(root, path, 'package.json'), 'utf8')).version]))), package: JSON.parse(await readFile(join(root, 'hosted/package.json'), 'utf8')).version, document: 1, legacyDocument: 0, program: 1, runtime: 1, bridge: 2, bridgeCompatible: [1, 2], xpManifest: 2, engineApis: [1, 2] },
   nativeProfile: 'native-scalar-v1', nativeFunctionalVerification: evidenceMatches ? 'WASM/native equivalence; see verification.json for scope' : 'no current source-matched equivalence evidence',
   artifacts: files.sort((a, b) => a.path.localeCompare(b.path)),
   sourceChecksums: await Promise.all(Object.keys(result.metafile.inputs).filter(p => !p.startsWith('hosted:') && !p.startsWith('<') && !p.includes('node_modules/')).sort().map(async path => ({ path, sha256: createHash('sha256').update(await readFile(join(root, path))).digest('hex') }))),

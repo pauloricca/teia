@@ -559,6 +559,8 @@ struct DspRepeatEffectBufferState {
 
 struct DspRepeatBufferState {
     slot: usize,
+    frozen: bool,
+    capture: u64,
     buffer: Option<Box<[f32]>>,
 }
 
@@ -591,7 +593,7 @@ impl DspRepeatResourceState {
                 .buffer_slots
                 .iter()
                 .map(|slot| DspRepeatBufferState {
-                    slot: *slot,
+                    slot: *slot, frozen: false, capture: 0,
                     buffer: try_zeroed_f32_buffer(MAX_DSP_BUFFER_SAMPLES),
                 })
                 .collect(),
@@ -615,6 +617,7 @@ impl DspRepeatResourceState {
             }
         }
         for buffer_state in &mut self.buffers {
+            buffer_state.frozen = false; buffer_state.capture = 0;
             if preserved_buffer_slots
                 .get(buffer_state.slot)
                 .copied()
@@ -640,6 +643,7 @@ impl DspRepeatResourceState {
             );
         }
         for buffer in &mut self.buffers {
+            core::mem::swap(&mut kernel_global!(DSP_BUFFER_FROZEN)[buffer.slot], &mut buffer.frozen);
             core::mem::swap(
                 &mut kernel_global!(DSP_BUFFER_BUFFERS)[buffer.slot],
                 &mut buffer.buffer,
@@ -659,6 +663,7 @@ impl DspRepeatResourceState {
             );
         }
         for buffer in &mut self.buffers {
+            core::mem::swap(&mut kernel_global!(DSP_BUFFER_FROZEN)[buffer.slot], &mut buffer.frozen);
             core::mem::swap(
                 &mut kernel_global!(DSP_BUFFER_BUFFERS)[buffer.slot],
                 &mut buffer.buffer,
@@ -986,6 +991,7 @@ macro_rules! wasm_state {
     )* };
 }
 engine_fields!(wasm_state);
+mod bounded_repeats;
 include!("runtime_preparation.rs");
 
 #[no_mangle]
@@ -1987,6 +1993,7 @@ pub extern "C" fn clearDspProgram() {
     #[cfg(feature = "parallel")]
     parallel::clear_plan();
     unsafe {
+        kernel_global!(DSP_BOUNDED_PROGRAM) = None;
         kernel_global!(DSP_REPEAT_CAPACITY) = 0;
 
         kernel_global!(DSP_BLOCK_PLAN) = None;
@@ -2058,6 +2065,7 @@ pub extern "C" fn resetDspVoiceState(slot: u32) {
 pub extern "C" fn resetDspRuntimeState() {
     let preserved_buffer_slots = buffer_slots_preserved_on_reset();
     unsafe {
+        if let Some(sequence) = (&mut *core::ptr::addr_of_mut!(kernel_global!(DSP_BOUNDED_PROGRAM))).as_mut() { sequence.reset(&preserved_buffer_slots); }
         for index in 0..kernel_global!(DSP_OP_COUNT) {
             kernel_global!(DSP_CONTROL_CACHES)[index].initialized = false;
         }
@@ -2207,8 +2215,8 @@ unsafe fn advance_dsp_midi_note_event() {
     kernel_global!(DSP_MIDI_NOTE_EVENT_BLANK_PENDING) = true;
 }
 
-// Shared note-state orchestration. Standalone dequeues with its legacy pulse
-// separators; hosted processing invokes this for all events at their exact offset.
+// Shared ordered note-state orchestration. Both adapters dequeue at most one
+// note every two samples, with a blank sample between events for edge consumers.
 #[allow(static_mut_refs)]
 unsafe fn apply_dsp_midi_note_event(event: DspMidiNoteEvent) {
     let held = kernel_global!(DSP_MIDI_HELD_NOTES).get_or_insert_with(Vec::new);
@@ -2229,16 +2237,20 @@ unsafe fn apply_dsp_midi_note_event(event: DspMidiNoteEvent) {
 }
 
 #[no_mangle]
+pub extern "C" fn dspMidiInputOverflows() -> f64 { unsafe { kernel_global!(DSP_MIDI_INPUT_OVERFLOWS) as f64 } }
+
+#[no_mangle]
 #[allow(static_mut_refs)]
 pub extern "C" fn queueDspMidiNoteEvent(note_on: u32, channel: u32, note: f64, velocity: f64) {
     unsafe {
         let events = kernel_global!(DSP_MIDI_NOTE_EVENTS).get_or_insert_with(VecDeque::new);
         if events.len() >= 4096 {
-            events.pop_front();
+            kernel_global!(DSP_MIDI_INPUT_OVERFLOWS) += 1;
+            return; // Reject newest; accepted events retain their order.
         }
         events.push_back(DspMidiNoteEvent {
             is_cc: false,
-            note_on: note_on != 0,
+            note_on: note_on != 0 && velocity > 0.0,
             channel: (channel as usize).clamp(1, 16),
             note: if note.is_finite() {
                 note.clamp(0.0, 127.0)
@@ -2432,6 +2444,7 @@ fn dsp_sample_playhead_from_state(
 }
 
 unsafe fn dsp_sample_slot_is_repeated(slot: usize) -> bool {
+    if (&*core::ptr::addr_of!(kernel_global!(DSP_BOUNDED_PROGRAM))).as_ref().is_some_and(|p| p.has_sample(slot)) { return true; }
     for runtime_slot in 0..MAX_DSP_SPREADS {
         if kernel_global!(DSP_SPREAD_RUNTIMES)[runtime_slot]
             .as_ref()
@@ -2453,6 +2466,9 @@ unsafe fn dsp_sample_slot_is_repeated(slot: usize) -> bool {
 
 #[no_mangle]
 pub extern "C" fn dspSamplePlayheadCount(slot: u32) -> u32 {
+    unsafe { if let Some(p) = (&*core::ptr::addr_of!(kernel_global!(DSP_BOUNDED_PROGRAM))).as_ref().filter(|p| p.has_sample(slot as usize)) {
+        let mut count = 0; p.visit_samples(slot as usize,&mut |_,_| count+=1); return count;
+    } }
     let slot = slot as usize;
     let mut count = 0usize;
     unsafe {
@@ -2500,6 +2516,10 @@ pub extern "C" fn dspSamplePlayheadCount(slot: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn dspSamplePlayheadValue(slot: u32, target: u32) -> f64 {
+    unsafe { if let Some(p) = (&*core::ptr::addr_of!(kernel_global!(DSP_BOUNDED_PROGRAM))).as_ref().filter(|p| p.has_sample(slot as usize)) {
+        let mut index = 0; let mut value = -1.0;
+        p.visit_samples(slot as usize,&mut |v,_| { if index == target { value=v; } index+=1; }); return value;
+    } }
     let slot = slot as usize;
     let target = target as usize;
     let mut index = 0usize;
@@ -2560,6 +2580,10 @@ pub extern "C" fn dspSamplePlayheadValue(slot: u32, target: u32) -> f64 {
 
 #[no_mangle]
 pub extern "C" fn dspSampleLatestPlayhead(slot: u32) -> f64 {
+    unsafe { if let Some(p) = (&*core::ptr::addr_of!(kernel_global!(DSP_BOUNDED_PROGRAM))).as_ref().filter(|p| p.has_sample(slot as usize)) {
+        let mut age = f64::INFINITY; let mut value = -1.0;
+        p.visit_samples(slot as usize,&mut |v,a| { if a <= age { value=v; age=a; } }); return value;
+    } }
     let slot = slot as usize;
     let mut latest_playhead = -1.0;
     let mut youngest_age = f64::INFINITY;
@@ -3004,7 +3028,7 @@ fn validate_engine_program(ops: &[DspOp], value_count: usize) -> Result<(), usiz
 #[no_mangle]
 pub extern "C" fn validateDspProgram() -> i32 {
     unsafe {
-        let ops: Vec<DspOp> = kernel_global!(DSP_OPS)[..kernel_global!(DSP_OP_COUNT)]
+        let ops: Vec<DspOp> = (&*core::ptr::addr_of!(kernel_global!(DSP_OPS)))[..kernel_global!(DSP_OP_COUNT)]
             .iter()
             .enumerate()
             .map(|(index, source)| {
@@ -7464,7 +7488,9 @@ fn render_dsp_buffer(op: DspOp, sample_rate: f64) -> f64 {
     };
     let record_head_output = read_dsp_buffer(slot, length_samples, record_head);
     set_dsp_reg(op.e, sanitize_sample(record_head_output, 8.0));
-    write_dsp_buffer(slot, length_samples, record_head, dsp_reg(op.a));
+    if !unsafe { kernel_global!(DSP_BUFFER_FROZEN)[slot] } {
+        write_dsp_buffer(slot, length_samples, record_head, dsp_reg(op.a));
+    }
     let output = read_dsp_buffer(slot, length_samples, playhead);
     unsafe {
         if op.state >= 0 && (op.state as usize + 3) < MAX_DSP_STATE {
@@ -9316,7 +9342,8 @@ fn render_dsp_midi_note_send(op: DspOp) {
 
         let events = kernel_global!(DSP_MIDI_OUTPUT_EVENTS).get_or_insert_with(VecDeque::new);
         if events.len() >= 4096 {
-            events.pop_front();
+            kernel_global!(DSP_MIDI_INPUT_OVERFLOWS) += 1;
+            return; // Reject newest; accepted events retain their order.
         }
         events.push_back(DspMidiNoteEvent {
             is_cc: false,
@@ -9370,7 +9397,8 @@ fn render_dsp_midi_cc_send(op: DspOp, sample_rate: f64) {
 
         let events = kernel_global!(DSP_MIDI_OUTPUT_EVENTS).get_or_insert_with(VecDeque::new);
         if events.len() >= 4096 {
-            events.pop_front();
+            kernel_global!(DSP_MIDI_INPUT_OVERFLOWS) += 1;
+            return; // Reject newest; accepted events retain their order.
         }
         events.push_back(DspMidiNoteEvent {
             is_cc: true,
@@ -11928,6 +11956,11 @@ unsafe fn render_dsp_ops(
     right_sample: &mut f64,
     use_control_cache: bool,
 ) {
+    if let Some(mut sequence) = (&mut *core::ptr::addr_of_mut!(kernel_global!(DSP_BOUNDED_PROGRAM))).take() {
+        sequence.render(frame, sample_rate, left_sample, right_sample, None);
+        kernel_global!(DSP_BOUNDED_PROGRAM) = Some(sequence);
+        return;
+    }
     let mut op_index = 0;
     while op_index < kernel_global!(DSP_OP_COUNT) {
         let mut op = kernel_global!(DSP_OPS)[op_index];

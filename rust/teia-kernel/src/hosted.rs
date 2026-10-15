@@ -4,6 +4,9 @@ use super::*;
 #[path = "hosted_resources.rs"]
 mod resources;
 pub use resources::*;
+#[path = "hosted_observation.rs"]
+mod observation;
+pub use observation::*;
 use std::cell::Cell;
 use std::marker::PhantomData;
 
@@ -12,6 +15,7 @@ pub const PROFILE: &str = "native-scalar-v1";
 pub const MAX_BLOCK_FRAMES: usize = MAX_WASM_FRAMES;
 pub const MAX_EVENTS: usize = 256;
 pub const MAX_MIDI_OUTPUT: usize = 4096;
+static NEXT_OWNER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 const MAX_HELD_NOTES: usize = 16 * 128;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -191,6 +195,7 @@ pub struct Feedback {
     pub midi_output_overflows: u64,
     pub repeat_exhaustions: u64,
     pub held_notes: usize,
+    pub queued_notes: usize,
     pub has_timeline: bool,
     pub peak: f32,
     pub render_frame: u64,
@@ -205,9 +210,16 @@ pub struct Instance {
     sample_rate: f64,
     max_block: usize,
     generation: u64,
+    identity: Identity,
+    root_buffer_states: Vec<u32>,
     needs_timeline: bool,
     feedback: Feedback,
     smooth_controls: bool,
+    observation: Option<ObservationPlan>,
+    owner: u64,
+    capture_epoch: u64,
+    capture_serial: u64,
+    captures: [u64; MAX_DSP_BUFFER_SLOTS],
     _owner: PhantomData<Cell<()>>,
 }
 // SAFETY: each instance owns its program/resources; temporary repeat-state
@@ -270,12 +282,28 @@ impl Instance {
         installed?;
         // Bounded resources are allocated before the execution-thread handoff.
         state.DSP_MIDI_HELD_NOTES = Some(Vec::with_capacity(MAX_HELD_NOTES));
+        state.DSP_MIDI_NOTE_EVENTS = Some(VecDeque::with_capacity(4096));
         state.DSP_MIDI_OUTPUT_EVENTS = Some(VecDeque::with_capacity(MAX_DSP_OPS));
         Ok(Self {
             state,
+            observation: None,
+            owner: NEXT_OWNER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            capture_epoch: 0,
+            capture_serial: 0,
+            captures: [0; MAX_DSP_BUFFER_SLOTS],
             sample_rate,
             max_block,
             generation: prepared.generation,
+            identity: prepared.identity(),
+            root_buffer_states: prepared
+                .ops
+                .iter()
+                .filter(|op| {
+                    op.opcode == DSP_OP_BUFFER
+                        && observation::root_buffer(&prepared.ops, op.state as u32)
+                })
+                .map(|op| op.state as u32)
+                .collect(),
             smooth_controls: false, // Version-1 compatibility; opt into standalone smoothing below.
             needs_timeline: prepared.needs_timeline,
             feedback: Feedback {
@@ -302,6 +330,9 @@ impl Instance {
         drop(self);
     }
     pub fn reset(&mut self) {
+        self.capture_epoch += 1;
+        self.captures.fill(0);
+        self.state.DSP_BUFFER_FROZEN.fill(false);
         native_state::enter(&mut self.state, || resetDspRuntimeState());
         self.state.HOST_PITCH_BEND.fill(0.0);
         self.state.DSP_MIDI_CC_VALUES.fill([0.0; 128]);
@@ -317,6 +348,7 @@ impl Instance {
         self.feedback.beat = 0.0;
         self.feedback.repeat_exhaustions = self.state.DSP_REPEAT_EXHAUSTIONS;
         self.feedback.held_notes = 0;
+        self.feedback.queued_notes = 0;
     }
     /// Compatibility convenience for numeric controls and no host timeline/MIDI.
     pub fn process(
@@ -335,7 +367,7 @@ impl Instance {
     }
     /// All events at an offset apply in supplied order before evaluating that
     /// sample. Monophonic MIDI uses last-note priority while retaining all held
-    /// keys. Pulse-event MIDI Note On/Off graph nodes are outside this profile.
+    /// keys. Note pulses use the shared bounded queue with blank separators.
     pub fn process_host(
         &mut self,
         input: [&[f32]; 2],
@@ -490,6 +522,19 @@ impl Instance {
                 _ => return Err(Error::UnsupportedEvent),
             }
         }
+        let queued_notes = self
+            .state
+            .DSP_MIDI_NOTE_EVENTS
+            .as_ref()
+            .map_or(0, |q| q.len());
+        let new_notes = events
+            .iter()
+            .filter(|e| matches!(e.kind, EventKind::NoteOn { .. } | EventKind::NoteOff { .. }))
+            .count();
+        if queued_notes + new_notes > 4096 {
+            self.feedback.event_overflows += 1;
+            return Err(Error::EventOverflow);
+        }
         self.validate_timeline(timeline, frames)?;
         // All validation above precedes output/state mutation.
         self.state.INPUT_LEFT[..frames].copy_from_slice(input[0]);
@@ -545,6 +590,7 @@ impl Instance {
                     apply_event(events[next_event].kind, smooth_controls);
                     next_event += 1;
                 }
+                advance_dsp_midi_note_event();
                 let (left, right) = render_shared_frame(frame, sample_rate, smoothing_alpha);
                 while let Some(event) = kernel_global!(DSP_MIDI_OUTPUT_EVENTS)
                     .as_mut()
@@ -578,6 +624,7 @@ impl Instance {
         self.feedback.has_timeline = self.state.HOST_TIMELINE_ACTIVE;
         self.feedback.repeat_exhaustions = self.state.DSP_REPEAT_EXHAUSTIONS;
         self.feedback.held_notes = self.state.DSP_MIDI_HELD_NOTES.as_ref().unwrap().len();
+        self.feedback.queued_notes = self.state.DSP_MIDI_NOTE_EVENTS.as_ref().unwrap().len();
         self.feedback.rendered_frames += frames as u64;
         self.feedback.peak = peak;
         self.feedback.midi_output_overflows += overflow;
@@ -604,20 +651,26 @@ unsafe fn apply_event(kind: EventKind, smooth: bool) {
             channel,
             note,
             velocity,
-        } => apply_dsp_midi_note_event(DspMidiNoteEvent {
-            is_cc: false,
-            note_on: velocity > 0.0,
-            channel: channel as usize,
-            note: note as f64,
-            velocity,
-        }),
-        EventKind::NoteOff { channel, note } => apply_dsp_midi_note_event(DspMidiNoteEvent {
-            is_cc: false,
-            note_on: false,
-            channel: channel as usize,
-            note: note as f64,
-            velocity: 0.0,
-        }),
+        } => kernel_global!(DSP_MIDI_NOTE_EVENTS)
+            .as_mut()
+            .unwrap()
+            .push_back(DspMidiNoteEvent {
+                is_cc: false,
+                note_on: velocity > 0.0,
+                channel: channel as usize,
+                note: note as f64,
+                velocity,
+            }),
+        EventKind::NoteOff { channel, note } => kernel_global!(DSP_MIDI_NOTE_EVENTS)
+            .as_mut()
+            .unwrap()
+            .push_back(DspMidiNoteEvent {
+                is_cc: false,
+                note_on: false,
+                channel: channel as usize,
+                note: note as f64,
+                velocity: 0.0,
+            }),
         EventKind::ControlChange {
             channel,
             controller,
@@ -674,6 +727,12 @@ mod equivalence {
                 );
             }
             resources.restore_buffers(48000.0).unwrap();
+            if let Some(capacity) = resources.repeat_capacity {
+                assert_eq!(
+                    prepareDspRealtime(capacity, resources.repeat_memory_budget),
+                    1
+                );
+            }
         });
         let input: Vec<f32> = (0..128).map(|i| (i as f32 * 0.13).sin() * 0.25).collect();
         for block in 0..6 {
@@ -698,9 +757,9 @@ mod equivalence {
                 }
                 clear(128);
                 beginDspRenderQuantum();
-                kernel_global!(INPUT)[..128].copy_from_slice(&input);
-                kernel_global!(INPUT_LEFT)[..128].copy_from_slice(&input);
-                kernel_global!(INPUT_RIGHT)[..128].copy_from_slice(&input);
+                (&mut kernel_global!(INPUT))[..128].copy_from_slice(&input);
+                (&mut kernel_global!(INPUT_LEFT))[..128].copy_from_slice(&input);
+                (&mut kernel_global!(INPUT_RIGHT))[..128].copy_from_slice(&input);
                 renderDspProgram(128, 48000.0);
                 for i in 0..128 {
                     assert!(

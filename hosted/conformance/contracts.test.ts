@@ -182,3 +182,88 @@ test('override rebind normalizes integer, step and narrowed bounds and retains t
   const narrowed = structuredClone(stepped); narrowed.parameters[0].max = 1;
   assert.equal(overrides.bind(narrowed)[0].value, 1);
 });
+
+test('v2 ordered gestures bypass revisions, retain releases and clean up lifecycle', async () => {
+  const bridge = new MockHostBridge();
+  const patch = fixture(); patch.nodes.push({ id: 'keys', type: 'Keys', params: { note: 0, frequency: 0 } });
+  const session = new HostedSession('gestures', patch, { save: true, bridgeVersion: 2, gestures: 1 }, bridge, 'live');
+  const before = writeDocument(session.getDocument());
+  session.gesture('keys', { note: 60, frequency: 261.625565 });
+  session.gesture('keys', { note: 64, frequency: 329.627557 });
+  session.gesture('keys', { note: 0, frequency: 0 });
+  const gestures = bridge.commands.filter(c => c.type === 'gesture');
+  assert.equal(gestures.length, 3); assert.deepEqual(gestures.map(c => c.sequence), [1, 2, 3]);
+  assert.equal(gestures[2].values.frequency, 0);
+  assert.equal(session.getSnapshot().revision, 0); assert.equal(session.getSnapshot().dirty, false);
+  assert.equal(writeDocument(session.getDocument()), before);
+  session.releaseGestures('focus loss'); assert.equal(last(bridge).type, 'release gestures');
+  session.gesture('keys', { frequency: 440 });
+  bridge.emit({ type: 'connection', sessionId: 'gestures', connected: false });
+  const count = bridge.commands.length; session.gesture('keys', { frequency: 0 }); assert.equal(bridge.commands.length, count);
+  session.dispose(); bridge.dispose();
+});
+
+test('v2 short press/release survive graph preparation supersession and failed gesture cancels controls', async () => {
+  const bridge = new MockHostBridge(); const patch = fixture();
+  const session = new HostedSession('press', patch, { save: true, bridgeVersion: 2, gestures: 1 }, bridge, 'live');
+  session.gesture('button', { pressed: 1 }); const press = last(bridge);
+  patch.name = 'new graph'; const applying = session.edit(patch); const apply = last(bridge);
+  session.gesture('button', { pressed: 0 }); const release = last(bridge);
+  assert.equal(press.type, 'gesture'); assert.equal(release.type, 'gesture');
+  assert.equal(release.generation, press.generation);
+  bridge.reply(apply.requestId, 'installed'); await applying;
+  assert.equal(last(bridge).type, 'release gestures');
+  // Acknowledgement from the retired generation cannot affect the replacement.
+  bridge.reply(press.requestId, 'failed'); bridge.reply(release.requestId, 'updated');
+  await Promise.resolve(); assert.equal(session.getSnapshot().generation, `mock:${apply.revision}`);
+  session.gesture('button', { pressed: 1 }); bridge.reply(last(bridge).requestId, 'failed');
+  await Promise.resolve(); assert.equal(last(bridge).type, 'release gestures');
+  session.dispose(); bridge.dispose();
+});
+
+test('v2 Buffer Save persists exact captured snapshot and never marks newer edits saved', async () => {
+  const bridge = new MockHostBridge(); const session = new HostedSession('capture', fixture(), { save: true, bridgeVersion: 2, bufferCapture: 1 }, bridge, 'live');
+  const saving = session.save(); const capture = last(bridge); assert.equal(capture.type, 'capture save');
+  const captured = session.getDocument(); captured.buffers = { recorded: { hash: 'a'.repeat(64), sampleRate: 48000, sampleCount: 960 } };
+  const newer = session.getDocument(); newer.name = 'newer'; const editing = session.edit(newer); const apply = last(bridge);
+  bridge.reply(capture.requestId, 'captured', undefined, { capturedDocument: captured }); await Promise.resolve();
+  const persist = last(bridge); assert.equal(persist.type, 'save', JSON.stringify(session.getSnapshot().saveDiagnostics)); if (persist.type !== 'save') throw new Error('Missing persistence');
+  assert.deepEqual(persist.document.buffers, captured.buffers); assert.notEqual(persist.document.name, 'newer');
+  bridge.reply(persist.requestId, 'saved'); assert.equal(await saving, true);
+  assert.equal(session.getSnapshot().dirty, true); assert.equal(session.getDocument().name, 'newer');
+  bridge.reply(apply.requestId, 'failed'); await editing;
+  session.dispose(); bridge.dispose();
+});
+
+test('v2 failed capture and failed persistence preserve saved baseline; old hosts receive no v2 messages', async () => {
+  const bridge = new MockHostBridge(); const session = new HostedSession('failed capture', fixture(), { save: true, bridgeVersion: 2, bufferCapture: 1 }, bridge, 'live');
+  let saving = session.save(); bridge.reply(last(bridge).requestId, 'failed'); assert.equal(await saving, false);
+  assert.equal(bridge.commands.some(c => c.type === 'save'), false);
+  saving = session.save(); bridge.reply(last(bridge).requestId, 'captured', undefined, { capturedDocument: session.getDocument() }); await Promise.resolve();
+  assert.equal(last(bridge).type, 'save', JSON.stringify(session.getSnapshot().saveDiagnostics)); bridge.reply(last(bridge).requestId, 'failed'); assert.equal(await saving, false);
+  assert.equal(session.getSnapshot().savedRevision, 0);
+  session.dispose(); bridge.dispose();
+  const legacyBridge = new MockHostBridge(); const legacy = new HostedSession('legacy', fixture(), { save: true }, legacyBridge, 'live');
+  legacy.gesture('button', { pressed: 1 }); assert.equal(legacyBridge.commands.length, 0);
+  saving = legacy.save(); assert.equal(last(legacyBridge).type, 'save'); legacyBridge.reply(last(legacyBridge).requestId, 'saved'); assert.equal(await saving, true);
+  legacy.dispose(); legacyBridge.dispose();
+});
+
+test('capture Save rejects host graph changes and replacement during capture, and accepts same-revision durable baseline', async () => {
+  const bridge = new MockHostBridge(); const session = new HostedSession('save isolation', fixture(), { save: true, bridgeVersion: 2, bufferCapture: 1 }, bridge, 'live');
+  let saving = session.save(); let capture = last(bridge);
+  const changed = session.getDocument(); changed.name = 'host changed graph';
+  bridge.reply(capture.requestId, 'captured', undefined, { capturedDocument: changed }); assert.equal(await saving, false);
+  saving = session.save(); capture = last(bridge);
+  const document = session.getDocument(); document.buffers = { recorded: { hash: 'b'.repeat(64), sampleRate: 48000, sampleCount: 960 } };
+  bridge.reply(capture.requestId, 'captured', undefined, { capturedDocument: document }); await Promise.resolve();
+  assert.equal(last(bridge).type, 'save'); bridge.reply(last(bridge).requestId, 'saved'); assert.equal(await saving, true);
+  assert.equal(session.getSnapshot().dirty, false); assert.deepEqual(session.getDocument().buffers, document.buffers);
+  saving = session.save(); capture = last(bridge);
+  const newer = session.getDocument(); newer.name = 'replacement'; const editing = session.edit(newer); const apply = last(bridge);
+  bridge.reply(apply.requestId, 'installed'); await editing;
+  const count = bridge.commands.length;
+  bridge.reply(capture.requestId, 'captured', undefined, { capturedDocument: document }); assert.equal(await saving, false);
+  assert.equal(bridge.commands.length, count);
+  session.dispose(); bridge.dispose();
+});

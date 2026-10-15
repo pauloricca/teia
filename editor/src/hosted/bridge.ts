@@ -1,12 +1,16 @@
 import type { Patch, SampleAsset, ImageAsset } from '../graph/types';
-import type { BufferVisualization, LinkMeterReading, LinkScopeReading } from '../audio/useAudioEngine';
+import type { BufferSnapshot, BufferVisualization, LinkMeterReading, LinkScopeReading } from '../audio/useAudioEngine';
 import type { Diagnostic } from './document';
 import type { EditClassification, PreparedPatch } from './compiler';
 
-export const BRIDGE_VERSION = 1;
+export const BRIDGE_VERSION = 2;
 export interface Context { requestId: string; sessionId: string; revision: number; generation: string | null }
 export interface Capabilities {
   save: boolean;
+  /** Explicit opt-in; absent means bridge v1 behavior. */
+  bridgeVersion?: 2;
+  gestures?: 1;
+  bufferCapture?: 1;
   profile?: PreparedPatch['profile'];
   saveAs?: boolean;
   /** Default allows saving an editable document even when it cannot compile. */
@@ -20,6 +24,11 @@ export interface Capabilities {
   nodeTypes?: string[];
 }
 export type HostCommand = Context & (
+  | { type: 'gesture'; version: 1; sequence: number; layout: string; nodeId: string; values: Record<string, number>; timestamp: number }
+  | { type: 'release gestures'; version: 1; sequence: number; reason: 'focus loss' | 'close' | 'dispose' | 'graph swap' }
+  | { type: 'capture buffer'; version: 1; nodeId: string }
+  | { type: 'restore buffer'; version: 1; nodeId: string; snapshot: BufferSnapshot }
+  | { type: 'capture save'; version: 1; document: Patch; installedRevision: number | null }
   | { type: 'revision' }
   | { type: 'apply'; document: Patch; prepared?: PreparedPatch; change: EditClassification }
   | { type: 'save'; document: Patch; saveAs: boolean }
@@ -31,14 +40,16 @@ export type HostCommand = Context & (
   | { type: 'feedback'; scopes: { id: string; length: number; points?: number; reset?: 'none' | 'zero-crossing' }[] }
 );
 export type HostReply = Context & {
-  status: 'queued' | 'installed' | 'updated' | 'saved' | 'failed' | 'cancelled' | 'closed' | 'connected';
+  capturedDocument?: Patch;
+  bufferSnapshot?: BufferSnapshot;
+  status: 'captured' | 'queued' | 'installed' | 'updated' | 'saved' | 'failed' | 'cancelled' | 'closed' | 'connected';
   diagnostics?: Diagnostic[];
 };
 export type HostEvent =
   | (Context & { type: 'installed'; diagnostics?: Diagnostic[] })
   | (Context & { type: 'diagnostics'; diagnostics: Diagnostic[] })
   | { type: 'connection'; sessionId: string; connected: boolean }
-  | (Context & { type: 'feedback'; meters?: Record<string, LinkMeterReading>; scopes?: Record<string, LinkScopeReading>; playheads?: Record<string, number[]>; buffers?: Record<string, BufferVisualization>; parameters?: Record<string, number>; peak?: number; tempo?: { bpm: number; beat: number; running: boolean; renderFrame: number } });
+  | (Context & { type: 'feedback'; observation?: { layout: string; dropped: number; eventOverflows: number; queuedNotes: number }; meters?: Record<string, LinkMeterReading>; scopes?: Record<string, LinkScopeReading>; playheads?: Record<string, number[]>; buffers?: Record<string, BufferVisualization>; parameters?: Record<string, number>; peak?: number; tempo?: { bpm: number; beat: number; running: boolean; renderFrame: number } });
 
 /** Implementations must announce every newer revision before expensive preparation,
  * atomically recheck revision at install, keep the old graph on failure, retain host

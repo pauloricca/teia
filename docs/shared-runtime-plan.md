@@ -1,5 +1,15 @@
 # Shared runtime implementation plan
 
+Current hosted facilities are execution revision 3 / bridge 2. The extraction
+plan and increment evidence below describe the earlier revision-2 milestone.
+Its context-zero pools and exact-offset native note scheduling have been
+superseded by the prepared hierarchical pools and shared ordered note FIFO.
+See [the current host handover](host-handover.md) and
+[artifact/evidence receipt](hosted-artifact-hashes.json) for exact public APIs,
+limits, hashes and remaining FFT work. Current verification covers 62 packaged
+fixtures in the Rust corpus and a named 57-fixture subset in actual Node-WASM
+versus native comparisons (zero sample difference); these are different scopes.
+
 The standalone compiled-graph engine is the behavioral reference. Preserve the
 existing DSP formulas and public WASM/hosted entrypoints while converging their
 implementation. No Vira checkout or running process is changed by this work.

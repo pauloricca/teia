@@ -9,6 +9,8 @@ export function useHostedAudio(session: HostedSession): AudioEngineState {
   const setLinkScopes = useCallback<AudioEngineState['setLinkScopes']>(requests => session.requestFeedback(requests), [session]);
   const clearBuffer = useCallback<AudioEngineState['clearBuffer']>(nodeId => { void session.mutateBuffer('clear', nodeId); }, [session]);
   const copyBuffers = useCallback<AudioEngineState['copyBuffers']>(copies => { for (const copy of copies) void session.mutateBuffer('copy', copy.sourceNodeId, copy.targetNodeId); }, [session]);
+  const captureBuffer = useCallback<AudioEngineState['captureBuffer']>(nodeId => session.captureBuffer(nodeId), [session]);
+  const restoreBuffers = useCallback<AudioEngineState['restoreBuffers']>(snapshots => { for (const [nodeId, snapshot] of Object.entries(snapshots)) void session.restoreBuffer(nodeId, snapshot); }, [session]);
   return useMemo(() => ({
     status: state.connected && state.generation !== null ? 'running' : 'idle', message: state.connected ? 'Audio is owned by the host.' : 'Host disconnected.',
     cpuLoad: 0, cpuPeakLoad: 0, cpuDeadlineMisses: 0,
@@ -19,8 +21,8 @@ export function useHostedAudio(session: HostedSession): AudioEngineState {
     audioInput: { status: 'unsupported', message: 'Audio routing and devices are owned by the host.', devices: [], selectedDeviceId: '', canSelectDevice: false },
     midiInput: { status: 'unsupported', message: 'MIDI routing and devices are owned by the host.', devices: [], outputDevices: [], canRequestAccess: false, lastControlChange: undefined },
     start: () => session.toggleTransport(), stop: () => { void session.toggleTransport(); }, startRecording: noop, stopRecording: noop,
-    captureBuffer: async () => null, clearBuffer, copyBuffers, restoreBuffers: noop, syncGraph: noop,
+    captureBuffer, clearBuffer, copyBuffers, restoreBuffers, syncGraph: noop,
     setLinkScopes, setAudioInputDeviceId: noop,
     refreshAudioInputDevices: asyncNoop, refreshMidiInputDevices: asyncNoop,
-  }), [session, state, setLinkScopes, clearBuffer, copyBuffers]);
+  }), [session, state, setLinkScopes, clearBuffer, copyBuffers, captureBuffer, restoreBuffers]);
 }

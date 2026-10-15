@@ -83,3 +83,18 @@ export function classifyEdit(previous: PreparedPatch, next: PreparedPatch): Edit
   if (wavesChanged || sequencersChanged) return { kind: 'specialized', layout: previous.layout, updates, ...(wavesChanged ? { customWaves: next.program.customWaveBindings } : {}), ...(sequencersChanged ? { sequencers: next.program.sequencerBindings } : {}) };
   return updates.length ? { kind: 'values', layout: previous.layout, updates } : { kind: 'editor-only' };
 }
+
+/** Host-side binding validation for bridge-v2 gestures. Use the INSTALLED
+ * preparation, never a newer draft. Schedule each ordered transition on a
+ * distinct sample; same-offset Control writes are final-value semantics.
+ * Missing bindings are unused outputs and need no runtime write. */
+export function gestureUpdates(prepared: PreparedPatch, nodeId: string, values: Record<string, number>): { layout: string; updates: { valueIndex: number; value: number }[] } {
+  const node = expandGroups(prepared.document).nodes.find(n => n.id === nodeId);
+  const ports = node?.type === 'Button' ? ['pressed', 'clicks'] : node?.type === 'Keys' ? ['note', 'frequency', 'gate', 'velocity'] : [];
+  const entries = Object.entries(values);
+  if (!entries.length || entries.length > 4 || entries.some(([port, value]) => !ports.includes(port) || !Number.isFinite(value) || value < 0 || (['pressed', 'gate', 'velocity'].includes(port) && value > 1) || (port === 'note' && value > 127) || (port === 'frequency' && value > 24000) || (port === 'clicks' && (!Number.isSafeInteger(value))))) throw new Error('Invalid transient node/control identity or value.');
+  return { layout: prepared.layout, updates: entries.flatMap(([port, value]) => {
+    const binding = prepared.program.valueBindings.find(b => b.kind === 'node-param' && b.nodeId === nodeId && b.port === port);
+    return binding ? [{ valueIndex: binding.valueIndex, value }] : [];
+  }) };
+}

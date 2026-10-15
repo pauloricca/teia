@@ -14,8 +14,8 @@
     "editor/src/audio/fm1Optimizer.ts": "c4aefb17286a0f80a2dcc2553b3e4c5bbe8fcb8f302c4e9eec095c1b3a03e9f0",
     "editor/src/audio/fm1Upload.ts": "77e2e199f523b95bb047e9dada2aa4725e03d8b9eb112d66a9d0c412fb0f0b96",
     "editor/src/audio/useFm1LiveEdit.ts": "f713142b090b52bd6f8322e9fda1648dbf2f7a3dde08aa99a4c5c657776fdb7e",
-    "editor/src/editor/NodeEditor.tsx": "9159128c880a7ad9859be4093b687c856f08e9091cee58d43950fbd76838971a",
-    "editor/src/editor/ShaderNode.tsx": "702853386388fb09f7f763c436155360858ff4ffc693f095b1e2677641d2eec0",
+    "editor/src/editor/NodeEditor.tsx": "97d12814833640f1c9fa16ed9e181a1cc1a0a8814a0f54519d76306a7cacc657",
+    "editor/src/editor/ShaderNode.tsx": "e7c7f12b6d7e3aa4162f052edbfdbd5b5afdf13c2c456e9067eaba1173f41127",
     "editor/src/editor/Fm1ModeContext.ts": "cc1bc130ec1638f62f27ce14997e86f8dae35e3a891d44702cab054b496fc5fd",
     "editor/src/audio/fm1Support.ts": "c7bc3b9979a76822aaf3b72acb914ce2e75e1abf37ff761c965e6e07e7ae363d",
     "editor/src/audio/fm1Capabilities.ts": "7a29929da790792dc3e54b3139cda2a4230e8f971fc5e101dade126a33a556cd",
@@ -35,32 +35,34 @@
     "editor/src/graph/serialize.ts": "b79eeb691c8f22ec11bb4cfa750b5720cc8af4674d0e9eabf13aa642d876109a",
     "editor/src/audio/dspEdit.ts": "04dc064fc4b22afa52ab4aaa6a0382b0b9466d8f0a2c507c63e8f7c05ed04076",
     "editor/src/audio/patchPackage.ts": "da3021756b4a8fa10606056bfd8d282248e4ff0a3e63892227284a3931d6decf",
-    "editor/src/hosted/document.ts": "4c956fe8cfb655a37d41ffe80c4ffcd7ca333455081f31383609a8d013d6e36d",
-    "editor/src/hosted/compiler.ts": "0ca73a587926f23b75960d690dc0ea1dbbe24c61f45990bca72d8cbdb09dcbbf",
+    "editor/src/hosted/document.ts": "2c8dc864316db5c6d789485449d94f7e76492a52dc7ccfa81430b6279ae866fd",
+    "editor/src/hosted/compiler.ts": "a6649dc7b3dc1da06139a47576b2189fde1b0ef3ec06ee7fcbeb24f9fb4ac0a1",
     "editor/src/hosted/native.ts": "8e817707257dad677252340d7066c85188265111cf83bf0d4fcb335ad9e235a9",
-    "editor/src/hosted/bridge.ts": "4afaf6b04adada736c69563498103d29bfa32f6b0dac01ba6eeb5be36420d02c",
-    "editor/src/hosted/session.ts": "004c7dc44f789cb1862a3a903dd553cd02bc582aeca16d0324eec35534bd696a",
+    "editor/src/hosted/bridge.ts": "9e98890329897f150648d7ebd5f97175140d6ccb4f28c01c3983c509c84ff8a9",
+    "editor/src/hosted/session.ts": "f0ef11f68816df01e24d37def2634f274120e68ca15dc38dc1751d21c4fae7bb",
     "editor/src/hosted/assets.ts": "1a529b112504a7987a8cb48d79e41d636ad021566dd659cd2d0966a0153bb651",
     "editor/src/hosted/parameters.ts": "cab08af00bdc37d6ffbb99f6691eb512697ccc0ad1d568c6f2400f481bf61c6d",
-    "editor/src/hosted/useHostedAudio.ts": "62eb80fb2c10ee75e7a77017687fc3cf364d8fb520383135f8db5cac61919d52",
+    "editor/src/hosted/useHostedAudio.ts": "b88ebf818bcf27d66567db79d6fe4d8a1bec2d50ebdae87ef1a235a9656c87a0",
     "editor/src/hosted/HostedNodeEditor.tsx": "f1d0a5cd30c90146f2d37c4b09bfbe54b48e03f5dad8d9e75c194f00f55c8255",
     "editor/src/hosted/HostedModeContext.ts": "037cfd1b3fb901f6e87436723fde6deb36aece15713fb72a8104cf42e5dfb1de",
-    "editor/src/hosted/mockBridge.ts": "80782a2c622863a9106faefdb0084a367bc88d794885f3d4ef97a60d44978892",
+    "editor/src/hosted/mockBridge.ts": "2ff7454b8aefe963ec2956c6dba068b272ca087b017f9bdcfee82cbe043f7e62",
     "editor/src/hosted/package.ts": "8941f0cf8acbff01a734a403ed63b8a76f1129423bf3281331597b2a77b3496c",
     "hosted/package.json": "b158aac159e3ce2937d6675845b53cbee26a1bc4e2c77ade6c71f5dc607e61af",
     "runtime/package.json": "948d13582e59a070522d2cd4d57898eea40936264c4ce747c54d683c278e39a1",
     "rust/teia-kernel/Cargo.toml": "bf4525d61264227f363fe583fc05d6da82b517487a8fa7418240f5ede6594ad7",
-    "scripts/build-hosted.mjs": "4c197dbc426448e0deb9cd8be49f4c550bca92cbbdf4fff64ee7eba7ba625e21",
+    "scripts/build-hosted.mjs": "e2adbe4cf74dce7033142d52884d08a95d3ebfa0adab0146a27dc37f5974db80",
     "scripts/build-hosted-conformance.mjs": "e10f5785cb07c1a6fe98d2d8654853719bc628c97b85d04c6a1a6c9dfbb21928",
-    "rust/teia-kernel/src/state_fields.rs": "cb9c7d5e9e59c12cfa65eed0ec5405a933e3c657918be7f70ba1e81cc20d5663",
-    "rust/teia-kernel/src/runtime_preparation.rs": "2486368ef5e866b420709e95b3d4af4b9c60921c7cda82beede7e8a2ad4f86a7",
+    "rust/teia-kernel/src/state_fields.rs": "e01c2ef270fb46a904c850c68a7cd6bcfc82436fad36cfc97751f4ddc5d037a9",
+    "rust/teia-kernel/src/runtime_preparation.rs": "2a066fdf79bc109459897fe7f0d22ccf4bacbf2631ede31b13d29115b02b577c",
     "rust/teia-kernel/src/hosted_resources.rs": "51f57778dc523816f0e711ba4e5829c7d574ab4e853f4d410824cfcaa5d5e77b",
-    "rust/teia-kernel/src/runtime-capabilities.json": "8525776544cce6d935f1c9788582b46fd8ac17c6aeeb9cd2a8707affb2f1c213",
-    "editor/src/hosted/engineCapabilities.json": "8525776544cce6d935f1c9788582b46fd8ac17c6aeeb9cd2a8707affb2f1c213",
+    "rust/teia-kernel/src/hosted_observation.rs": "ad005c16d4303329bcd938938484097324c9aaca038ed86a18e5c19953c75a1e",
+    "rust/teia-kernel/src/bounded_repeats.rs": "2f3e45a04f788f95a12a58dd7f1b84207e5e1a5fa9b4c829f5ee4dfb2e4fb998",
+    "rust/teia-kernel/src/runtime-capabilities.json": "db1f595d6e7118c60c5a2c4ee0b36a7a99084958a2f15f86abad3145b3b36920",
+    "editor/src/hosted/engineCapabilities.json": "db1f595d6e7118c60c5a2c4ee0b36a7a99084958a2f15f86abad3145b3b36920",
     "scripts/engine-capabilities.mjs": "1250e52155d1ba3931976ce63706728bf24a81fc39fa05dc4d2923af601a65e3",
-    "rust/teia-kernel/src/lib.rs": "6106cc08d6886c2038673fd5b9fcce21a4d0726d8dae2a385025f7424adc3312",
+    "rust/teia-kernel/src/lib.rs": "d2d835d87a2a5f981a7dde5999c58ce01757f5975eb2ebf15653a36417c58a36",
     "rust/teia-kernel/src/native_state.rs": "8a0824dc795694aed1f03ee73830d158debd70b6e59d44abd137d6d7f8897259",
-    "rust/teia-kernel/src/hosted.rs": "762d9f4c29d2b7cb1c4cb1942634c2b3a48fc65995358787b5005cc7d0fc5af6",
+    "rust/teia-kernel/src/hosted.rs": "5131a2be03b43f3f4fc1b2298d6f335416dda830a93e07da641b63617864c332",
     "editor/public/audio/audio-worklet-wasm.js": "566b31a68db9d30ad5adc75eebce49f446e3b5e0ab5dc9a7b76a53aa7905e3c0"
   },
   "features": [
@@ -693,7 +695,12 @@
       "blockedInputs": [
         "channel"
       ],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Native and standalone note input is serialized through a 4096-event queue, one note per two samples with blank separators. Mono state changes on delivered events; channel filtering and velocity-zero releases apply. Native overflow atomically rejects an input block; standalone rejects the newest queued event. Note-zero scalar note tags remain ambiguous with idle; frequency/velocity outputs can trigger note zero.",
+        "firmwareBehavior": "FM-1_921 MIDI Note retains its separately implemented channel-1 mono state and pending trigger. Device note-pulse nodes use the separate 256-event queue and release Spawn gates on overflow.",
+        "requiredWork": "Audit and document native/web versus FM-1_921 mono/pulse scheduling and overflow under equivalent event bursts; implement any required parity changes in firmware before claiming matching semantics. Hardware verification remains separate."
+      }
     },
     {
       "id": "MidiNoteOn",
@@ -710,9 +717,9 @@
       "blockedInputs": [],
       "blockedOutputs": [],
       "drift": {
-        "webBehavior": "Queued sample-aligned MIDI events supplied by the browser.",
+        "webBehavior": "Native and standalone note input is serialized through a 4096-event queue, one note per two samples with blank separators. Mono state changes on delivered events; channel filtering and velocity-zero releases apply. Native overflow atomically rejects an input block; standalone rejects the newest queued event. Note-zero scalar note tags remain ambiguous with idle; frequency/velocity outputs can trigger note zero.",
         "firmwareBehavior": "USB/TRS input is ingested at audio-block boundaries, with a 256-event queue; overflow drops events and releases Spawn gates.",
-        "requiredWork": "Verify USB/TRS bursts, channel filtering, physical key releases and hardware deadlines."
+        "requiredWork": "Audit and document native/web versus FM-1_921 mono/pulse scheduling and overflow under equivalent event bursts; implement any required parity changes in firmware before claiming matching semantics. Hardware verification remains separate."
       }
     },
     {
@@ -730,9 +737,9 @@
       "blockedInputs": [],
       "blockedOutputs": [],
       "drift": {
-        "webBehavior": "Queued sample-aligned MIDI events supplied by the browser.",
+        "webBehavior": "Native and standalone note input is serialized through a 4096-event queue, one note per two samples with blank separators. Mono state changes on delivered events; channel filtering and velocity-zero releases apply. Native overflow atomically rejects an input block; standalone rejects the newest queued event. Note-zero scalar note tags remain ambiguous with idle; frequency/velocity outputs can trigger note zero.",
         "firmwareBehavior": "USB/TRS input is ingested at audio-block boundaries, with a 256-event queue; overflow drops events and releases Spawn gates.",
-        "requiredWork": "Verify USB/TRS bursts, channel filtering, physical key releases and hardware deadlines."
+        "requiredWork": "Audit and document native/web versus FM-1_921 mono/pulse scheduling and overflow under equivalent event bursts; implement any required parity changes in firmware before claiming matching semantics. Hardware verification remains separate."
       }
     },
     {
@@ -1675,7 +1682,7 @@
       "status": "unsupported",
       "since": null,
       "verification": "source reviewed",
-      "notes": "Hosted native instances now reuse standalone Rust program/instruction validation, addDspOp resource/cache preparation, shared scalar graph scheduling, smoothing machinery, monitoring and reset. State fields/defaults have one declaration. Native Resources adapt samples/images/custom waves/sequencers/Buffer snapshots. Explicit preallocated Spawn/Spread budgets are opt-in and expose exhaustion. Legacy standalone capacity and version-1 immediate native controls remain unchanged; smoothing is selectable. Native and WASM equivalence and allocation tests do not establish firmware support, macOS deadlines or external host integration. FFT browser analysis migration remains pending.",
+      "notes": "Bridge v2 adds opt-in ordered transient gestures and Buffer capture-before-persist Save. Native instance APIs provide prepared observation plans, caller-owned bounded feedback, staged frozen-write captures and prepared Buffer swaps including concrete nested repeat item addresses. FFT remains explicitly unavailable natively. Firmware and host integration are not inferred from container regression tests.",
       "evidence": [
         "editor/src/hosted/index.ts",
         "editor/src/hosted/session.ts",
@@ -1685,7 +1692,7 @@
       "blockedInputs": [],
       "blockedOutputs": [],
       "drift": {
-        "webBehavior": "Shared Rust preparation, validation, state declaration and scalar graph evaluator across WASM/native; native resource adapters and opt-in bounded context-zero Spawn/Spread pools with counted capped counts/dropped triggers. Existing standalone dynamic policy remains the default.",
+        "webBehavior": "Instance-scoped native observation, bounded staged Buffer capture and replacement, bridge-v2 gesture/capture Save contracts, shared hierarchical bounded repeat pools. Hosts own timing, durable references, device access and actual IPC implementations.",
         "firmwareBehavior": "Existing FM-1 binary/live-edit protocols use their own single-device lifecycle and compiled parameter slots. They do not implement this hosted bridge or native instance API.",
         "requiredWork": "A firmware adapter and explicit capability audit would be needed to expose equivalent hosted lifecycle, revision and parameter identity semantics. Existing FM-1 mode remains separate."
       }
@@ -1696,7 +1703,7 @@
       "status": "unsupported",
       "since": null,
       "verification": "source reviewed",
-      "notes": "Native host profile preallocates a 2048-key monophonic held-note pool and 4096-event output scratch, accepts ordered sample-offset note/CC/pitch bend and segmented authoritative timing. Browser event separators and standalone Tempo modes remain unchanged. Allocation/deadline tests are not executed.",
+      "notes": "Native notes now use the shared ordered 4096-event FIFO with one event every two samples and a blank separator; mono state changes on delivery. CC, pitch bend and host timeline remain sample-offset controls. Native input queue overflow rejects the incoming block; standalone queue rejects newest with a counter. Allocation guards and headless regression evidence do not establish device deadlines or firmware parity.",
       "evidence": [
         "rust/teia-kernel/src/hosted.rs",
         "rust/teia-kernel/src/lib.rs",
@@ -1706,7 +1713,7 @@
       "blockedInputs": [],
       "blockedOutputs": [],
       "drift": {
-        "webBehavior": "Teia native hosted processing applies all simultaneous events at their supplied offsets, implements per-channel pitch bend, returns note/CC output offsets, and follows supplied frame/beat/BPM/running state with within-block segments and explicit seeks/loops.",
+        "webBehavior": "Native/WASM note pulses and mono state share ordered one-note-per-two-samples delivery, including equal-offset bursts and velocity-zero releases. Native block overflow is atomic; standalone queue overflow rejects newest. Pitch bend, CC and host timeline keep immediate offset semantics.",
         "firmwareBehavior": "FM-1 does not consume this host-event/timeline API. Existing device MIDI and internal/MIDI clock protocols retain their separately tracked restrictions and timing.",
         "requiredWork": "Design a bounded firmware adapter and encoded timing/pitch-bend protocol; implement corresponding DSP/control handlers and audit source/hardware evidence before claiming parity."
       }
@@ -1717,16 +1724,18 @@
       "status": "unsupported",
       "since": null,
       "verification": "source reviewed",
-      "notes": "Opt-in prepareDspRealtime(capacity, memory budget) preallocates compiled context-zero Spawn/Spread resources. Grow/shrink and killed instances recycle storage; explicit budget exhaustion caps Spread and drops new Spawn triggers with a counter. Existing standalone dynamic semantics remain unchanged when no policy is selected. Allocation tests cover representative fixtures, not all engine paths or firmware.",
+      "notes": "prepareDspRealtime preallocates hierarchical Spread/Spawn pools to depth 4, at most 1024 total potential item slots across all parent contexts, with a checked heap payload budget. Each parent item owns child state/resources. Capped Spread counts and dropped excess Spawn triggers increment exhaustion; no allocation or dynamic fallback occurs in the selected bounded path. Legacy standalone dynamic policy remains default. FM-1 has not implemented or verified this preparation policy.",
       "evidence": [
         "rust/teia-kernel/src/runtime_preparation.rs",
         "rust/teia-kernel/src/lib.rs",
-        "rust/teia-kernel/tests/hosted.rs"
+        "rust/teia-kernel/tests/hosted.rs",
+        "rust/teia-kernel/src/bounded_repeats.rs",
+        "rust/teia-kernel/src/hosted_observation.rs"
       ],
       "blockedInputs": [],
       "blockedOutputs": [],
       "drift": {
-        "webBehavior": "WASM/native share an optional explicit finite repeat budget and resource pools, with exhaustion feedback.",
+        "webBehavior": "Shared native/WASM finite hierarchical repeat execution, including mixed nesting and per-item Buffer captures. Fixed depth/total-slot bounds, caller memory budget, counted exhaustion and allocation-free render traversal.",
         "firmwareBehavior": "FM-1 uses its existing contract limits and firmware repeat implementation; it does not expose this host preparation API or the new budget/exhaustion feedback.",
         "requiredWork": "Audit mapping to firmware limits before implementing an equivalent adapter. No firmware version or hardware verification is advanced."
       }

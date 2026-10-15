@@ -625,3 +625,24 @@ Unversioned patch JSON remains schema 0. Schema 1 is opt-in. Hosted import adds 
 The native Rust `native-scalar-v1` name is retained for compatibility. Native and WASM now share Rust instruction/program validation, installation and resource/cache preparation, scalar graph scheduling, parameter smoothing machinery, monitoring, reset and node DSP. One state declaration supplies both WASM globals and owned native fields; instance operations always enter their explicit owned scope. The independent opcode whitelists are removed. Native resource preparation supports samples, images, custom waves, sequencers and Buffer snapshots; hosts must map bindings and decoded assets to `Resources`/`Instance::new_with_resources`. FFT still depends on browser-worklet analysis and is explicitly diagnosed for native use.
 
 Spawn/Spread have an optional shared preallocated policy with explicit capacity/memory budgets and exhaustion feedback. Excess Spawn triggers are dropped and Spread counts capped only when that policy is selected. Existing standalone dynamic capacity remains unchanged. Version-1 native controls retain their immediate behavior; `set_control_smoothing(true)` selects the existing standalone smoothing path. See the [shared runtime plan, migration boundary and evidence](docs/shared-runtime-plan.md). Native tests, allocation guards, compiled-graph comparisons and actual WASM/native output comparisons have been executed; macOS deadlines, editor isolation and Vira integration are not claimed. Build artifacts alone do not execute tests.
+
+
+Hosted execution revision 3 adds instance-scoped observation plans for signed
+meters, bounded scopes, sample playheads and Buffer previews; staged Buffer
+capture/clear/copy/restore; and hierarchical bounded Spread/Spawn pools. The
+selected bounded repeat policy supports depth 4 and at most 1024 potential item
+slots across all parent contexts, subject to the supplied memory budget. Native
+and standalone MIDI note delivery now share a bounded ordered FIFO: one note
+every two samples, with a blank separator, so simultaneous note bursts reach
+pulse/Spawn consumers in order. Mono state changes at delivery; CC, pitch bend
+and control offsets retain their immediate scheduling.
+
+Hosts opt in to bridge-v2 gestures with `bridgeVersion: 2, gestures: 1`: Button
+and Keys performance gestures then bypass document edits and Apply, and release
+on focus loss. Hosts must also fence/release on disconnect, close and graph
+replacement. Without that capability, the existing editing behavior remains.
+With `bufferCapture: 1`, explicit Save first requests host-owned durable Buffer
+captures and then persists the exact resulting snapshot; newer edits stay dirty.
+Buffer mutations additionally require `bufferMutation`. Live Apply never saves.
+FFT remains unavailable in native mode; its separate implementation plan and all
+thread, queue and allocation rules are in [the host handover](docs/host-handover.md).

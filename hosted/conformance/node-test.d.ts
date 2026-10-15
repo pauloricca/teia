@@ -5,7 +5,12 @@ declare module 'node:test' {
   export namespace test { function todo(name: string): void; }
 }
 declare module 'node:assert/strict' {
-  interface Assert { ok(value: unknown): asserts value; equal(actual: unknown, expected: unknown): void; }
+  interface Assert {
+    ok(value: unknown, message?: string): asserts value;
+    equal(actual: unknown, expected: unknown, message?: string): void;
+    notEqual(actual: unknown, expected: unknown, message?: string): void;
+    deepEqual(actual: unknown, expected: unknown, message?: string): void;
+  }
   const assert: Assert;
   export default assert;
 }

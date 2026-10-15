@@ -3,7 +3,7 @@ import { HostedSession } from '../hosted/session';
 import { useHostedAudio } from '../hosted/useHostedAudio';
 import { HostedModeContext } from '../hosted/HostedModeContext';
 import { preparePatch } from '../hosted/compiler';
-import { withParameterIds, cloneParameterIds } from '../hosted/document';
+import { withParameterIds, cloneParameterIds, retainNestedBufferReferences } from '../hosted/document';
 import type { AudioEngineState } from '../audio/useAudioEngine';
 import { parsePatchJson, normalizeSelectedMidiDeviceIds, expressionInputDefinitions, syncParamsToInputs, isRecord, isNodeType, isNumberRecord, isSampleAsset, isImageAsset } from '../graph/parse';
 import {
@@ -797,9 +797,28 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     historyGroupRef.current = groupKey ? { key: groupKey, time: now } : null;
   }, []);
 
+  const [hostedTransient, setHostedTransient] = useState<Record<string, Record<string, number>>>({});
+  const sendHostedGesture = useCallback((nodeId: string, type: string | null, values: Record<string, number>) => {
+    if (!hosted?.capabilities.gestures || hosted.capabilities.bridgeVersion !== 2) return false;
+    const ports = type === 'Button' ? ['pressed', 'clicks'] : type === 'Keys' ? ['note', 'frequency', 'gate', 'velocity'] : [];
+    if (!Object.keys(values).length || !Object.keys(values).every(port => ports.includes(port))) return false;
+    hosted.gesture(nodeId, values);
+    setHostedTransient(current => ({ ...current, [nodeId]: { ...current[nodeId], ...values } }));
+    return true;
+  }, [hosted]);
+  useEffect(() => {
+    if (!hosted?.capabilities.gestures) return;
+    const release = () => { hosted.releaseGestures('focus loss'); setHostedTransient({}); };
+    const hidden = () => { if (document.hidden) release(); };
+    window.addEventListener('blur', release); document.addEventListener('visibilitychange', hidden);
+    return () => { window.removeEventListener('blur', release); document.removeEventListener('visibilitychange', hidden); release(); };
+  }, [hosted]);
+  useEffect(() => { setHostedTransient({}); }, [hostedState?.generation, hostedState?.connected]);
+
   const updateNodeParam = useCallback((nodeId: string, port: string, value: number) => {
-    commitHistory(`param:${nodeId}:${port}`);
     const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
+    if (sendHostedGesture(scopedDspNodeId(nodeId, editingStack.map(frame => frame.groupId)), relatedNode?.data.patchNode.type ?? null, { [port]: value })) return;
+    commitHistory(`param:${nodeId}:${port}`);
     if (relatedNode?.data.patchNode.type === 'Joystick') {
       const clearX = port === 'xMidiChannel' || port === 'xMidiCc';
       const clearY = port === 'yMidiChannel' || port === 'yMidiCc';
@@ -860,12 +879,13 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         return nextDefinition.outputs.some((output) => output.name === link.from.port) ? [edge] : [];
       })));
     }
-  }, [commitHistory]);
+  }, [commitHistory, sendHostedGesture, editingStack]);
 
   const updateNodeParams = useCallback((nodeId: string, values: Record<string, number>) => {
     if (Object.keys(values).length === 0) return;
-    commitHistory(`params:${nodeId}`);
     const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
+    if (sendHostedGesture(scopedDspNodeId(nodeId, editingStack.map(frame => frame.groupId)), relatedNode?.data.patchNode.type ?? null, values)) return;
+    commitHistory(`params:${nodeId}`);
     if (relatedNode?.data.patchNode.type === 'Joystick') {
       const clearX = Object.hasOwn(values, 'x');
       const clearY = Object.hasOwn(values, 'y');
@@ -889,7 +909,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
           },
         }
       : node));
-  }, [commitHistory]);
+  }, [commitHistory, sendHostedGesture, editingStack]);
 
   const updateNodeCustomWave = useCallback((nodeId: string, customWave: CustomWaveSettings, historyKey?: string) => {
     const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
@@ -1504,6 +1524,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
 
     let convertedBufferSample: SampleAsset | undefined;
     if (relatedNode.data.patchNode.type === 'Buffer' && type === 'SamplePlayer') {
+      if (hosted) { setImportError('Buffer to Sample conversion requires a host media conversion adapter.'); return; }
       const dspNodeId = runtimeDspNodeIdForFlowNode(
         relatedNode,
         nodesRef.current,
@@ -3190,7 +3211,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
   const hostedInitialViewRef = useRef(false);
   useEffect(() => {
     if (hosted && !hostedInitialViewRef.current) { hostedInitialViewRef.current = true; return; }
-    if (hosted) void hosted.edit({ ...patch, ...(Object.keys(bufferAssets).length ? { buffers: bufferAssets } : {}) });
+    if (hosted) void hosted.edit(retainNestedBufferReferences({ ...patch, ...(Object.keys(bufferAssets).length ? { buffers: bufferAssets } : {}) }, hosted.getDocument()));
   }, [hosted, patch, bufferAssets]);
   const fm1LiveState = useFm1LiveEdit(patch, fm1Mode && fm1Live, fm1Preset, () => setFm1Live(false));
   fm1BusyRef.current = fm1LiveState.busy;
@@ -3263,7 +3284,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
       const midiControlVisual = midiControlVisuals[previewId];
       const data = {
         ...nodeCallbacksPlaceholder(),
-        patchNode: { ...effectiveInnerNode, id: previewId, position: undefined },
+        patchNode: { ...effectiveInnerNode, id: previewId, position: undefined, params: { ...effectiveParams, ...hostedTransient[dspNodeId] } },
         isCanvasLocked: canvasLocked,
         canvasZoom: settledGraphZoom,
         isAreaUiCollapsedPresentation: true,
@@ -3281,11 +3302,11 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
               onMidiInputRefresh: audio.refreshMidiInputDevices,
             }
           : {}),
-        onParamChange: (_previewNodeId: string, port: string, value: number) => updateGroupUiNodeOverride(
+        onParamChange: (_previewNodeId: string, port: string, value: number) => sendHostedGesture(dspNodeId, innerNode.type, { [port]: value }) || updateGroupUiNodeOverride(
           node.id, innerNode.id, `param:${innerNode.id}:${port}`,
           (current) => ({ ...current, params: { ...current.params, [port]: value } }),
         ),
-        onParamsChange: (_previewNodeId: string, values: Record<string, number>) => updateGroupUiNodeOverride(
+        onParamsChange: (_previewNodeId: string, values: Record<string, number>) => sendHostedGesture(dspNodeId, innerNode.type, values) || updateGroupUiNodeOverride(
           node.id, innerNode.id, `params:${innerNode.id}`,
           (current) => ({ ...current, params: { ...current.params, ...values } }),
         ),
@@ -3316,7 +3337,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         ...((innerNode.type === 'CustomWave' || innerNode.type === 'SamplePlayer') ? { audioPlayheads: audio.playheads[dspNodeId] } : {}),
         ...(innerNode.type === 'CustomWave' ? { audioCustomWaveFrequency: audio.linkMeters[`${dspNodeId}:frequency`]?.input } : {}),
         ...(innerNode.type === 'Buffer' ? { audioBuffer: audio.buffers[dspNodeId] } : {}),
-        ...(innerNode.type === 'Buffer' ? { onBufferClear: () => clearBufferRecording(dspNodeId) } : {}),
+        ...(innerNode.type === 'Buffer' && (!hosted || hosted.capabilities.bufferMutation) ? { onBufferClear: () => clearBufferRecording(dspNodeId) } : {}),
         ...(innerNode.type === 'SamplePlayer' ? { audioSampleParams: samplePlayerVisualizationParams(dspNodeId, audio.linkMeters) } : {}),
       } satisfies ShaderNodeData;
       return {
@@ -3333,6 +3354,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
       data: { ...node.data, groupUiPreview: { width: layout.size.width, height: layout.size.height, nodes: previewNodes } },
     };
   }), [
+    hostedTransient, sendHostedGesture,
     activeDspGroupIds,
     audio.buffers,
     audio.midiInput,
@@ -3352,8 +3374,9 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
   ]);
 
   const renderedNodes = useMemo(() => {
-    const nextNodes = nodesWithGroupUi.map((node) => {
-    const dspNodeId = runtimeDspNodeIdForFlowNode(node, nodesWithGroupUi, activeDspGroupIds);
+    const nextNodes = nodesWithGroupUi.map((sourceNode) => {
+    const dspNodeId = runtimeDspNodeIdForFlowNode(sourceNode, nodesWithGroupUi, activeDspGroupIds);
+    const node = hostedTransient[dspNodeId] ? { ...sourceNode, data: { ...sourceNode.data, patchNode: { ...sourceNode.data.patchNode, params: { ...sourceNode.data.patchNode.params, ...hostedTransient[dspNodeId] } } } } : sourceNode;
     const monitorLinkId = monitorLinkIdByNode.get(dspNodeId);
     const audioOutputLeft = audio.linkMeters[`${dspNodeId}:left`]?.output ?? 0;
     const audioOutputRight = audio.linkMeters[`${dspNodeId}:right`]?.output ?? 0;
@@ -3404,7 +3427,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         ...(audioPlayheads !== undefined ? { audioPlayheads } : {}),
         ...(node.data.patchNode.type === 'CustomWave' ? { audioCustomWaveFrequency: audio.linkMeters[`${dspNodeId}:frequency`]?.input } : {}),
         ...(audioBuffer !== undefined ? { audioBuffer } : {}),
-        ...(showsBufferVisual ? { onBufferClear: () => clearBufferRecording(dspNodeId) } : {}),
+        ...(showsBufferVisual && (!hosted || hosted.capabilities.bufferMutation) ? { onBufferClear: () => clearBufferRecording(dspNodeId) } : {}),
         ...(audioSampleParams ? { audioSampleParams } : {}),
         ...(midiControlVisual?.sliderValue !== undefined ? { midiSliderValue: midiControlVisual.sliderValue } : {}),
         ...(midiControlVisual?.joystickX !== undefined || midiControlVisual?.joystickY !== undefined
@@ -3422,7 +3445,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     const reconciledNodes = reuseUnchangedNodePresentations(renderedNodeCacheRef.current, nextNodes);
     renderedNodeCacheRef.current = reconciledNodes;
     return reconciledNodes;
-  }, [activeDspGroupIds, audio.buffers, audio.linkMeters, audio.linkScopes, audio.playheads, audio.status, clearBufferRecording, dspDiagnostics, midiControlVisuals, monitorLinkIdByNode, nodesWithGroupUi]);
+  }, [hostedTransient, activeDspGroupIds, audio.buffers, audio.linkMeters, audio.linkScopes, audio.playheads, audio.status, clearBufferRecording, dspDiagnostics, midiControlVisuals, monitorLinkIdByNode, nodesWithGroupUi]);
 
   const renderedEdges = useMemo<ShaderFlowEdge[]>(() => {
     const edgeById = new Map(edgesWithCallbacks.map((edge) => [edge.id, edge]));
@@ -4572,8 +4595,11 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     if (hosted) {
       if (!hosted.capabilities.save || (saveAs && !hosted.capabilities.saveAs)) { setImportError('The host does not allow this Save operation.'); return; }
       // Snapshot the latest React document before Save, even if an effect is pending.
-      void hosted.edit({ ...patch, ...(Object.keys(bufferAssetsRef.current).length ? { buffers: bufferAssetsRef.current } : {}) });
-      if (await hosted.save(saveAs)) { setImportError(null); showSaveFeedback(); }
+      void hosted.edit(retainNestedBufferReferences({ ...patch, ...(Object.keys(bufferAssetsRef.current).length ? { buffers: bufferAssetsRef.current } : {}) }, hosted.getDocument()));
+      if (await hosted.save(saveAs)) {
+        if (hosted.getSnapshot().savedRevision === hosted.getSnapshot().revision) replaceBufferAssets(hosted.getDocument().buffers ?? {});
+        setImportError(null); showSaveFeedback();
+      }
       else setImportError(hosted.getSnapshot().saveDiagnostics?.map(d => d.message).join('\n') || 'The host did not acknowledge Save. The working document is retained.');
       return;
     }

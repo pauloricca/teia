@@ -17,7 +17,7 @@ export class MockHostBridge implements HostBridge {
     if (command.type === 'apply' || command.type === 'revision') this.latest.set(command.sessionId, Math.max(command.revision, this.latest.get(command.sessionId) ?? -1));
     return new Promise(resolve => { this.pending.set(command.requestId, { command: structuredClone(command), resolve }); });
   }
-  reply(requestId: string, status: HostReply['status'], diagnostics?: HostReply['diagnostics']): void {
+  reply(requestId: string, status: HostReply['status'], diagnostics?: HostReply['diagnostics'], payload?: Pick<HostReply, 'capturedDocument' | 'bufferSnapshot'>): void {
     const pending = this.pending.get(requestId);
     if (!pending) throw new Error(`Unknown request ${requestId}.`);
     const command = pending.command;
@@ -36,7 +36,7 @@ export class MockHostBridge implements HostBridge {
         try { this.parameters.set(this.installed.prepared, command.parameterId, command.value); for (const update of this.parameters.bind(this.installed.prepared)) this.liveValues[update.valueIndex] = update.value; } catch { status = 'failed'; }
       }
     }
-    const reply = { requestId, sessionId: command.sessionId, revision: command.revision, generation: status === 'installed' ? `mock:${command.revision}` : command.generation, status, ...(diagnostics ? { diagnostics } : {}) };
+    const reply = { ...payload, requestId, sessionId: command.sessionId, revision: command.revision, generation: status === 'installed' ? `mock:${command.revision}` : command.generation, status, ...(diagnostics ? { diagnostics } : {}) };
     pending.resolve(reply);
     this.pending.delete(requestId);
   }

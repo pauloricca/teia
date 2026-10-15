@@ -27,8 +27,12 @@
     "smoke:wasm-memory": "node scripts/smoke-wasm-memory.mjs",
     "fm1:support:check": "node scripts/fm1-support.mjs --check",
     "fm1:support:write": "node scripts/fm1-support.mjs --write",
-    "pretypecheck": "npm run fm1:support:check",
-    "prebuild": "npm run fm1:support:check",
-    "fm1:install": "python3 scripts/fm1-install.py"
+    "pretypecheck": "npm run engine:capabilities:check && npm run fm1:support:check",
+    "prebuild": "npm run engine:capabilities:check && npm run fm1:support:check",
+    "fm1:install": "python3 scripts/fm1-install.py",
+    "build:hosted": "node scripts/build-hosted.mjs",
+    "build:hosted:conformance": "node scripts/build-hosted-conformance.mjs",
+    "engine:capabilities:write": "node scripts/engine-capabilities.mjs --write",
+    "engine:capabilities:check": "node scripts/engine-capabilities.mjs --check"
   }
 }

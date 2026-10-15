@@ -190,6 +190,8 @@ export interface PatchLink {
 }
 
 export interface Patch {
+  /** Absent means legacy schema 0; explicit schema 1 is opt-in. */
+  schemaVersion?: 1;
   nodes: PatchNode[];
   links: PatchLink[];
   /** Content-addressed snapshots for Buffer nodes whose `on reset` mode is preserve. */
@@ -230,6 +232,8 @@ export interface MidiInputPreferences {
 }
 
 export interface PortDefinition {
+  /** Persistent exposed parameter identity; independent of editable name/order. */
+  parameterId?: string;
   name: string;
   defaultValue?: number;
   connectable?: boolean;

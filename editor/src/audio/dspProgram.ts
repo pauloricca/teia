@@ -25,6 +25,8 @@ export { DSP_OP } from './dspOpcodes';
 
 export interface DspProgram {
   version: 1;
+  /** Missing means legacy engine API 1 (mono Input selectors ignored). */
+  engineApiVersion?: 1 | 2;
   ops: DspOp[];
   values: number[];
   valueBindings: DspValueBinding[];
@@ -411,6 +413,7 @@ export function compilePatchToDspProgram(patch: Patch, optimizationOptions: DspC
 
   return {
     version: 1,
+    engineApiVersion: context.ops.some(op => op.opcode === DSP_OP.Input && (op.b === 0 || op.b === 1)) ? 2 : 1,
     ops: context.ops,
     values: context.values,
     valueBindings: context.valueBindings,
@@ -1320,6 +1323,7 @@ function compileNodeOutput(node: PatchNode, port: string, context: CompileContex
       opcode: DSP_OP.Input,
       out: output,
       a: gain,
+      b: port === 'left' ? 0 : port === 'right' ? 1 : -1,
     });
     return emitBinary(DSP_OP.Mul, output, resolveInput(node, 'level', 0.7, context), context);
   }

@@ -1,0 +1,17 @@
+{
+  "format": "teia-shared-runtime-evidence",
+  "version": 1,
+  "rustSourceSha256": "a9083ae9f2a96f2a95545e093cfe16fddbe101af6de7f3545b45624a186ad2ec",
+  "wasmSha256": "71d50787739972ae167fb5aa2ee0d689723baf1d30971f23f4b4b6e72c2ddaee",
+  "fixtureSha256": "de7d37c507bb0ab7b353ddd20271972f3fa56b18be6b58aa4f4fb3f3bd734db5",
+  "platform": "Linux ARM64 native container versus Node WASM",
+  "fixtures": 53,
+  "blocksPerFixture": 6,
+  "controls": "standalone smoothing, change at block 2, reset after block 3",
+  "blockPlan": true,
+  "maxAbsoluteSampleError": 0,
+  "limitations": [
+    "No macOS-native or audio-deadline measurements",
+    "No browser isolation or Vira integration claim"
+  ]
+}

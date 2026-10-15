@@ -1,3 +1,4 @@
+import { dspProgramStructureKey, dspCustomWavePointsKey, dspSequencerConfigKey } from './dspEdit';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AUDIO_ENGINE_CONFIG } from './config';
 import { createParallelEngine, type ParallelEngine } from './parallelEngine';
@@ -93,7 +94,7 @@ export interface RecordingState {
   elapsedSeconds: number;
 }
 
-interface AudioEngineState {
+export interface AudioEngineState {
   status: AudioStatus;
   message: string;
   cpuLoad: number;
@@ -2274,48 +2275,8 @@ function scopePayload(requests: ScopeCaptureRequest[]) {
   };
 }
 
-function dspProgramStructureKey(program: DspProgram): string {
-  return JSON.stringify({
-    version: program.version,
-    ops: program.ops,
-    valueBindings: program.valueBindings,
-    midiControlBindings: program.midiControlBindings,
-    tempoBindings: program.tempoBindings,
-    stateBindings: program.stateBindings,
-    registerCount: program.registerCount,
-    stateCount: program.stateCount,
-    feedbackLinkIds: program.feedbackLinkIds,
-    monitorIds: program.monitorIds,
-    sampleBindings: program.sampleBindings,
-    imageBindings: program.imageBindings,
-    fftBindings: program.fftBindings,
-    // Point coordinates have a dedicated in-place worklet update path. Mode
-    // and sustain changes still rebuild because they alter oscillator setup.
-    customWaveBindings: program.customWaveBindings.map((binding) => ({
-      nodeId: binding.nodeId,
-      mode: binding.customWave.mode,
-      sustainStart: binding.customWave.sustainStart,
-      sustainEnd: binding.customWave.sustainEnd,
-    })),
-    sequencerBindings: program.sequencerBindings.map((binding) => binding.nodeId),
-    repeatBindings: program.repeatBindings,
-    maxVoices: program.maxVoices,
-    usesMidiNote: program.usesMidiNote,
-    usesMidiClock: program.usesMidiClock,
-    errors: program.errors,
-  });
-}
 
-function dspCustomWavePointsKey(program: DspProgram): string {
-  return JSON.stringify(program.customWaveBindings.map((binding) => ({
-    nodeId: binding.nodeId,
-    points: binding.customWave.points,
-  })));
-}
 
-function dspSequencerConfigKey(program: DspProgram): string {
-  return JSON.stringify(program.sequencerBindings);
-}
 
 function arraysEqual(left: number[] | null, right: number[]): boolean {
   if (!left || left.length !== right.length) return false;

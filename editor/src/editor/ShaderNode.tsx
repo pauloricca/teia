@@ -1,3 +1,4 @@
+import { HostedModeContext } from '../hosted/HostedModeContext';
 import { Fm1ModeContext } from './Fm1ModeContext';
 import { isFm1NodeImplemented } from '../audio/fm1Support';
 import { Handle, Position, useConnection, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
@@ -99,6 +100,21 @@ const FFT_ANALYSIS_MAX_FREQUENCY = 20000;
 export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selected, dragging }: NodeProps<ShaderFlowNode>) {
   const node = data.patchNode;
   const fm1Mode = useContext(Fm1ModeContext);
+  const hostedMode = useContext(HostedModeContext);
+  const [hostedImageUrl, setHostedImageUrl] = useState<string | undefined>();
+  useEffect(() => {
+    setHostedImageUrl(undefined);
+    if (!hostedMode || !node.image?.url || !hostedMode.assets?.imagePreview) return;
+    const controller = new AbortController();
+    let url: string | undefined;
+    void hostedMode.assets.imagePreview(node.image.url, controller.signal).then(blob => {
+      if (!blob || controller.signal.aborted || blob.size > 4 * 1024 * 1024 || !blob.type.startsWith('image/')) return;
+      url = URL.createObjectURL(blob); setHostedImageUrl(url);
+    }).catch(() => undefined);
+    return () => { controller.abort(); if (url) URL.revokeObjectURL(url); };
+  }, [hostedMode?.assets, node.image?.url]);
+  const imagePreviewUrl = hostedMode ? hostedImageUrl : node.image?.url;
+  const hostedUnsupported = hostedMode?.nodeTypes && node.type !== null && !hostedMode.nodeTypes.includes(node.type);
   const fm1Unsupported = fm1Mode && node.type !== null && !isFm1NodeImplemented(node.type);
   const connectionInProgress = useConnection((connection) => connection.inProgress);
   const isCanvasLocked = data.isCanvasLocked === true;
@@ -1189,6 +1205,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
             />
           </button>
         ) : null}
+        {hostedUnsupported ? <span className="node-dsp-error-marker" title="This node is outside the host's advertised runtime capabilities; the document remains editable." aria-label="Unsupported by host">!</span> : null}
         {fm1Unsupported ? <span className="node-dsp-error-marker" title="This node is not implemented or verified on FM1" aria-label="Not supported on FM1">!</span> : null}
         {hasDspErrors ? (
           <span
@@ -1368,8 +1385,8 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
           ) : null}
           {showImageDisplay ? (
             <div className="shader-node-full-width-display image-node-display nodrag nopan" aria-label={node.image?.url ? 'Image coordinate preview' : 'Image preview'}>
-              {node.image?.url ? <img src={node.image.url} alt={node.image.name} draggable={false} onLoad={handleImageLoad} /> : <span>Select an image</span>}
-              {node.image?.url ? <>
+              {imagePreviewUrl ? <img src={imagePreviewUrl} alt={node.image?.name ?? 'Host image preview'} draggable={false} onLoad={handleImageLoad} /> : <span>{hostedMode ? 'Image preview requires host data' : 'Select an image'}</span>}
+              {imagePreviewUrl ? <>
                 <i className="image-node-crosshair image-node-crosshair-vertical" style={{ left: `calc(${imageX} * (100% - 1px))` }} />
                 <i className="image-node-crosshair image-node-crosshair-horizontal" style={{ top: `calc(${imageY} * (100% - 1px))` }} />
               </> : null}
@@ -2453,6 +2470,7 @@ function SampleWaveformDisplay({
   onStartChange,
   onEndChange,
 }: SampleWaveformDisplayProps) {
+  const hostedMode = useContext(HostedModeContext);
   const [waveform, setWaveform] = useState<SampleWaveform | null>(null);
   const canvasRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<{ boundary: 'start' | 'end'; pointerId: number } | null>(null);
@@ -2536,17 +2554,20 @@ function SampleWaveformDisplay({
       cancelled = true;
     };
 
-    void getSampleWaveform(sampleUrl).then((nextWaveform) => {
-      if (!cancelled) setWaveform(nextWaveform);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [sampleUrl]);
+    const controller = new AbortController();
+    const request = hostedMode
+      ? (hostedMode.assets?.waveform?.(sampleUrl, controller.signal) ?? Promise.resolve(null))
+      : getSampleWaveform(sampleUrl);
+    void request.then((nextWaveform) => {
+      if (!cancelled && nextWaveform && Number.isFinite(nextWaveform.duration) && nextWaveform.duration > 0 && nextWaveform.bins.length <= 1024 && nextWaveform.bins.every(bin => Number.isFinite(bin.min) && Number.isFinite(bin.max) && bin.min <= bin.max)) setWaveform(nextWaveform);
+    }).catch(() => undefined);
+    return () => { cancelled = true; controller.abort(); };
+  }, [sampleUrl, hostedMode?.assets]);
 
   return (
     <div className="sample-waveform-display nodrag nopan">
-      {sampleUrl && isVideoSampleUrl(sampleUrl) ? (
+      {hostedMode && !hostedMode.assets?.waveform && <span>Waveform preview requires host data</span>}
+      {!hostedMode && sampleUrl && isVideoSampleUrl(sampleUrl) ? (
         <SampleVideoPreview
           sampleUrl={sampleUrl}
           startPosition={safeStart}
@@ -5539,6 +5560,7 @@ function NodeTypePicker({
   onCustomLabelCommit,
 }: NodeTypePickerProps) {
   const fm1Mode = useContext(Fm1ModeContext);
+  const hostedMode = useContext(HostedModeContext);
   const nodeTypeLabel = nodeType ? getNodeTypeLabel(nodeType) : 'type';
   const pickerLabel = displayLabel ?? nodeTypeLabel;
   const [query, setQuery] = useState<string>(nodeType ? pickerLabel : '');
@@ -5556,6 +5578,7 @@ function NodeTypePicker({
 
     return [...NODE_TYPE_LIST, 'Area' as const]
       .filter((option) => {
+        if (hostedMode?.nodeTypes && option !== 'Area' && !hostedMode.nodeTypes.includes(option)) return false;
         if (fm1Mode && option !== 'Area' && !isFm1NodeImplemented(option)) return false;
         if ((!isEditingSubpatch && (option === 'Ins' || option === 'Outs')) || (isEditingSubpatch && option === 'Params')) return false;
         const label = option === 'Area' ? 'Area' : getNodeTypeLabel(option);
@@ -5578,7 +5601,7 @@ function NodeTypePicker({
 
         return Number(rightStartsWithQuery) - Number(leftStartsWithQuery);
       });
-  }, [fm1Mode, isEditingSubpatch, searchQuery]);
+  }, [fm1Mode, hostedMode, isEditingSubpatch, searchQuery]);
   useEffect(() => {
     if (!open) {
       setQuery(nodeType ? pickerLabel : '');

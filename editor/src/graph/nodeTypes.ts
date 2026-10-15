@@ -131,7 +131,7 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
       { name: 'gain', defaultValue: 1 },
       { name: 'level', defaultValue: 0.7 },
     ],
-    outputs: [{ name: 'signal' }],
+    outputs: [{ name: 'signal' }, { name: 'left' }, { name: 'right' }],
   },
   CustomWave: {
     type: 'CustomWave',

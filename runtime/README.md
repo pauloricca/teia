@@ -20,3 +20,13 @@ Serve the package's `dist/audio-worklet-wasm.js`, `dist/teia-kernel.wasm`, and `
 Build this package from the editor repository with `npm run build:runtime`. Its worklet skips editor visualization, metering, CPU reporting, and legacy effect allocations while retaining DSP FFT outputs. The package is installable from a local tarball; it has not been published to a registry. Before the first public release, review `npm pack --dry-run ./runtime`, then publish from `runtime/` with `npm publish --access public` after signing in to npm and enabling 2FA.
 
 Editor exports use the `teia-patch` manifest format and name `@pauloricca/teia-runtime`.
+
+
+Runtime 0.3.0 accepts engine APIs 1 and 2. Exports using Audio Input's separate
+`left`/`right` channels require API 2 so older players reject them instead of
+silently averaging. Existing mono `signal` packages remain API 1. Manifest 2 and
+program 1 are retained. Params may include additive `persistentId`, step and
+integer metadata; legacy ID lookup is retained, and setParameter/getParameter also accept the
+persistent identity. Preserved Buffer snapshots nested inside subpatchs
+are resolved using the compiled group scope. The private hosted editor/native
+surface is packaged separately; see [hosted contracts](../docs/hosted.md).

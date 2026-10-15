@@ -1,34 +1,67 @@
 {
   "schemaVersion": 2,
   "firmware": "FM-1_921",
-  "reviewedOn": "2026-10-11",
+  "reviewedOn": "2026-10-15",
   "reviewedSources": {
-    "editor/src/graph/types.ts": "d151a68c85539525df1abc869e07378c17c9c21a3dd5d265bc9b4fe7ce72536a",
-    "editor/src/graph/nodeTypes.ts": "1f79be272daf828e69d5a2513edd9cf76ac17d3e1ace160611cc59ef11e6fc09",
+    "editor/src/graph/types.ts": "84df856c4053473ec409753e072d0292d34c5a6cdf5d49c4e8fd60b4423ff61b",
+    "editor/src/graph/nodeTypes.ts": "906b9042d383228df616b4c8f8da844856bb9d90c5f7fe359b57aeabc62f8a59",
     "editor/src/graph/subpatch.ts": "56fd60b9c664479761eefaa1e4d5264160156974687bc529aba01716ed2fbeb5",
     "editor/src/graph/spread.ts": "58bec3d980343612b1fc6e31059ab2926b50455f7a547129ffd24b071d81a0da",
     "editor/src/graph/expression.ts": "3d9ffced8af6611ed9b59414f2917895aa21fbf2d0f145d59eeab71a9ab34995",
-    "editor/src/audio/dspProgram.ts": "e80593f688090f148d30478807ed82fedbdc1447dcbd0be3d8a7a70f546f06c3",
+    "editor/src/audio/dspProgram.ts": "4a4b1e17c61adf7885147812400dfb8e9d8f10fb8a2f3265c239aeacaf65e457",
     "editor/src/audio/dspOpcodes.ts": "3e605442a356c87dd1c6aef58ce0d00d762c5ed31da0499b90e962181fed55ee",
     "editor/src/audio/fm1Package.ts": "f63cff9f1feaf41aef939d0c540684ee1cb7dd99601204af693bc007cbe27c9c",
     "editor/src/audio/fm1Optimizer.ts": "c4aefb17286a0f80a2dcc2553b3e4c5bbe8fcb8f302c4e9eec095c1b3a03e9f0",
     "editor/src/audio/fm1Upload.ts": "77e2e199f523b95bb047e9dada2aa4725e03d8b9eb112d66a9d0c412fb0f0b96",
     "editor/src/audio/useFm1LiveEdit.ts": "f713142b090b52bd6f8322e9fda1648dbf2f7a3dde08aa99a4c5c657776fdb7e",
-    "editor/src/editor/NodeEditor.tsx": "23f419165d12ff77014d3c032b1c11d143824b3b2550dd0af184d6767e445572",
-    "editor/src/editor/ShaderNode.tsx": "327d932dcc09fe744e10055a6096c72ab4028d5045f98a1cb8f7441715508e24",
+    "editor/src/editor/NodeEditor.tsx": "9159128c880a7ad9859be4093b687c856f08e9091cee58d43950fbd76838971a",
+    "editor/src/editor/ShaderNode.tsx": "702853386388fb09f7f763c436155360858ff4ffc693f095b1e2677641d2eec0",
     "editor/src/editor/Fm1ModeContext.ts": "cc1bc130ec1638f62f27ce14997e86f8dae35e3a891d44702cab054b496fc5fd",
     "editor/src/audio/fm1Support.ts": "c7bc3b9979a76822aaf3b72acb914ce2e75e1abf37ff761c965e6e07e7ae363d",
     "editor/src/audio/fm1Capabilities.ts": "7a29929da790792dc3e54b3139cda2a4230e8f971fc5e101dade126a33a556cd",
     "editor/src/editor/Fm1SupportPage.tsx": "4f634b0db59887bc62a1a8a0dbe811e563683ee4cfa534a3a4aa8a1760264f49",
     "editor/src/App.tsx": "a7ab18f0eea1c2c9e395d4c01b34d58621d483f7e9069b4325e82ff3a7da4eee",
-    "editor/src/styles.css": "de2840b10ba9ba93cc59bcc2063ea0ab4487171f1a4c7ac781411a0d253b4278",
+    "editor/src/styles.css": "06ed38df2e8b7370fd978c6f0071c1f9cec6e2d8cf4479120cb7463cb201a0a4",
     "firmware/fm1/runtime.h": "7537b66a1045b93e2d5db70cb42c37d90a123322b687073a4fd1527c3c2480ad",
     "firmware/fm1/app.c": "3d32135afb8c1f704f3cee8266386ca56b78e8b285633fa7ce8b24b4c5075c00",
     "firmware/fm1/upload.h": "fe5d2b0469e85b0ae7af404089885b4f50561a0fd7f7dd3e5b1f80a19433b266",
     "firmware/fm1/export-patch.mjs": "f4080ecd3b6e5c20490cba612cc582a1396527ef5d9cfd4c85fc60e191645e55",
     "scripts/fm1-runtime-spike.py": "c1456307c522e6d52494e1f6d51921bc196482d6b5946b1dadde0405378ae958",
     "scripts/fm1-send-patch.py": "8dff7e8ae136c2fce5ef04c8d0b3d15f745f971cf6d94418d7f393f4b1623cad",
-    "scripts/fm1-install.py": "cb0b4d51615e40b164fd767964d845a65f3931c194d698c650b724f9825f228c"
+    "scripts/fm1-install.py": "cb0b4d51615e40b164fd767964d845a65f3931c194d698c650b724f9825f228c",
+    "editor/src/diagnostics.ts": "eeed709b3d569dc320dccaaf956dc903ea0c192e88d890440a5c9c2cd9ca8480",
+    "runtime/src/index.ts": "428283ed669a780a0a1d31c3ae63f85c9c6cbf30952c27023065ec62a74dcb05",
+    "editor/src/graph/parse.ts": "769600d7bc6858f0d2c83a4e9cd3b50329df0adbced9331f1da85c70dbe3f2e8",
+    "editor/src/graph/serialize.ts": "b79eeb691c8f22ec11bb4cfa750b5720cc8af4674d0e9eabf13aa642d876109a",
+    "editor/src/audio/dspEdit.ts": "04dc064fc4b22afa52ab4aaa6a0382b0b9466d8f0a2c507c63e8f7c05ed04076",
+    "editor/src/audio/patchPackage.ts": "da3021756b4a8fa10606056bfd8d282248e4ff0a3e63892227284a3931d6decf",
+    "editor/src/hosted/document.ts": "4c956fe8cfb655a37d41ffe80c4ffcd7ca333455081f31383609a8d013d6e36d",
+    "editor/src/hosted/compiler.ts": "0ca73a587926f23b75960d690dc0ea1dbbe24c61f45990bca72d8cbdb09dcbbf",
+    "editor/src/hosted/native.ts": "8e817707257dad677252340d7066c85188265111cf83bf0d4fcb335ad9e235a9",
+    "editor/src/hosted/bridge.ts": "4afaf6b04adada736c69563498103d29bfa32f6b0dac01ba6eeb5be36420d02c",
+    "editor/src/hosted/session.ts": "004c7dc44f789cb1862a3a903dd553cd02bc582aeca16d0324eec35534bd696a",
+    "editor/src/hosted/assets.ts": "1a529b112504a7987a8cb48d79e41d636ad021566dd659cd2d0966a0153bb651",
+    "editor/src/hosted/parameters.ts": "cab08af00bdc37d6ffbb99f6691eb512697ccc0ad1d568c6f2400f481bf61c6d",
+    "editor/src/hosted/useHostedAudio.ts": "62eb80fb2c10ee75e7a77017687fc3cf364d8fb520383135f8db5cac61919d52",
+    "editor/src/hosted/HostedNodeEditor.tsx": "592234a79ed87b02fa92fd7cb24631f4cd60b563ebbe3dec413fd25e5334064b",
+    "editor/src/hosted/HostedModeContext.ts": "037cfd1b3fb901f6e87436723fde6deb36aece15713fb72a8104cf42e5dfb1de",
+    "editor/src/hosted/mockBridge.ts": "80782a2c622863a9106faefdb0084a367bc88d794885f3d4ef97a60d44978892",
+    "editor/src/hosted/package.ts": "8941f0cf8acbff01a734a403ed63b8a76f1129423bf3281331597b2a77b3496c",
+    "hosted/package.json": "b158aac159e3ce2937d6675845b53cbee26a1bc4e2c77ade6c71f5dc607e61af",
+    "runtime/package.json": "948d13582e59a070522d2cd4d57898eea40936264c4ce747c54d683c278e39a1",
+    "rust/teia-kernel/Cargo.toml": "bf4525d61264227f363fe583fc05d6da82b517487a8fa7418240f5ede6594ad7",
+    "scripts/build-hosted.mjs": "4c197dbc426448e0deb9cd8be49f4c550bca92cbbdf4fff64ee7eba7ba625e21",
+    "scripts/build-hosted-conformance.mjs": "e10f5785cb07c1a6fe98d2d8654853719bc628c97b85d04c6a1a6c9dfbb21928",
+    "rust/teia-kernel/src/state_fields.rs": "cb9c7d5e9e59c12cfa65eed0ec5405a933e3c657918be7f70ba1e81cc20d5663",
+    "rust/teia-kernel/src/runtime_preparation.rs": "2486368ef5e866b420709e95b3d4af4b9c60921c7cda82beede7e8a2ad4f86a7",
+    "rust/teia-kernel/src/hosted_resources.rs": "51f57778dc523816f0e711ba4e5829c7d574ab4e853f4d410824cfcaa5d5e77b",
+    "rust/teia-kernel/src/runtime-capabilities.json": "8525776544cce6d935f1c9788582b46fd8ac17c6aeeb9cd2a8707affb2f1c213",
+    "editor/src/hosted/engineCapabilities.json": "8525776544cce6d935f1c9788582b46fd8ac17c6aeeb9cd2a8707affb2f1c213",
+    "scripts/engine-capabilities.mjs": "1250e52155d1ba3931976ce63706728bf24a81fc39fa05dc4d2923af601a65e3",
+    "rust/teia-kernel/src/lib.rs": "6106cc08d6886c2038673fd5b9fcce21a4d0726d8dae2a385025f7424adc3312",
+    "rust/teia-kernel/src/native_state.rs": "8a0824dc795694aed1f03ee73830d158debd70b6e59d44abd137d6d7f8897259",
+    "rust/teia-kernel/src/hosted.rs": "762d9f4c29d2b7cb1c4cb1942634c2b3a48fc65995358787b5005cc7d0fc5af6",
+    "editor/public/audio/audio-worklet-wasm.js": "566b31a68db9d30ad5adc75eebce49f446e3b5e0ab5dc9a7b76a53aa7905e3c0"
   },
   "features": [
     {
@@ -323,13 +356,22 @@
       "status": "unsupported",
       "since": null,
       "verification": "source reviewed",
-      "notes": "No supported FM-1 lowering for this node operation or resource; browser support does not imply device support.",
+      "notes": "Web and native scalar hosting expose legacy mono signal plus separate left and right outputs. FM-1 has no supported audio input operation or resource. XP stereo exports require engine API 2; legacy mono exports remain API 1. Runtime 0.3.0 accepts both.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "editor/src/audio/dspProgram.ts"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [
+        "signal",
+        "left",
+        "right"
+      ],
+      "drift": {
+        "webBehavior": "Audio Input keeps signal as the stereo average and adds separate left/right outputs. The native scalar hosting profile consumes host-owned planar stereo buffers.",
+        "firmwareBehavior": "FM-1 has no audio-input lowering or audio capture resource. This node remains unsupported.",
+        "requiredWork": "Implement firmware audio-input resources, channel routing and compiler lowering, then verify timing and channel isolation on hardware."
+      }
     },
     {
       "id": "CustomWave",
@@ -387,13 +429,18 @@
       "status": "unsupported",
       "since": null,
       "verification": "source reviewed",
-      "notes": "No supported FM-1 lowering for this node operation or resource; browser support does not imply device support.",
+      "notes": "No supported FM-1 lowering for this node operation or resource; browser support does not imply device support. Hosted asset requirements and XP packaging/player now resolve preserved snapshots inside subpatchs using the compiled group scope.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "editor/src/audio/dspProgram.ts"
       ],
       "blockedInputs": [],
-      "blockedOutputs": []
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Preserved Buffer snapshots are resolved through host adapters or XP assets, including snapshots nested in subpatchs.",
+        "firmwareBehavior": "FM-1 has no supported Buffer DSP or preserved snapshot resource.",
+        "requiredWork": "Implement bounded firmware Buffer DSP and persistence resources, compiler lowering and verification before claiming parity."
+      }
     },
     {
       "id": "Playhead",
@@ -1530,7 +1577,7 @@
         "firmware/fm1/test-links.c"
       ],
       "drift": {
-        "webBehavior": "Compiled links apply each bend separately: clamp the exponent to -32 through 32, compute double-precision 2^x, clamp the ratio to 12000, then multiply and clamp the result to ±12000. Opposing bends need not cancel after intermediate clipping.",
+        "webBehavior": "Compiled links apply each bend separately in browser and native hosted scalar profiles: clamp the exponent to -32 through 32, compute double-precision 2^x, clamp the ratio to 12000, then multiply and clamp the result to ±12000. Opposing bends need not cancel after intermediate clipping. Native admission now includes the existing shared Bend evaluator; functional verification remains outstanding.",
         "firmwareBehavior": "913 matches those instruction boundaries and limits using Q16.16 ratios with table interpolation. Ratios below half a Q16.16 step round to zero; multiplication truncates to fixed-point precision.",
         "requiredWork": "Wider fractional precision is needed for extreme negative bends and very small products. Measure hardware timing and audible results; no runtime verification is claimed."
       }
@@ -1621,6 +1668,68 @@
       ],
       "blockedInputs": [],
       "blockedOutputs": []
+    },
+    {
+      "id": "hosted-runtime-editor",
+      "category": "workflow",
+      "status": "unsupported",
+      "since": null,
+      "verification": "source reviewed",
+      "notes": "Hosted native instances now reuse standalone Rust program/instruction validation, addDspOp resource/cache preparation, shared scalar graph scheduling, smoothing machinery, monitoring and reset. State fields/defaults have one declaration. Native Resources adapt samples/images/custom waves/sequencers/Buffer snapshots. Explicit preallocated Spawn/Spread budgets are opt-in and expose exhaustion. Legacy standalone capacity and version-1 immediate native controls remain unchanged; smoothing is selectable. Native and WASM equivalence and allocation tests do not establish firmware support, macOS deadlines or external host integration. FFT browser analysis migration remains pending.",
+      "evidence": [
+        "editor/src/hosted/index.ts",
+        "editor/src/hosted/session.ts",
+        "rust/teia-kernel/src/hosted.rs",
+        "docs/hosted.md"
+      ],
+      "blockedInputs": [],
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Shared Rust preparation, validation, state declaration and scalar graph evaluator across WASM/native; native resource adapters and opt-in bounded context-zero Spawn/Spread pools with counted capped counts/dropped triggers. Existing standalone dynamic policy remains the default.",
+        "firmwareBehavior": "Existing FM-1 binary/live-edit protocols use their own single-device lifecycle and compiled parameter slots. They do not implement this hosted bridge or native instance API.",
+        "requiredWork": "A firmware adapter and explicit capability audit would be needed to expose equivalent hosted lifecycle, revision and parameter identity semantics. Existing FM-1 mode remains separate."
+      }
+    },
+    {
+      "id": "hosted-midi-transport",
+      "category": "workflow",
+      "status": "unsupported",
+      "since": null,
+      "verification": "source reviewed",
+      "notes": "Native host profile preallocates a 2048-key monophonic held-note pool and 4096-event output scratch, accepts ordered sample-offset note/CC/pitch bend and segmented authoritative timing. Browser event separators and standalone Tempo modes remain unchanged. Allocation/deadline tests are not executed.",
+      "evidence": [
+        "rust/teia-kernel/src/hosted.rs",
+        "rust/teia-kernel/src/lib.rs",
+        "editor/src/hosted/native.ts",
+        "docs/hosted.md"
+      ],
+      "blockedInputs": [],
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "Teia native hosted processing applies all simultaneous events at their supplied offsets, implements per-channel pitch bend, returns note/CC output offsets, and follows supplied frame/beat/BPM/running state with within-block segments and explicit seeks/loops.",
+        "firmwareBehavior": "FM-1 does not consume this host-event/timeline API. Existing device MIDI and internal/MIDI clock protocols retain their separately tracked restrictions and timing.",
+        "requiredWork": "Design a bounded firmware adapter and encoded timing/pitch-bend protocol; implement corresponding DSP/control handlers and audit source/hardware evidence before claiming parity."
+      }
+    },
+    {
+      "id": "shared-runtime-realtime-policy",
+      "category": "workflow",
+      "status": "unsupported",
+      "since": null,
+      "verification": "source reviewed",
+      "notes": "Opt-in prepareDspRealtime(capacity, memory budget) preallocates compiled context-zero Spawn/Spread resources. Grow/shrink and killed instances recycle storage; explicit budget exhaustion caps Spread and drops new Spawn triggers with a counter. Existing standalone dynamic semantics remain unchanged when no policy is selected. Allocation tests cover representative fixtures, not all engine paths or firmware.",
+      "evidence": [
+        "rust/teia-kernel/src/runtime_preparation.rs",
+        "rust/teia-kernel/src/lib.rs",
+        "rust/teia-kernel/tests/hosted.rs"
+      ],
+      "blockedInputs": [],
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "WASM/native share an optional explicit finite repeat budget and resource pools, with exhaustion feedback.",
+        "firmwareBehavior": "FM-1 uses its existing contract limits and firmware repeat implementation; it does not expose this host preparation API or the new budget/exhaustion feedback.",
+        "requiredWork": "Audit mapping to firmware limits before implementing an equivalent adapter. No firmware version or hardware verification is advanced."
+      }
     }
   ],
   "evidenceLog": [

@@ -1,10 +1,12 @@
 {
   "name": "@pauloricca/teia-runtime",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "type": "module",
   "license": "UNLICENSED",
   "types": "./dist/index.d.ts",
-  "files": ["dist/"],
+  "files": [
+    "dist/"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

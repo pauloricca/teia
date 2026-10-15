@@ -200,6 +200,8 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
     this.leftBuffer = null;
     this.rightBuffer = null;
     this.inputBuffer = null;
+    this.inputLeftBuffer = null;
+    this.inputRightBuffer = null;
     this.linkMeterInputSums = null;
     this.linkMeterOutputSums = null;
     this.linkMeterEnvelopeSums = null;
@@ -433,6 +435,16 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
       if (!ptr) continue;
       const target = new Float32Array(this.wasm.memory.buffer, ptr, bufferLength);
       target.fill(0);
+      if (this.wasm.restoreDspBufferSnapshot) {
+        target.set(snapshot.samples.subarray(0, bufferLength));
+        const restored = this.wasm.restoreDspBufferSnapshot(binding.state, snapshot.samples.length, snapshot.sampleRate, sampleRate);
+        if (restored >= 0) {
+          this.bufferSampleCounts.set(nodeId, restored);
+          this.pendingBufferRestores.delete(nodeId);
+        }
+        continue;
+      }
+      // Compatibility with kernels predating shared snapshot preparation.
       const targetCount = this.clamp(
         Math.round(snapshot.samples.length * sampleRate / snapshot.sampleRate),
         2,
@@ -672,6 +684,8 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
     this.wasmMemoryBytes = buffer.byteLength;
     const leftOffset = typeof this.wasm.leftPtr === "function" ? this.wasm.leftPtr() : LEFT_OFFSET;
     const rightOffset = typeof this.wasm.rightPtr === "function" ? this.wasm.rightPtr() : RIGHT_OFFSET;
+    this.inputLeftBuffer = typeof this.wasm.inputLeftPtr === "function" ? new Float32Array(buffer, this.wasm.inputLeftPtr(), MAX_WASM_FRAMES) : null;
+    this.inputRightBuffer = typeof this.wasm.inputRightPtr === "function" ? new Float32Array(buffer, this.wasm.inputRightPtr(), MAX_WASM_FRAMES) : null;
     this.leftBuffer = new Float32Array(buffer, leftOffset, MAX_WASM_FRAMES);
     this.rightBuffer = new Float32Array(buffer, rightOffset, MAX_WASM_FRAMES);
     this.inputBuffer = typeof this.wasm.inputPtr === "function"
@@ -1100,6 +1114,7 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
 
     return {
       version: 1,
+      engineApiVersion: program.engineApiVersion === 2 ? 2 : 1,
       ops,
       values,
       immediateValueIndexes,
@@ -1402,6 +1417,7 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
     if (hasProgramMigration) this.wasm.beginDspProgramUpdate();
     this.wasm.clearDspProgram();
     this.wasm.clearGraph?.();
+    this.wasm.setDspStereoInputEnabled?.(this.dspProgram.engineApiVersion === 2 ? 1 : 0);
     this.maxVoices = this.dspProgram.maxVoices;
     this.nodes = [];
     this.nodesById = new Map();
@@ -1425,7 +1441,10 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
         frequency: 220,
         customWave: binding.customWave,
       });
-      customNode.wasmIndex = this.wasm.addNode?.(
+      customNode.wasmIndex = this.wasm.addDspResourceNode?.(9,
+        CUSTOM_WAVE_MODE_IDS.get(customNode.customWave?.mode) ?? 0,
+        customNode.customWave?.sustainStart ?? 0.5,
+        customNode.customWave?.sustainEnd ?? 0.75, 0) ?? this.wasm.addNode?.(
         this.waveId(customNode),
         this.frequencyModeId(customNode),
         customNode.ratio,
@@ -1478,7 +1497,7 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
           release: binding.release,
         },
       });
-      sampleNode.wasmIndex = this.wasm.addNode?.(
+      sampleNode.wasmIndex = this.wasm.addDspResourceNode?.(10, 0, 0.5, 0.75, binding.release) ?? this.wasm.addNode?.(
         this.waveId(sampleNode),
         this.frequencyModeId(sampleNode),
         sampleNode.ratio,
@@ -1532,6 +1551,13 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
         op.value3 ?? 0,
         op.value4 ?? 0,
       );
+    }
+
+    const invalidInstruction = this.wasm.validateDspProgram?.() ?? -1;
+    if (invalidInstruction >= 0) {
+      this.dspProgram.errors.push(`Rust rejected instruction ${invalidInstruction}.`);
+      if (hasProgramMigration) this.wasm.finishDspProgramUpdate();
+      return;
     }
 
     this.applyDspRepeatMigration(repeatMigration);
@@ -3055,6 +3081,10 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
     const input = inputs[0];
     const inputLeft = input?.[0];
     const inputRight = input?.[1] || inputLeft;
+    for (let i = 0; i < frames; i += 1) {
+      if (this.inputLeftBuffer) this.inputLeftBuffer[i] = inputLeft?.[i] || 0;
+      if (this.inputRightBuffer) this.inputRightBuffer[i] = inputRight?.[i] || 0;
+    }
     if (!inputLeft) {
       this.inputBuffer.fill(0, 0, frames);
       return;

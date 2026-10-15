@@ -1,3 +1,6 @@
+import { requiredEngineApi } from './dspEdit';
+import { bufferReferences } from '../hosted/document';
+import { preparePatch } from '../hosted/compiler';
 import type { DspProgram } from './dspProgram';
 import { patchToJson } from '../graph/serialize';
 import type { BufferAsset, Patch, PatchNode } from '../graph/types';
@@ -8,10 +11,20 @@ type PackageFile = { path: string; bytes: Uint8Array<ArrayBuffer> };
 const encoder = new TextEncoder();
 const MAX_ZIP_SIZE = 0xffff_ffff;
 
-export async function createPatchPackage(patch: Patch, sourceProgram: DspProgram): Promise<Blob> {
+export interface PortableAssetAdapters {
+  readMedia: (reference: string) => Promise<Uint8Array<ArrayBuffer>>;
+  readBuffer: (asset: BufferAsset) => Promise<{ samples: Float32Array; sampleRate: number } | null>;
+}
+export async function createPatchPackage(patch: Patch, sourceProgram?: DspProgram, adapters?: PortableAssetAdapters): Promise<Blob> {
+  if (!sourceProgram) {
+    const prepared = preparePatch(patch);
+    if (!('program' in prepared) || prepared.diagnostics.some(d => d.severity === 'error')) throw new Error(prepared.diagnostics.map(d => d.message).join('; '));
+    sourceProgram = prepared.program;
+  }
   if (sourceProgram.errors.length) throw new Error(`Cannot export a patch with DSP errors: ${sourceProgram.errors.join('; ')}`);
   const portablePatch = structuredClone(patch);
   const program = structuredClone(sourceProgram);
+  program.engineApiVersion = requiredEngineApi(program);
   const files: PackageFile[] = [];
   const assets: Array<{ path: string; sha256: string; bytes: number; source: string }> = [];
   const mediaPaths = new Map<string, string>();
@@ -24,11 +37,13 @@ export async function createPatchPackage(patch: Patch, sourceProgram: DspProgram
     if (!url.trim()) return url;
     const existing = mediaPaths.get(url);
     if (existing) return existing;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Could not export asset ${url} (${response.status}).`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
+    const bytes = adapters ? await adapters.readMedia(url) : await (async () => {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Could not export asset ${url} (${response.status}).`);
+      return new Uint8Array(await response.arrayBuffer());
+    })();
     const hash = await sha256(bytes);
-    const extension = safeExtension(new URL(url, location.href).pathname);
+    const extension = safeExtension(new URL(url, 'https://teia.invalid/').pathname);
     const path = `assets/${kind}/${hash}${extension}`;
     if (!files.some((file) => file.path === path)) await addAsset(path, bytes, url);
     mediaPaths.set(url, path);
@@ -48,11 +63,11 @@ export async function createPatchPackage(patch: Patch, sourceProgram: DspProgram
   for (const binding of program.sampleBindings) binding.sample.url = mediaPaths.get(binding.sample.url) ?? binding.sample.url;
   for (const binding of program.imageBindings) binding.image.url = mediaPaths.get(binding.image.url) ?? binding.image.url;
 
-  for (const asset of Object.values(portablePatch.buffers ?? {}) as BufferAsset[]) {
+  for (const asset of Object.values(bufferReferences(portablePatch)) as BufferAsset[]) {
     const path = `assets/buffers/${asset.hash}.f32`;
     if (files.some((file) => file.path === path)) continue;
-    const snapshot = await loadBufferSnapshot(asset);
-    if (!snapshot) throw new Error(`Preserved Buffer ${asset.hash} is missing from browser storage.`);
+    const snapshot = await (adapters ? adapters.readBuffer(asset) : loadBufferSnapshot(asset));
+    if (!snapshot) throw new Error(`Preserved Buffer ${asset.hash} is missing from the supplied asset source.`);
     const bytes = new Uint8Array(snapshot.samples.byteLength);
     bytes.set(new Uint8Array(snapshot.samples.buffer, snapshot.samples.byteOffset, snapshot.samples.byteLength));
     if (await sha256(bytes) !== asset.hash) throw new Error(`Preserved Buffer ${asset.hash} failed its integrity check.`);
@@ -65,19 +80,23 @@ export async function createPatchPackage(patch: Patch, sourceProgram: DspProgram
       if (!binding) throw new Error(`Parameter ${node.id}.${port.name} has no compiled value binding.`);
       return {
         id: `${node.id}.${port.name}`,
+        ...(port.parameterId ? { persistentId: port.parameterId } : {}),
         name: port.name,
         nodeId: node.id,
         valueIndex: binding.valueIndex,
         defaultValue: node.params[port.name] ?? port.defaultValue ?? 0,
         min: port.min ?? 0,
         max: port.max ?? 1,
+        ...(port.step !== undefined ? { step: port.step } : {}),
+        ...(port.integer !== undefined ? { integer: port.integer } : {}),
       };
     }));
   const manifest = {
     format: 'teia-patch',
     version: 2,
     programVersion: program.version,
-    engineApiVersion: 1,
+    engineApiVersion: requiredEngineApi(program),
+    parameterIdentityVersion: 1, // additive metadata; v2 id lookup stays legacy-compatible
     runtimePackage: '@pauloricca/teia-runtime',
     paths: { patch: 'patch.json', program: 'program.json' },
     parameters,

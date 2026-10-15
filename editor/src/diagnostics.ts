@@ -11,7 +11,7 @@ const PERFORMANCE_TIMELINE_MAINTENANCE_INTERVAL_MS = 1_000;
 const PERFORMANCE_TIMELINE_ENTRY_LIMIT = 1_000;
 const SESSION_STORAGE_KEY = 'teia-editor.diagnostics-session';
 
-const sessionId = getSessionId();
+let sessionId: string | undefined; // Acquire standalone diagnostics storage only on first log.
 let lastPerformanceTimelineMaintenanceAt = 0;
 
 const buildEnvironment = import.meta.env as ImportMetaEnv & {
@@ -119,7 +119,7 @@ export function logDiagnosticEvent(
   }
 
   const payload = {
-    sessionId,
+    sessionId: sessionId ??= getSessionId(),
     timestamp: new Date().toISOString(),
     performanceNowMs: Math.round(now),
     level: options.level ?? 'info',

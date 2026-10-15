@@ -3,6 +3,9 @@ import { readPackageZip } from './zip.js';
 interface ParameterDefinition {
   id: string;
   name: string;
+  persistentId?: string;
+  step?: number;
+  integer?: boolean;
   nodeId: string;
   valueIndex: number;
   defaultValue: number;
@@ -23,6 +26,7 @@ interface Manifest {
 
 interface Program {
   version: number;
+  engineApiVersion?: number;
   errors: string[];
   values: number[];
   sampleBindings: Array<{ nodeId: string; sample: { name: string; url: string } }>;
@@ -30,7 +34,7 @@ interface Program {
   [key: string]: unknown;
 }
 
-interface Patch { buffers?: Record<string, { hash: string; sampleRate: number; sampleCount: number }> }
+interface Patch { buffers?: Record<string, { hash: string; sampleRate: number; sampleCount: number }>; nodes?: { id: string; type?: string; subpatch?: Patch }[] }
 
 const registeredWorklets = new WeakMap<BaseAudioContext, { hash: string; ready: Promise<void> }>();
 const workletUrl = new URL('./audio-worklet-wasm.js', import.meta.url);
@@ -58,12 +62,13 @@ export class PatchPlayer {
     const bytes = packageFile instanceof Blob ? await packageFile.arrayBuffer() : packageFile;
     const files = readPackageZip(bytes);
     const manifest = readJson<Manifest>(files, 'manifest.json');
-    if (manifest.format !== 'teia-patch' || manifest.version !== 2 || manifest.engineApiVersion !== 1
+    if (manifest.format !== 'teia-patch' || manifest.version !== 2 || ![1, 2].includes(manifest.engineApiVersion)
       || manifest.runtimePackage !== '@pauloricca/teia-runtime') {
       throw new Error('Unsupported patch package or engine API version.');
     }
     const program = readJson<Program>(files, manifest.paths.program);
     const patch = readJson<Patch>(files, manifest.paths.patch);
+    program.engineApiVersion = manifest.engineApiVersion;
     if (program.version !== manifest.programVersion || program.errors?.length) throw new Error('Invalid compiled DSP program.');
     if (!Array.isArray(program.values) || !Array.isArray(manifest.parameters)) throw new Error('Invalid parameter metadata.');
     await verifyAssets(files, manifest);
@@ -112,7 +117,7 @@ export class PatchPlayer {
 
   setParameter(id: string, value: number): void {
     this.ensureOpen();
-    const parameter = this.parameters.find((entry) => entry.id === id);
+    const parameter = this.parameters.find((entry) => entry.id === id) ?? this.parameters.find((entry) => entry.persistentId === id);
     if (!parameter) throw new Error(`Unknown parameter: ${id}`);
     if (!Number.isFinite(value)) throw new Error('Parameter value must be finite.');
     const bounded = Math.min(parameter.max ?? Infinity, Math.max(parameter.min ?? -Infinity, value));
@@ -121,7 +126,7 @@ export class PatchPlayer {
   }
 
   getParameter(id: string): number {
-    const parameter = this.parameters.find((entry) => entry.id === id);
+    const parameter = this.parameters.find((entry) => entry.id === id) ?? this.parameters.find((entry) => entry.persistentId === id);
     if (!parameter) throw new Error(`Unknown parameter: ${id}`);
     return this.values[parameter.valueIndex];
   }
@@ -243,7 +248,13 @@ async function prepareImages(files: Map<string, Uint8Array<ArrayBuffer>>, progra
 }
 
 function prepareBuffers(files: Map<string, Uint8Array<ArrayBuffer>>, patch: Patch) {
-  return Object.entries(patch.buffers ?? {}).map(([nodeId, asset]) => {
+  const references: NonNullable<Patch['buffers']> = {};
+  const visit = (source: Patch, prefix: string) => {
+    for (const [id, asset] of Object.entries(source.buffers ?? {})) references[`${prefix}${id}`] = asset;
+    for (const node of source.nodes ?? []) if (node.type === 'Group' && node.subpatch) visit(node.subpatch, `${prefix}${node.id}__`);
+  };
+  visit(patch, '');
+  return Object.entries(references).map(([nodeId, asset]) => {
     const path = `assets/buffers/${asset.hash}.f32`;
     const file = requiredFile(files, path);
     if (file.byteLength !== asset.sampleCount * 4) throw new Error(`Invalid Buffer data: ${path}`);

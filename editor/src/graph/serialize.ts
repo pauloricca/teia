@@ -3,6 +3,7 @@ import { normalizeCustomWave } from './customWave';
 
 export function normalizePatch(patch: Patch): Patch {
   return {
+    ...(patch.schemaVersion ? { schemaVersion: patch.schemaVersion } : {}),
     ...(patch.name ? { name: patch.name } : {}),
     ...(patch.buffers ? { buffers: normalizeBufferAssets(patch.buffers) } : {}),
     ...(patch.midiInput ? { midiInput: {

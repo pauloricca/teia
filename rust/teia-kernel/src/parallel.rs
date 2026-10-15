@@ -88,15 +88,21 @@ std::thread_local! {
 #[inline(always)]
 pub(super) fn active_repeat_context() -> *mut RepeatContext {
     #[cfg(target_arch = "wasm32")]
-    { unsafe { ACTIVE_REPEAT_CONTEXT } }
+    {
+        unsafe { ACTIVE_REPEAT_CONTEXT }
+    }
     #[cfg(not(target_arch = "wasm32"))]
-    { ACTIVE_REPEAT_CONTEXT.with(Cell::get) }
+    {
+        ACTIVE_REPEAT_CONTEXT.with(Cell::get)
+    }
 }
 
 #[inline(always)]
 unsafe fn set_active_repeat_context(context: *mut RepeatContext) {
     #[cfg(target_arch = "wasm32")]
-    { ACTIVE_REPEAT_CONTEXT = context; }
+    {
+        ACTIVE_REPEAT_CONTEXT = context;
+    }
     #[cfg(not(target_arch = "wasm32"))]
     ACTIVE_REPEAT_CONTEXT.with(|active| active.set(context));
 }
@@ -111,7 +117,9 @@ pub(super) unsafe fn record_custom_wave_frame(node: usize, consumed: u32) {
 
 pub(super) unsafe fn invalid_state_ptr() -> *mut f64 {
     let context = active_repeat_context();
-    core::ptr::addr_of_mut!(REPEAT_INVALID_STATE).cast::<f64>().add((*context).lane)
+    core::ptr::addr_of_mut!(REPEAT_INVALID_STATE)
+        .cast::<f64>()
+        .add((*context).lane)
 }
 
 struct Plan {
@@ -134,11 +142,25 @@ struct RepeatPlan {
 
 fn uses_explicit_context(op: DspOp) -> bool {
     match op.opcode {
-        DSP_OP_VALUE | DSP_OP_ADD | DSP_OP_MUL | DSP_OP_SUB | DSP_OP_DIV | DSP_OP_NEG
-        | DSP_OP_BEND | DSP_OP_ABS | DSP_OP_MAP | DSP_OP_FOLD | DSP_OP_HARD_CLIP
-        | DSP_OP_SOFT_CLIP | DSP_OP_ENVELOPE | DSP_OP_BLOCK_LATCH
-        | DSP_OP_SPREAD_INDEX | DSP_OP_SPAWN_INSTANCE_GATE | DSP_OP_SPREAD_COLLECT
-        | DSP_OP_FEEDBACK_READ | DSP_OP_FEEDBACK_WRITE => true,
+        DSP_OP_VALUE
+        | DSP_OP_ADD
+        | DSP_OP_MUL
+        | DSP_OP_SUB
+        | DSP_OP_DIV
+        | DSP_OP_NEG
+        | DSP_OP_BEND
+        | DSP_OP_ABS
+        | DSP_OP_MAP
+        | DSP_OP_FOLD
+        | DSP_OP_HARD_CLIP
+        | DSP_OP_SOFT_CLIP
+        | DSP_OP_ENVELOPE
+        | DSP_OP_BLOCK_LATCH
+        | DSP_OP_SPREAD_INDEX
+        | DSP_OP_SPAWN_INSTANCE_GATE
+        | DSP_OP_SPREAD_COLLECT
+        | DSP_OP_FEEDBACK_READ
+        | DSP_OP_FEEDBACK_WRITE => true,
         DSP_OP_OSC => (0..=4).contains(&op.a) && op.d < 0 && op.e < 0,
         _ => false,
     }
@@ -151,10 +173,17 @@ fn uses_explicit_context(op: DspOp) -> bool {
 fn repeat_access(op: DspOp) -> Option<(Vec<i32>, usize)> {
     match op.opcode {
         DSP_OP_RANDOM => Some((vec![op.a, op.b, op.c], 4)),
-        DSP_OP_OSC if op.a == 6 => Some((vec![op.value2.round() as i32, op.value3.round() as i32], 1)),
-        DSP_OP_OSC if op.a == 7 => Some((vec![op.b, op.value2.round() as i32, op.value3.round() as i32], 3)),
+        DSP_OP_OSC if op.a == 6 => {
+            Some((vec![op.value2.round() as i32, op.value3.round() as i32], 1))
+        }
+        DSP_OP_OSC if op.a == 7 => Some((
+            vec![op.b, op.value2.round() as i32, op.value3.round() as i32],
+            3,
+        )),
         DSP_OP_OSC if op.a == 5 => Some((vec![op.c, op.d], 3)),
-        DSP_OP_DISTORTION if op.c < 0 && op.value.round() as i32 == 3 => Some((vec![op.a, op.b], 1)),
+        DSP_OP_DISTORTION if op.c < 0 && op.value.round() as i32 == 3 => {
+            Some((vec![op.a, op.b], 1))
+        }
         DSP_OP_SAMPLE if op.value2 < 0.5 => Some((vec![op.b, op.c, op.d, op.e], 1)),
         DSP_OP_SAMPLE_PARAM => Some((vec![op.c], 0)),
         DSP_OP_SPREAD_INDEX | DSP_OP_SPAWN_INSTANCE_GATE => Some((vec![], 0)),
@@ -169,11 +198,19 @@ fn repeat_access(op: DspOp) -> Option<(Vec<i32>, usize)> {
         )),
         DSP_OP_MIDI_NOTE => Some((vec![op.b], 0)),
         DSP_OP_MIDI_CC => Some((vec![op.a, op.b], 0)),
-        DSP_OP_DISTORTION if op.c < 0 && op.value.round() as i32 != 3 =>
-            Some((vec![op.a, op.b], 0)),
+        DSP_OP_DISTORTION if op.c < 0 && op.value.round() as i32 != 3 => {
+            Some((vec![op.a, op.b], 0))
+        }
         DSP_OP_IMAGE => Some((vec![op.a, op.b], 0)),
         DSP_OP_BUFFER => Some((
-            vec![op.a, op.b, op.c, op.d, op.value2.round() as i32, op.value3.round() as i32],
+            vec![
+                op.a,
+                op.b,
+                op.c,
+                op.d,
+                op.value2.round() as i32,
+                op.value3.round() as i32,
+            ],
             7,
         )),
         DSP_OP_OSC if op.a == 5 && op.c >= 0 => {
@@ -216,7 +253,9 @@ fn repeat_plan(ops: &[DspOp], start: usize, end: usize) -> Option<RepeatPlan> {
         return None;
     }
     let collectors: Vec<(usize, DspOp)> = collector_indices
-        .iter().map(|&index| (index, ops[index])).collect();
+        .iter()
+        .map(|&index| (index, ops[index]))
+        .collect();
     let mut collector_outputs = Vec::new();
     for (_, item) in &collectors {
         if item.a < 0
@@ -269,8 +308,12 @@ fn repeat_plan(ops: &[DspOp], start: usize, end: usize) -> Option<RepeatPlan> {
         }
         if op.opcode == DSP_OP_OSC && op.a == 9 {
             let node = op.value.round() as usize;
-            if node >= MAX_NODES { return None; }
-            if !custom_wave_nodes.contains(&node) { custom_wave_nodes.push(node); }
+            if node >= MAX_NODES {
+                return None;
+            }
+            if !custom_wave_nodes.contains(&node) {
+                custom_wave_nodes.push(node);
+            }
         }
         if op.out >= 0 {
             if op.out as usize >= MAX_DSP_REGS {
@@ -279,7 +322,9 @@ fn repeat_plan(ops: &[DspOp], start: usize, end: usize) -> Option<RepeatPlan> {
             writes.push(op.out as usize);
         }
         if op.opcode == DSP_OP_BUFFER {
-            if op.e < 0 || op.e as usize >= MAX_DSP_REGS { return None; }
+            if op.e < 0 || op.e as usize >= MAX_DSP_REGS {
+                return None;
+            }
             writes.push(op.e as usize);
         }
     }
@@ -344,14 +389,19 @@ fn repeat_plan(ops: &[DspOp], start: usize, end: usize) -> Option<RepeatPlan> {
         end,
         collectors,
         collector_positions,
-        results: UnsafeCell::new(vec![0.0; MAX_PARALLEL_REPEAT_ITEMS * collector_indices.len()].into_boxed_slice()),
+        results: UnsafeCell::new(
+            vec![0.0; MAX_PARALLEL_REPEAT_ITEMS * collector_indices.len()].into_boxed_slice(),
+        ),
         inputs,
         writes,
         state_start,
         state_count,
         min_count,
         custom_wave_nodes,
-        explicit_context_only: ops[start + 1..end].iter().copied().all(uses_explicit_context),
+        explicit_context_only: ops[start + 1..end]
+            .iter()
+            .copied()
+            .all(uses_explicit_context),
     })
 }
 
@@ -469,8 +519,10 @@ pub extern "C" fn configureDspParallel(workers: u32) {
 #[no_mangle]
 pub extern "C" fn compileDspParallelPlan() {
     unsafe {
-        let ops =
-            core::slice::from_raw_parts(core::ptr::addr_of!(DSP_OPS).cast::<DspOp>(), DSP_OP_COUNT);
+        let ops = core::slice::from_raw_parts(
+            core::ptr::addr_of!(kernel_global!(DSP_OPS)).cast::<DspOp>(),
+            kernel_global!(DSP_OP_COUNT),
+        );
         PLAN = Some(build_plan(ops));
     }
 }
@@ -570,12 +622,12 @@ unsafe fn render_repeat_lane(start: usize, count: usize, lane: usize) {
         .cast::<[f64; MAX_DSP_REGS]>()
         .add(lane);
     for &reg in &plan.inputs {
-        regs[reg] = DSP_REGS[reg];
+        regs[reg] = kernel_global!(DSP_REGS)[reg];
     }
     let mut left = 0.0;
     let mut right = 0.0;
     for item in first..last {
-        let spawn = DSP_OPS[start].opcode == DSP_OP_SPAWN_BEGIN;
+        let spawn = kernel_global!(DSP_OPS)[start].opcode == DSP_OP_SPAWN_BEGIN;
         let (state_ptr, resources, gate) = if spawn {
             let instance = &mut *REPEAT_SPAWN_PTR.add(item);
             (
@@ -611,12 +663,14 @@ unsafe fn render_repeat_lane(start: usize, count: usize, lane: usize) {
             states: context.states,
             state_start: context.state_start,
             state_count: context.state_count,
-            invalid_state: core::ptr::addr_of_mut!(REPEAT_INVALID_STATE).cast::<f64>().add(lane),
+            invalid_state: core::ptr::addr_of_mut!(REPEAT_INVALID_STATE)
+                .cast::<f64>()
+                .add(lane),
             item,
             gate,
         };
-        if spawn && DSP_OPS[start].c >= 0 {
-            regs[DSP_OPS[start].c as usize] = 0.0;
+        if spawn && kernel_global!(DSP_OPS)[start].c >= 0 {
+            regs[kernel_global!(DSP_OPS)[start].c as usize] = 0.0;
         }
         if !plan.explicit_context_only {
             set_active_repeat_context(&mut context);
@@ -624,15 +678,22 @@ unsafe fn render_repeat_lane(start: usize, count: usize, lane: usize) {
         for index in start + 1..plan.end {
             let collector_position = plan.collector_positions[index - start];
             if collector_position != usize::MAX {
-                let result = (*plan.results.get()).as_mut_ptr()
+                let result = (*plan.results.get())
+                    .as_mut_ptr()
                     .add(item * plan.collectors.len() + collector_position);
                 *result = regs[plan.collectors[collector_position].1.a as usize];
                 continue;
             }
-            let op = DSP_OPS[index];
+            let op = kernel_global!(DSP_OPS)[index];
             let repeated_resources = if !resources.is_null()
-                && matches!(op.opcode, DSP_OP_SAMPLE | DSP_OP_SAMPLE_PARAM | DSP_OP_RANDOM | DSP_OP_OSC | DSP_OP_DISTORTION)
-            {
+                && matches!(
+                    op.opcode,
+                    DSP_OP_SAMPLE
+                        | DSP_OP_SAMPLE_PARAM
+                        | DSP_OP_RANDOM
+                        | DSP_OP_OSC
+                        | DSP_OP_DISTORTION
+                ) {
                 Some(&mut *resources)
             } else {
                 None
@@ -650,10 +711,10 @@ unsafe fn render_repeat_lane(start: usize, count: usize, lane: usize) {
         if !plan.explicit_context_only {
             set_active_repeat_context(core::ptr::null_mut());
         }
-        if spawn && DSP_OPS[start].c >= 0 {
+        if spawn && kernel_global!(DSP_OPS)[start].c >= 0 {
             *core::ptr::addr_of_mut!(REPEAT_KILL_RESULTS)
                 .cast::<f64>()
-                .add(item) = regs[DSP_OPS[start].c as usize];
+                .add(item) = regs[kernel_global!(DSP_OPS)[start].c as usize];
         }
     }
 }
@@ -686,7 +747,7 @@ pub(super) unsafe fn render_repeat(
     }
     if plan.state_count != state_count
         || (state_count > 0 && states.is_null() && spawn.is_null())
-        || (DSP_OPS[start].opcode == DSP_OP_SPAWN_BEGIN) != !spawn.is_null()
+        || (kernel_global!(DSP_OPS)[start].opcode == DSP_OP_SPAWN_BEGIN) != !spawn.is_null()
     {
         return false;
     }
@@ -708,8 +769,9 @@ pub(super) unsafe fn render_repeat(
     }
     for &node in &plan.custom_wave_nodes {
         for lane in 0..=WORKERS {
-            CUSTOM_WAVE_MORPH_CONSUMED_FRAMES[node] =
-                CUSTOM_WAVE_MORPH_CONSUMED_FRAMES[node].max(REPEAT_MORPH_CONSUMED[lane][node]);
+            kernel_global!(CUSTOM_WAVE_MORPH_CONSUMED_FRAMES)[node] =
+                kernel_global!(CUSTOM_WAVE_MORPH_CONSUMED_FRAMES)[node]
+                    .max(REPEAT_MORPH_CONSUMED[lane][node]);
             REPEAT_MORPH_CONSUMED[lane][node] = 0;
         }
     }
@@ -717,18 +779,21 @@ pub(super) unsafe fn render_repeat(
         for (position, (_, collector)) in plan.collectors.iter().enumerate() {
             let value = (*plan.results.get())[item * plan.collectors.len() + position];
             let total = dsp_reg(collector.out);
-            set_dsp_reg(collector.out, local_sanitize(if collector.b == 1 {
-                total * value
-            } else {
-                total + value
-            }));
+            set_dsp_reg(
+                collector.out,
+                local_sanitize(if collector.b == 1 {
+                    total * value
+                } else {
+                    total + value
+                }),
+            );
         }
     }
     let main_regs = &*core::ptr::addr_of!(REPEAT_REGS).cast::<[f64; MAX_DSP_REGS]>();
     for &reg in &plan.writes {
-        DSP_REGS[reg] = main_regs[reg];
+        kernel_global!(DSP_REGS)[reg] = main_regs[reg];
     }
-    DSP_SPREAD_ITEM_INDEX = count - 1;
+    kernel_global!(DSP_SPREAD_ITEM_INDEX) = count - 1;
     true
 }
 

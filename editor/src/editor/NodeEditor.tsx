@@ -1,3 +1,11 @@
+import { useSyncExternalStore } from 'react';
+import { HostedSession } from '../hosted/session';
+import { useHostedAudio } from '../hosted/useHostedAudio';
+import { HostedModeContext } from '../hosted/HostedModeContext';
+import { preparePatch } from '../hosted/compiler';
+import { withParameterIds, cloneParameterIds } from '../hosted/document';
+import type { AudioEngineState } from '../audio/useAudioEngine';
+import { parsePatchJson, normalizeSelectedMidiDeviceIds, expressionInputDefinitions, syncParamsToInputs, isRecord, isNodeType, isNumberRecord, isSampleAsset, isImageAsset } from '../graph/parse';
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -329,19 +337,36 @@ interface CopiedGraph {
   edges: ShaderFlowEdge[];
 }
 
-export function NodeEditor() {
-  return (
-    <ReactFlowProvider>
-      <NodeEditorInner />
-    </ReactFlowProvider>
-  );
+export function NodeEditor({ hosted }: { hosted?: HostedSession } = {}) {
+  return <ReactFlowProvider>{hosted
+    ? <HostedEditorInner key={hosted.sessionId} hosted={hosted} />
+    : <StandaloneEditorInner />}</ReactFlowProvider>;
 }
-
-function NodeEditorInner() {
+function StandaloneEditorInner() {
+  const [options, setOptions] = useState({});
+  const audio = useAudioEngine(options);
+  return <NodeEditorInner audio={audio} onAudioOptions={setOptions} />;
+}
+function HostedEditorInner({ hosted }: { hosted: HostedSession }) {
+  const audio = useHostedAudio(hosted);
+  const capabilities = useMemo(() => ({ ...hosted.capabilities, assets: hosted.bridge.assets }), [hosted]);
+  return <HostedModeContext.Provider value={capabilities}><NodeEditorInner audio={audio} hosted={hosted} /></HostedModeContext.Provider>;
+}
+function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngineState; hosted?: HostedSession; onAudioOptions?: (options: { selectedMidiInputDeviceIds: string[]; selectedMidiOutputDeviceIds: string[]; midiClockOutputEnabled: boolean; recordingPatchName: string }) => void }) {
+  // Backend and initial source are chosen at construction, before device/storage hooks.
+  const hostedState = useSyncExternalStore(hosted?.subscribe ?? emptySubscribe, hosted?.getSnapshot ?? emptySnapshot, hosted?.getSnapshot ?? emptySnapshot);
   const flowStore = useStoreApi();
   const nodesInitialized = useNodesInitialized();
-  const initialState = useMemo(() => loadInitialEditorState(), []);
-  const storedViewport = useMemo(() => loadStoredViewport(), []);
+  const initialState = useMemo(() => {
+    if (!hosted) return loadInitialEditorState();
+    const document = hosted.getDocument();
+    const callbacks = nodeCallbacksPlaceholder();
+    const state = flowToEditorState(toFlowNodes(document, callbacks, null), toFlowEdges(document, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder), { patchName: document.name ?? 'hosted patch', ...(document.midiInput ? { midiInput: document.midiInput } : {}) });
+    state.areas = document.areas;
+    state.buffers = document.buffers;
+    return state;
+  }, []);
+  const storedViewport = useMemo(() => hosted ? null : loadStoredViewport(), []);
   const initialViewport = useMemo(
     () => storedViewport ?? initialState?.ui?.viewport ?? { x: 0, y: 0, zoom: USER_ZOOM_BASELINE },
     [initialState, storedViewport],
@@ -439,7 +464,7 @@ function NodeEditorInner() {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const fm1BusyRef = useRef(false);
-  const [fm1Mode, setFm1Mode] = useState(() => initialState?.ui?.fm1Mode === true);
+  const [fm1Mode, setFm1Mode] = useState(() => !hosted && initialState?.ui?.fm1Mode === true);
   const [fm1Live, setFm1Live] = useState(false);
   const [fm1Preset, setFm1Preset] = useState(1);
   const [fm1Patch, setFm1Patch] = useState<Patch | null>(null);
@@ -493,7 +518,9 @@ function NodeEditorInner() {
   const reconnectDuplicateRef = useRef(false);
   const reconnectingEdgeSnapshotRef = useRef<ShaderFlowEdge | null>(null);
   const rootPatchName = editingStack[0]?.parentPatchName ?? patchName;
-  const audio = useAudioEngine({ selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds, midiClockOutputEnabled, recordingPatchName: rootPatchName });
+  useEffect(() => {
+    onAudioOptions?.({ selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds, midiClockOutputEnabled, recordingPatchName: rootPatchName });
+  }, [onAudioOptions, selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds, midiClockOutputEnabled, rootPatchName]);
 
   useEffect(() => {
     bufferAssetsRef.current = bufferAssets;
@@ -505,6 +532,7 @@ function NodeEditorInner() {
   }, []);
 
   const clearBufferRecording = useCallback((nodeId: string) => {
+    if (hosted) { void hosted.mutateBuffer('clear', nodeId).then(applied => { if (!applied) setImportError('The host did not acknowledge clearing the Buffer.'); }); return; }
     audio.clearBuffer(nodeId);
     bufferLoadGenerationRef.current += 1;
     if (!bufferAssetsRef.current[nodeId]) return;
@@ -515,6 +543,7 @@ function NodeEditorInner() {
   }, [audio.clearBuffer, replaceBufferAssets]);
 
   const restoreBufferAssets = useCallback(async (assets: Record<string, BufferAsset>) => {
+    if (hosted) { replaceBufferAssets(assets); return; }
     const generation = bufferLoadGenerationRef.current + 1;
     bufferLoadGenerationRef.current = generation;
     replaceBufferAssets(assets);
@@ -577,7 +606,7 @@ function NodeEditorInner() {
   const recordingButtonLabel = audioRecordingActive
     ? formatRecordingTimestamp(audio.recording.elapsedSeconds)
     : 'REC';
-  const localPatchStorageEnabled = useMemo(() => canUseLocalPatchStorage(), []);
+  const localPatchStorageEnabled = useMemo(() => !hosted && canUseLocalPatchStorage(), []);
   const [reconnectPreviewEdge, setReconnectPreviewEdge] = useState<ShaderFlowEdge | null>(null);
   const [areaDraw, setAreaDraw] = useState<AreaDrawState | null>(null);
   const [resumedSelectionDraw, setResumedSelectionDraw] = useState<AreaDrawState | null>(null);
@@ -597,6 +626,7 @@ function NodeEditorInner() {
   }, [editingAreaId]);
 
   const toggleAudioPlayback = useCallback(() => {
+    if (hosted) { void hosted.toggleTransport(); return; }
     if (fm1Mode) { setFm1Live(current => current ? false : !fm1BusyRef.current); return; }
     if (audioPlaybackActive) {
       audio.stop();
@@ -606,6 +636,7 @@ function NodeEditorInner() {
   }, [fm1Mode, audioPlaybackActive, audio.start, audio.stop]);
 
   const toggleAudioRecording = useCallback(() => {
+    if (hosted) { setImportError('Recording is owned by the host.'); return; }
     if (audioRecordingActive) {
       audio.stopRecording();
       return;
@@ -655,6 +686,7 @@ function NodeEditorInner() {
   useEffect(() => {
     const handlePlaybackKeyDown = (event: KeyboardEvent) => {
       if (event.key !== ' ' || event.repeat) return;
+      if (hosted && !hosted.capabilities.transport) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isEditableEventTarget(event.target) && !isPlaybackShortcutControlEventTarget(event.target)) return;
 
@@ -1004,6 +1036,7 @@ function NodeEditorInner() {
   useEffect(() => resetSampleRecording, [resetSampleRecording]);
 
   const startSampleRecording = useCallback(async () => {
+    if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     if (!sampleLibrary || sampleRecording.status !== 'idle') return;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setSampleLibrary((current) => current ? { ...current, error: 'Microphone recording is not supported by this browser.' } : current);
@@ -1100,6 +1133,16 @@ function NodeEditorInner() {
   }, []);
 
   const openSampleLibrary = useCallback(async (nodeId: string) => {
+    if (hosted) {
+      const select = hosted.bridge.assets?.selectMedia;
+      if (!select) { setImportError('Media selection requires a supplied host asset adapter.'); return; }
+      try {
+        const current = nodesRef.current.find(node => node.id === nodeId)?.data.patchNode.sample;
+        const asset = await hosted.selectMedia({ kind: 'sample', nodeId, current });
+        if (asset) updateNodeSample(nodeId, asset);
+      } catch (error) { setImportError(String(error)); }
+      return;
+    }
     const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
     if (!relatedNode || relatedNode.data.patchNode.type !== 'SamplePlayer') return;
 
@@ -1151,16 +1194,19 @@ function NodeEditorInner() {
   }, [sampleLibrary, updateNodeSample]);
 
   const requestSampleUpload = useCallback((nodeId: string) => {
+    if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     pendingSampleUploadNodeIdRef.current = nodeId;
     sampleFileInputRef.current?.click();
   }, []);
 
   const requestSampleUploadFromLibrary = useCallback(() => {
+    if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     if (!sampleLibrary) return;
     requestSampleUpload(sampleLibrary.nodeId);
   }, [requestSampleUpload, sampleLibrary]);
 
   const uploadSampleForNode = useCallback(async (nodeId: string, file: File) => {
+    if (hosted) { setImportError('Media editing requires a supplied host asset adapter.'); return; }
     if (!file || !nodeId) return false;
 
     try {
@@ -1194,6 +1240,7 @@ function NodeEditorInner() {
   }, [sampleLibrary, sampleRecording, uploadSampleForNode]);
 
   const uploadDroppedSampleFiles = useCallback((nodeId: string, files: FileList) => {
+    if (hosted) { setImportError('Media editing requires a supplied host asset adapter.'); return; }
     const file = files[0];
     if (!file) return;
     void uploadSampleForNode(nodeId, file);
@@ -1226,6 +1273,16 @@ function NodeEditorInner() {
   }, [sampleLibrary, uploadDroppedSampleFiles]);
 
   const openImageLibrary = useCallback(async (nodeId: string) => {
+    if (hosted) {
+      const select = hosted.bridge.assets?.selectMedia;
+      if (!select) { setImportError('Media selection requires a supplied host asset adapter.'); return; }
+      try {
+        const current = nodesRef.current.find(node => node.id === nodeId)?.data.patchNode.image;
+        const asset = await hosted.selectMedia({ kind: 'image', nodeId, current });
+        if (asset) updateNodeImage(nodeId, asset);
+      } catch (error) { setImportError(String(error)); }
+      return;
+    }
     const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
     if (!relatedNode || relatedNode.data.patchNode.type !== 'Image') return;
     const currentImage = relatedNode.data.patchNode.image ?? null;
@@ -1249,11 +1306,13 @@ function NodeEditorInner() {
   }, []);
 
   const requestImageUpload = useCallback((nodeId: string) => {
+    if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     pendingImageUploadNodeIdRef.current = nodeId;
     imageFileInputRef.current?.click();
   }, []);
 
   const uploadImageForNode = useCallback(async (nodeId: string, file: File) => {
+    if (hosted) { setImportError('Media editing requires a supplied host asset adapter.'); return; }
     if (!file || !nodeId) return;
     try {
       setImageLibrary((current) => current && current.nodeId === nodeId ? { ...current, loading: true, error: null } : current);
@@ -1274,6 +1333,7 @@ function NodeEditorInner() {
   }, [updateNodeImage]);
 
   const uploadImageFile = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    if (hosted) { setImportError('Media editing requires a supplied host asset adapter.'); return; }
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     const nodeId = pendingImageUploadNodeIdRef.current;
@@ -1303,6 +1363,7 @@ function NodeEditorInner() {
   }, [imageLibrary, updateNodeImage]);
 
   const requestImageUploadFromLibrary = useCallback(() => {
+    if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     if (imageLibrary) requestImageUpload(imageLibrary.nodeId);
   }, [imageLibrary, requestImageUpload]);
 
@@ -1688,7 +1749,7 @@ function NodeEditorInner() {
               ? renamePortDefinitions(node.data.patchNode.inputs, port, nextPort)
               : node.data.patchNode.inputs,
             outputs: side === 'output'
-              ? renamePortDefinitions(node.data.patchNode.outputs, port, nextPort)
+              ? renamePortDefinitions(node.data.patchNode.type === 'Params' ? withParameterIds({ nodes: [node.data.patchNode as PatchNode], links: [] }).nodes[0].outputs : node.data.patchNode.outputs, port, nextPort)
               : node.data.patchNode.outputs,
             params: nextBoundaryPortParams(node.data.patchNode as PatchNode, side, port, nextPort),
           },
@@ -3117,6 +3178,7 @@ function NodeEditorInner() {
   const patch = useMemo(() => ({
     ...patchFromFlow(materializedGraph.nodes, materializedGraph.edges, editingStack.length === 0 ? areas : editingStack[0]?.parentAreas),
     name: rootPatchName,
+    ...(hosted?.getDocument().schemaVersion ? { schemaVersion: 1 as const } : {}),
     ...(selectedMidiInputDeviceIds.length > 0 || selectedMidiOutputDeviceIds.length > 0 || midiClockOutputEnabled
       ? { midiInput: {
         selectedDeviceIds: selectedMidiInputDeviceIds,
@@ -3125,6 +3187,11 @@ function NodeEditorInner() {
       } }
       : {}),
   }), [areas, editingStack, materializedGraph, midiClockOutputEnabled, rootPatchName, selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds]);
+  const hostedInitialViewRef = useRef(false);
+  useEffect(() => {
+    if (hosted && !hostedInitialViewRef.current) { hostedInitialViewRef.current = true; return; }
+    if (hosted) void hosted.edit({ ...patch, ...(Object.keys(bufferAssets).length ? { buffers: bufferAssets } : {}) });
+  }, [hosted, patch, bufferAssets]);
   const fm1LiveState = useFm1LiveEdit(patch, fm1Mode && fm1Live, fm1Preset, () => setFm1Live(false));
   fm1BusyRef.current = fm1LiveState.busy;
   const trimmedRootPatchName = rootPatchName.trim();
@@ -3139,7 +3206,11 @@ function NodeEditorInner() {
   // `liveDspPatch` is rebuilt from editor state on every canvas move. Its key
   // contains every DSP-relevant field, so using the key as the memo boundary
   // prevents a layout-only update from recompiling the program.
-  const audioGraph = useMemo(() => compilePatchToDspProgram(liveDspPatch), [dspPatchKey]);
+  const audioGraph = useMemo(() => {
+    const prepared = preparePatch(liveDspPatch);
+    const program = 'program' in prepared ? prepared.program : compilePatchToDspProgram({ nodes: [], links: [] });
+    return { ...program, errors: [...new Set([...program.errors, ...prepared.diagnostics.filter(d => d.severity === 'error').map(d => d.message)])] };
+  }, [dspPatchKey]);
   const preservedBufferNodeIds = useMemo(() => preservedBufferIds(audioGraph), [audioGraph]);
   const referencedBufferAssets = useMemo(() => filterBufferAssets(bufferAssets, preservedBufferNodeIds), [bufferAssets, preservedBufferNodeIds]);
   const persistedEditorStateJson = useMemo(() => {
@@ -3687,10 +3758,11 @@ function NodeEditorInner() {
   );
 
   useEffect(() => {
-    audio.syncGraph(audioGraph);
+    if (!hosted) audio.syncGraph(audioGraph);
   }, [audio.syncGraph, audioGraph]);
 
   const checkpointPreservedBuffers = useCallback((): Promise<Record<string, BufferAsset>> => {
+    if (hosted) return Promise.resolve(bufferAssetsRef.current);
     if (bufferCheckpointRef.current) return bufferCheckpointRef.current;
     const loadGeneration = bufferLoadGenerationRef.current;
     const checkpoint = (async () => {
@@ -3711,7 +3783,7 @@ function NodeEditorInner() {
   }, [audio.captureBuffer, audioGraph, replaceBufferAssets]);
 
   useEffect(() => {
-    if (audio.status !== 'running' || preservedBufferNodeIds.size === 0) return;
+    if (hosted || audio.status !== 'running' || preservedBufferNodeIds.size === 0) return;
     const interval = window.setInterval(() => {
       void checkpointPreservedBuffers().catch(() => undefined);
     }, BUFFER_CHECKPOINT_INTERVAL_MS);
@@ -3722,12 +3794,13 @@ function NodeEditorInner() {
   useEffect(() => {
     const previousStatus = previousAudioStatusRef.current;
     previousAudioStatusRef.current = audio.status;
-    if (previousStatus === 'running' && audio.status !== 'running' && preservedBufferNodeIds.size > 0) {
+    if (!hosted && previousStatus === 'running' && audio.status !== 'running' && preservedBufferNodeIds.size > 0) {
       void checkpointPreservedBuffers().catch(() => undefined);
     }
   }, [audio.status, checkpointPreservedBuffers, preservedBufferNodeIds]);
 
   useEffect(() => {
+    if (hosted) return;
     const checkpointWhenHidden = () => {
       if (document.visibilityState === 'hidden' && preservedBufferNodeIds.size > 0) {
         void checkpointPreservedBuffers().catch(() => undefined);
@@ -3747,7 +3820,7 @@ function NodeEditorInner() {
 
     viewportRef.current = clampedViewport;
     setSettledViewport(clampedViewport);
-    storeViewport(clampedViewport);
+    if (!hosted) storeViewport(clampedViewport);
     void reactFlow.setViewport(clampedViewport);
   }, [editorSize, panTranslateExtent, reactFlow, settledViewport]);
 
@@ -3773,10 +3846,11 @@ function NodeEditorInner() {
   }, [activeDspGroupIds, audio.setLinkScopes, editorSize, edges, fullscreenScopeId, monitorLinkIdByNode, nodesWithCallbacks, settledViewport]);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, persistedEditorStateJson);
+    if (!hosted) window.localStorage.setItem(STORAGE_KEY, persistedEditorStateJson);
   }, [persistedEditorStateJson]);
 
   useEffect(() => {
+    if (hosted) return;
     const persistLatestEditorState = () => {
       const json = persistedEditorStateJsonRef.current;
       if (json !== null) window.localStorage.setItem(STORAGE_KEY, json);
@@ -4494,7 +4568,15 @@ function NodeEditorInner() {
     } : current);
   }, []);
 
-  const savePatchJson = useCallback(async () => {
+  const savePatchJson = useCallback(async (saveAs = false) => {
+    if (hosted) {
+      if (!hosted.capabilities.save || (saveAs && !hosted.capabilities.saveAs)) { setImportError('The host does not allow this Save operation.'); return; }
+      // Snapshot the latest React document before Save, even if an effect is pending.
+      void hosted.edit({ ...patch, ...(Object.keys(bufferAssetsRef.current).length ? { buffers: bufferAssetsRef.current } : {}) });
+      if (await hosted.save(saveAs)) { setImportError(null); showSaveFeedback(); }
+      else setImportError(hosted.getSnapshot().saveDiagnostics?.map(d => d.message).join('\n') || 'The host did not acknowledge Save. The working document is retained.');
+      return;
+    }
     let savedBufferAssets: Record<string, BufferAsset>;
     try {
       savedBufferAssets = await checkpointPreservedBuffers();
@@ -4536,7 +4618,20 @@ function NodeEditorInner() {
     showSaveFeedback();
   }, [checkpointPreservedBuffers, localPatchStorageEnabled, patch, rootPatchName, showSaveFeedback, trimmedRootPatchName]);
 
+  useEffect(() => {
+    if (!hosted) return;
+    const saveKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (!event.repeat) void savePatchJson(event.shiftKey);
+      }
+    };
+    window.addEventListener('keydown', saveKey);
+    return () => window.removeEventListener('keydown', saveKey);
+  }, [hosted, savePatchJson]);
+
   const exportPatchPackage = useCallback(async () => {
+    if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     try {
       const savedBufferAssets = await checkpointPreservedBuffers();
       const exportPatch: Patch = {
@@ -4547,7 +4642,7 @@ function NodeEditorInner() {
         ...exportPatch,
         nodes: exportPatch.nodes.map((node) => node.type === 'Params' ? { ...node, enabled: true } : node),
       };
-      const blob = await createPatchPackage(compiledPatch, compilePatchToDspProgram(stripPatchForDsp(compiledPatch)));
+      const blob = await createPatchPackage(compiledPatch);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -4563,6 +4658,7 @@ function NodeEditorInner() {
   }, [checkpointPreservedBuffers, patch, rootPatchName]);
 
   const requestPatchLoad = useCallback(() => {
+    if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     if (localPatchStorageEnabled) {
       void openLocalPatchLibrary();
       return;
@@ -4636,6 +4732,7 @@ function NodeEditorInner() {
   }, [importSubpatchCandidate, localSubpatchImport]);
 
   const requestSubpatchImport = useCallback(() => {
+    if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     if (!localPatchStorageEnabled) {
       importFileInputRef.current?.click();
       return;
@@ -4706,6 +4803,7 @@ function NodeEditorInner() {
   }, []);
 
   const newPatch = useCallback(() => {
+    if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     setNewPatchConfirmationOpen(true);
   }, []);
 
@@ -5641,7 +5739,7 @@ function NodeEditorInner() {
     zoomInteractionRef.current = { zoomChanged: false, lastZoom: nextViewport.zoom };
     viewportRef.current = nextViewport;
     setSettledViewport(nextViewport);
-    storeViewport(nextViewport);
+    if (!hosted) storeViewport(nextViewport);
 
     // React Flow reports programmatic viewport changes with a null event. Only
     // settle direct pinch/zoom gestures; otherwise a reset animation can start
@@ -6005,8 +6103,9 @@ function NodeEditorInner() {
                 {formatZoomPercentage(settledViewport.zoom)}
               </ControlButton>
               <div
+                hidden={Boolean(hosted)}
                 className={`react-flow__controls-cpu-meter${audio.status === 'running' ? ' is-running' : ''}`}
-                style={{ '--cpu-load': cpuLoad } as CSSProperties}
+                style={{ '--cpu-load': cpuLoad, display: hosted ? 'none' : undefined } as CSSProperties}
                 role="meter"
                 aria-label={audio.status === 'running' ? `CPU usage ${cpuPercentage}%` : 'CPU usage, audio stopped'}
                 aria-valuemin={0}
@@ -6042,7 +6141,10 @@ function NodeEditorInner() {
             {isEditingSubpatch ? (
               <button className="viewport-button viewport-button-history" type="button" onClick={exitSubpatch} aria-label="Exit subpatch" title="Exit subpatch">EXIT</button>
             ) : null}
-            {fm1Mode ? <>
+            {hosted ? <>
+              <span title="Audio and document paths are owned by the host">HOSTED · {hostedState?.dirty ? 'unsaved' : 'saved'}</span>
+              {hosted.capabilities.transport && <button className="viewport-button" type="button" onClick={toggleAudioPlayback}>TRANSPORT</button>}
+            </> : fm1Mode ? <>
               <button className="viewport-button" type="button" role="switch" aria-checked={fm1Live}
                 disabled={!fm1Live && fm1LiveState.busy} onClick={() => setFm1Live(value => !value)} title={fm1LiveState.message}>LIVE EDIT</button>
               <button className="viewport-button" type="button" disabled={fm1Live || fm1LiveState.busy}
@@ -6075,18 +6177,19 @@ function NodeEditorInner() {
               {recordingButtonLabel}
             </button>
             </>}
-            <button className="viewport-button" type="button" onClick={newPatch} aria-label="New patch" title="New patch">NEW</button>
+            {!hosted && <button className="viewport-button" type="button" onClick={newPatch} aria-label="New patch" title="New patch">NEW</button>}
             <button
               className={['viewport-button', saveFeedbackActive ? 'viewport-button-save-confirmed' : ''].filter(Boolean).join(' ')}
               type="button"
               onClick={() => void savePatchJson()}
-              disabled={localPatchStorageEnabled && trimmedRootPatchName.length === 0}
+              disabled={hosted ? !hosted.capabilities.save || !hostedState?.connected : localPatchStorageEnabled && trimmedRootPatchName.length === 0}
               aria-label="Save patch"
-              title={localPatchStorageEnabled && trimmedRootPatchName.length === 0 ? 'Enter a patch name before saving locally' : 'Save patch'}
+              title={hosted ? !hosted.capabilities.save ? 'The host does not allow saving' : !hostedState?.connected ? 'Host disconnected' : 'Save through the host' : localPatchStorageEnabled && trimmedRootPatchName.length === 0 ? 'Enter a patch name before saving locally' : 'Save patch'}
             >
               SAVE
             </button>
-            <button className="viewport-button" type="button" onClick={requestPatchLoad} aria-label="Load patch" title="Load patch">LOAD</button>
+            {!hosted && <button className="viewport-button" type="button" onClick={requestPatchLoad} aria-label="Load patch" title="Load patch">LOAD</button>}
+            {hosted?.capabilities.saveAs && <button className="viewport-button" type="button" onClick={() => void savePatchJson(true)}>SAVE AS</button>}
             <button className="viewport-button viewport-button-history" type="button" onClick={undo} disabled={history.past.length === 0} aria-label="Undo" title="Undo">UNDO</button>
             <button className="viewport-button viewport-button-history" type="button" onClick={redo} disabled={history.future.length === 0} aria-label="Redo" title="Redo">REDO</button>
             <div className="viewport-more" data-open={moreMenuOpen}
@@ -6108,11 +6211,13 @@ function NodeEditorInner() {
                   if (event.currentTarget.contains(document.activeElement)) moreMenuTriggerRef.current?.focus();
                   setMoreMenuOpen(false);
                 }}>
+                {!hosted && <>
                 <button className="viewport-button" type="button" onClick={() => setMidiSettingsOpen(true)} aria-label="MIDI settings" title="MIDI settings" role="menuitem">MIDI SETTINGS</button>
                 <button className="viewport-button" type="button" onClick={() => void exportPatchPackage()} aria-label="Export patch package" title="Export patch package" role="menuitem">EXPORT PATCH</button>
                 <button className="viewport-button" type="button" role="menuitemcheckbox" aria-checked={fm1Mode}
                   disabled={fm1LiveState.busy} onClick={() => { audio.stopRecording(); audio.stop(); setFm1Live(false); setFm1Mode(value => !value); }}>FM1 MODE</button>
                 {!fm1Mode && <button className="viewport-button" type="button" disabled={fm1Live || fm1LiveState.busy} onClick={() => setFm1Patch(patch)} aria-label="Send patch to FM-1" title="FM-1 limits and upload" role="menuitem">SEND TO FM1</button>}
+                </>}
                 <button className="viewport-button" type="button" onClick={() => scaleSelectedNodes(2)} disabled={!canScaleSelection} aria-label="Increase selected node scale" title="Increase selected node scale" role="menuitem">SCALE UP SELECTION</button>
                 <button className="viewport-button" type="button" onClick={() => scaleSelectedNodes(0.5)} disabled={!canScaleSelection} aria-label="Decrease selected node scale" title="Decrease selected node scale" role="menuitem">SCALE DOWN SELECTION</button>
                 <button className="viewport-button" type="button" onClick={groupSelectedNodes} disabled={!canGroupSelection || isEditingSubpatch} aria-label="Group to subpatch" title="Group to subpatch" role="menuitem">GROUP TO SUBPATCH</button>
@@ -6126,6 +6231,9 @@ function NodeEditorInner() {
           <input ref={sampleFileInputRef} className="file-input" type="file" accept="audio/*,video/mp4,.wav,.mp3,.aiff,.aif,.flac,.ogg,.m4a,.mp4" onChange={uploadSampleFile} />
           <input ref={imageFileInputRef} className="file-input" type="file" accept="image/avif,image/gif,image/jpeg,image/png,image/webp,.avif,.gif,.jpg,.jpeg,.png,.webp" onChange={uploadImageFile} />
           {fm1Patch && <Fm1UploadDialog patch={fm1Patch} onClose={() => setFm1Patch(null)} />}
+          {hostedState && <p className="import-error-floating" aria-live="polite">{hostedState.connected ? `revision ${hostedState.revision}; installed ${hostedState.installedRevision ?? 'host initial'}; generation ${hostedState.generation ?? 'unknown'}` : 'Host disconnected; working document retained.'}{hostedState.diagnostics.filter(d => d.severity !== 'info').map(d => ` · ${d.message}`).join('')}</p>}
+          {hostedState?.feedback?.tempo && <output className="hosted-tempo-feedback" aria-label="Host tempo">{hostedState.feedback.tempo.bpm} beats per minute · {hostedState.feedback.tempo.running ? 'running' : 'stopped'}</output>}
+          {hostedState?.feedback?.parameters && <output className="hosted-parameter-feedback" aria-label="Host instance parameters">{Object.entries(hostedState.feedback.parameters).map(([id, value]) => <span key={id}>{hosted?.getParameterLabel(id)}: {value} </span>)}</output>}
           {importError ? <p className="import-error-floating">{importError}</p> : null}
           {audioGraph.errors.length > 0 ? (
             <section className="dsp-error-panel" aria-live="polite" aria-label="DSP compile errors">
@@ -7077,110 +7185,10 @@ function padDatePart(value: number): string {
   return String(value).padStart(2, '0');
 }
 
-function parsePatchJson(json: string): Patch {
-  const parsed = JSON.parse(json) as unknown;
-  return parsePatchObject(parsed, 'Patch JSON');
-}
 
-function parsePatchObject(value: unknown, label: string): Patch {
-  if (!isRecord(value)) {
-    throw new Error(`${label} must be an object.`);
-  }
-  if (!Array.isArray(value.nodes)) {
-    throw new Error(`${label} must contain a nodes array.`);
-  }
-  if (!Array.isArray(value.links)) {
-    throw new Error(`${label} must contain a links array.`);
-  }
 
-  return normalizePatchCompatibility({
-    ...(typeof value.name === 'string' ? { name: value.name } : {}),
-    ...parseBufferAssets(value.buffers, label),
-    ...parseMidiInputPreferences(value.midiInput),
-    ...parsePatchAreas(value.areas, label),
-    nodes: value.nodes.flatMap((node, index) => {
-      const parsedNode = parsePatchNode(node, index);
-      return parsedNode ? [parsedNode] : [];
-    }),
-    links: value.links.map((link, index) => parsePatchLink(link, index)),
-  });
-}
 
-function parseBufferAssets(value: unknown, label: string): Pick<Patch, 'buffers'> {
-  if (value === undefined) return {};
-  if (!isRecord(value)) throw new Error(`${label} buffers must be an object.`);
-  const buffers: Record<string, BufferAsset> = {};
-  for (const [nodeId, entry] of Object.entries(value)) {
-    if (
-      !nodeId
-      || !isRecord(entry)
-      || typeof entry.hash !== 'string'
-      || !/^[a-f0-9]{64}$/.test(entry.hash)
-      || typeof entry.sampleRate !== 'number'
-      || !Number.isFinite(entry.sampleRate)
-      || entry.sampleRate <= 0
-      || typeof entry.sampleCount !== 'number'
-      || !Number.isSafeInteger(entry.sampleCount)
-      || entry.sampleCount < 2
-      || entry.sampleCount > 960_000
-    ) {
-      throw new Error(`${label} has an invalid Buffer reference for "${nodeId}".`);
-    }
-    buffers[nodeId] = {
-      hash: entry.hash,
-      sampleRate: entry.sampleRate,
-      sampleCount: entry.sampleCount,
-    };
-  }
-  return Object.keys(buffers).length > 0 ? { buffers } : {};
-}
 
-function parsePatchAreas(value: unknown, label: string): Pick<Patch, 'areas'> {
-  if (value === undefined) return {};
-  if (!Array.isArray(value)) throw new Error(`${label} areas must be an array.`);
-  const areas = value.map((area, index): EditorArea => {
-    if (!isRecord(area) || typeof area.id !== 'string' || typeof area.title !== 'string') {
-      throw new Error(`${label} area ${index} needs string id and title values.`);
-    }
-    if (!isRecord(area.position) || !isRecord(area.size)
-      || typeof area.position.x !== 'number' || typeof area.position.y !== 'number'
-      || typeof area.size.width !== 'number' || typeof area.size.height !== 'number') {
-      throw new Error(`${label} area ${index} needs numeric position and size values.`);
-    }
-    return {
-      id: area.id,
-      title: area.title,
-      position: { x: area.position.x, y: area.position.y },
-      size: { width: area.size.width, height: area.size.height },
-      ...(area.kind === 'spread' ? { kind: 'spread' as const } : {}),
-      ...(typeof area.spreadNodeId === 'string' ? { spreadNodeId: area.spreadNodeId } : {}),
-      ...(typeof area.uiHeight === 'number' ? { uiHeight: area.uiHeight } : {}),
-      ...(typeof area.collapsed === 'boolean' ? { collapsed: area.collapsed } : {}),
-      ...(typeof area.locked === 'boolean' ? { locked: area.locked } : {}),
-      ...(Array.isArray(area.nodeIds) && area.nodeIds.every((entry) => typeof entry === 'string')
-        ? { nodeIds: area.nodeIds as string[] }
-        : {}),
-      ...(Array.isArray(area.areaIds) && area.areaIds.every((entry) => typeof entry === 'string')
-        ? { areaIds: area.areaIds as string[] }
-        : {}),
-    };
-  });
-  return areas.length > 0 ? { areas } : {};
-}
-
-function parseMidiInputPreferences(value: unknown): Pick<Patch, 'midiInput'> {
-  if (!isRecord(value)) return {};
-  const selectedDeviceIds = normalizeSelectedMidiDeviceIds(value.selectedDeviceIds);
-  const selectedOutputDeviceIds = normalizeSelectedMidiDeviceIds(value.selectedOutputDeviceIds);
-  const sendClock = value.sendClock === true;
-  return selectedDeviceIds.length > 0 || selectedOutputDeviceIds.length > 0 || sendClock
-    ? { midiInput: {
-      selectedDeviceIds,
-      ...(selectedOutputDeviceIds.length > 0 ? { selectedOutputDeviceIds } : {}),
-      ...(sendClock ? { sendClock: true } : {}),
-    } }
-    : {};
-}
 
 function patchToDspKey(patch: Patch): string {
   return JSON.stringify(patch);
@@ -7389,264 +7397,22 @@ function stripPatchNodeForDsp(node: PatchNode, includeLayout: boolean): PatchNod
   };
 }
 
-function parsePatchNode(value: unknown, index: number): PatchNode | null {
-  if (!isRecord(value)) {
-    throw new Error(`Node ${index} must be an object.`);
-  }
-  if (typeof value.id !== 'string' || value.id.trim() === '') {
-    throw new Error(`Node ${index} needs a string id.`);
-  }
-  if (!isNodeType(value.type)) {
-    return null;
-  }
-  if (!isNumberRecord(value.params)) {
-    throw new Error(`Node "${value.id}" needs numeric params.`);
-  }
-  if (value.expression !== undefined && typeof value.expression !== 'string') {
-    throw new Error(`Node "${value.id}" expression must be a string.`);
-  }
-  if (value.subpatchName !== undefined && typeof value.subpatchName !== 'string') {
-    throw new Error(`Node "${value.id}" subpatchName must be a string.`);
-  }
-  if (value.customLabel !== undefined && typeof value.customLabel !== 'string') {
-    throw new Error(`Node "${value.id}" customLabel must be a string.`);
-  }
-  if (value.subpatchCloneId !== undefined && typeof value.subpatchCloneId !== 'string') {
-    throw new Error(`Node "${value.id}" subpatchCloneId must be a string.`);
-  }
-  const subpatchUiOverrides = parseSubpatchUiOverrides(value.subpatchUiOverrides, value.id);
-  if (value.sample !== undefined && !isSampleAsset(value.sample)) {
-    throw new Error(`Node "${value.id}" sample must include a string name and url.`);
-  }
-  if (value.image !== undefined && !isImageAsset(value.image)) {
-    throw new Error(`Node "${value.id}" image must include a string name and url.`);
-  }
-  if (value.compactPorts !== undefined && typeof value.compactPorts !== 'boolean') {
-    throw new Error(`Node "${value.id}" compactPorts must be a boolean.`);
-  }
-  if (value.enabled !== undefined && typeof value.enabled !== 'boolean') {
-    throw new Error(`Node "${value.id}" enabled must be a boolean.`);
-  }
-  if (value.spreadNodeIds !== undefined && (
-    !Array.isArray(value.spreadNodeIds)
-    || !value.spreadNodeIds.every((entry) => typeof entry === 'string')
-  )) {
-    throw new Error(`Node "${value.id}" spreadNodeIds must be an array of strings.`);
-  }
-  if (value.scale !== undefined && (typeof value.scale !== 'number' || !Number.isFinite(value.scale) || value.scale <= 0)) {
-    throw new Error(`Node "${value.id}" scale must be a positive finite number.`);
-  }
 
-  const position = value.position === undefined ? undefined : parsePosition(value.position, value.id);
-  const scopeSize = value.scopeSize === undefined ? undefined : parseNodeDisplaySize(value.scopeSize, value.id, value.type);
-  const parsedInputs = value.inputs === undefined ? undefined : parsePortDefinitions(value.inputs, `Node "${value.id}" inputs`);
-  const outputs = value.outputs === undefined ? undefined : parsePortDefinitions(value.outputs, `Node "${value.id}" outputs`);
-  const subpatch = value.subpatch === undefined ? undefined : parsePatchObject(value.subpatch, `Node "${value.id}" subpatch`);
-  const expression = value.type === 'Expression'
-    ? (value.expression ?? DEFAULT_EXPRESSION)
-    : value.expression;
-  const inputs = value.type === 'Expression' && expression !== undefined
-    ? (parsedInputs ?? expressionInputDefinitions(expression))
-    : normalizeLegacyInputDefinitions(value.type, parsedInputs);
-  const params = value.type === 'Expression' && inputs
-    ? syncParamsToInputs(value.params, inputs)
-    : normalizeLegacyNodeParams(value.type, value.params);
-  const customWave = value.type === 'CustomWave'
-    ? normalizeCustomWave(parseCustomWaveLike(value.customWave, value.id), params)
-    : undefined;
 
-  return {
-    id: value.id,
-    type: value.type,
-    ...(typeof value.customLabel === 'string' && value.customLabel.trim() ? { customLabel: value.customLabel.trim() } : {}),
-    ...(value.subpatchName ? { subpatchName: value.subpatchName } : {}),
-    ...(value.subpatchCloneId ? { subpatchCloneId: value.subpatchCloneId } : {}),
-    ...(subpatchUiOverrides ? { subpatchUiOverrides } : {}),
-    ...(expression !== undefined ? { expression } : {}),
-    ...(isSampleAsset(value.sample) ? { sample: value.sample } : {}),
-    ...(isImageAsset(value.image) ? { image: value.image } : {}),
-    ...(customWave ? { customWave } : {}),
-    params,
-    ...(position ? { position } : {}),
-    ...(typeof value.scale === 'number' ? { scale: value.scale } : {}),
-    ...(scopeSize ? { scopeSize } : {}),
-    ...(inputs ? { inputs } : {}),
-    ...(outputs ? { outputs } : {}),
-    ...(subpatch ? { subpatch } : {}),
-    ...(typeof value.compactPorts === 'boolean' ? { compactPorts: value.compactPorts } : {}),
-    ...(value.enabled === false ? { enabled: false } : {}),
-    ...(Array.isArray(value.spreadNodeIds) ? { spreadNodeIds: value.spreadNodeIds as string[] } : {}),
-  };
-}
 
-function normalizeLegacyNodeParams(type: NodeType, params: Record<string, number>): Record<string, number> {
-  if (type !== 'SamplePlayer' || params.originalFrequency !== undefined || params.originalPitch === undefined) {
-    return params;
-  }
 
-  const { originalPitch, ...nextParams } = params;
-  return {
-    ...nextParams,
-    originalFrequency: midiNoteFrequency(originalPitch),
-  };
-}
 
-function normalizeLegacyInputDefinitions(type: NodeType, inputs: PortDefinition[] | undefined): PortDefinition[] | undefined {
-  if (type === 'Playhead') {
-    if (!inputs || inputs.some((input) => input.name === 'length')) return inputs;
-    return [...inputs, { name: 'length', defaultValue: 1, min: 0.001 }];
-  }
 
-  if (type !== 'SamplePlayer') return inputs;
-  return inputs?.map((input) => (
-    input.name === 'originalPitch'
-      ? { ...input, name: 'originalFrequency', defaultValue: input.defaultValue === 60 ? 440 : input.defaultValue }
-      : input
-  ));
-}
 
-function midiNoteFrequency(note: number): number {
-  return 440 * (2 ** ((note - 69) / 12));
-}
 
-function parseCustomWaveLike(value: unknown, nodeId: string): Partial<CustomWaveSettings> | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) {
-    throw new Error(`Node "${nodeId}" customWave must be an object.`);
-  }
-  if (value.points !== undefined && !Array.isArray(value.points)) {
-    throw new Error(`Node "${nodeId}" customWave.points must be an array.`);
-  }
-  return value as Partial<CustomWaveSettings>;
-}
 
-function isSampleAsset(value: unknown): value is SampleAsset {
-  return isRecord(value) && typeof value.name === 'string' && typeof value.url === 'string';
-}
 
-function isImageAsset(value: unknown): value is ImageAsset {
-  return isRecord(value) && typeof value.name === 'string' && typeof value.url === 'string';
-}
 
-function parsePosition(value: unknown, nodeId: string): { x: number; y: number } {
-  if (!isRecord(value) || typeof value.x !== 'number' || typeof value.y !== 'number') {
-    throw new Error(`Node "${nodeId}" position must have numeric x and y.`);
-  }
-  return { x: value.x, y: value.y };
-}
 
-function parseNodeDisplaySize(value: unknown, nodeId: string, type: NodeType): ScopeNodeSize {
-  if (!isRecord(value) || typeof value.width !== 'number' || typeof value.height !== 'number') {
-    throw new Error(`Node "${nodeId}" scopeSize must have numeric width and height.`);
-  }
 
-  const size = { width: value.width, height: value.height };
-  if (type === 'Image') return clampImageNodeSize(size, size.width / Math.max(1, size.height));
-  if (type === 'CustomWave' || type === 'SamplePlayer' || type === 'Buffer') return clampCustomWaveNodeSize(size);
-  if (type === 'Slider' || type === 'Joystick' || type === 'Button') return clampControlNodeSize(size);
-  return clampScopeNodeSize(size);
-}
 
-function parsePortDefinitions(value: unknown, label: string): PortDefinition[] {
-  if (!Array.isArray(value)) {
-    throw new Error(`${label} must be an array.`);
-  }
-  return value.map((entry, index) => {
-    if (!isRecord(entry) || typeof entry.name !== 'string' || entry.name.trim() === '') {
-      throw new Error(`${label} entry ${index} needs a string name.`);
-    }
-    return {
-      name: entry.name,
-      ...(typeof entry.defaultValue === 'number' ? { defaultValue: entry.defaultValue } : {}),
-      ...(typeof entry.connectable === 'boolean' ? { connectable: entry.connectable } : {}),
-      ...(typeof entry.valueEditor === 'boolean' ? { valueEditor: entry.valueEditor } : {}),
-      ...(typeof entry.min === 'number' ? { min: entry.min } : {}),
-      ...(typeof entry.max === 'number' ? { max: entry.max } : {}),
-      ...(typeof entry.integer === 'boolean' ? { integer: entry.integer } : {}),
-    };
-  });
-}
 
-function parsePatchLink(value: unknown, index: number): PatchLink {
-  if (!isRecord(value)) {
-    throw new Error(`Link ${index} must be an object.`);
-  }
-  return {
-    from: parseEndpoint(value.from, `Link ${index} source`),
-    to: parseEndpoint(value.to, `Link ${index} target`),
-    ...(typeof value.weight === 'number' ? { weight: value.weight } : {}),
-    ...(value.mode === 'set' || value.mode === 'add' || value.mode === 'multiply' || value.mode === 'bend' ? { mode: value.mode } : {}),
-    ...(typeof value.enabled === 'boolean' ? { enabled: value.enabled } : {}),
-    ...(Array.isArray(value.weightModulations) ? {
-      weightModulations: value.weightModulations.map((entry, modulationIndex) => (
-        parseLinkWeightModulation(entry, `Link ${index} strength modulation ${modulationIndex}`)
-      )),
-    } : {}),
-  };
-}
 
-function parseLinkWeightModulation(
-  value: unknown,
-  label: string,
-): NonNullable<PatchLink['weightModulations']>[number] {
-  if (!isRecord(value)) throw new Error(`${label} must be an object.`);
-  return {
-    from: parseEndpoint(value.from, `${label} source`),
-    ...(typeof value.weight === 'number' ? { weight: value.weight } : {}),
-    ...(value.mode === 'set' || value.mode === 'add' || value.mode === 'multiply' || value.mode === 'bend' ? { mode: value.mode } : {}),
-    ...(typeof value.enabled === 'boolean' ? { enabled: value.enabled } : {}),
-    ...(Array.isArray(value.weightModulations) ? {
-      weightModulations: value.weightModulations.map((entry, index) => parseLinkWeightModulation(entry, `${label}.${index}`)),
-    } : {}),
-  };
-}
-
-function parseEndpoint(value: unknown, label: string): PatchLink['from'] {
-  if (!isRecord(value) || typeof value.node !== 'string' || typeof value.port !== 'string') {
-    throw new Error(`${label} must have string node and port.`);
-  }
-  return { node: value.node, port: value.port };
-}
-
-function isNodeType(value: unknown): value is NodeType {
-  if (typeof value !== 'string') return false;
-  const definition = getDefinition(value as NodeType) as ReturnType<typeof getDefinition> | undefined;
-  return definition?.type === value;
-}
-
-function isNumberRecord(value: unknown): value is Record<string, number> {
-  if (!isRecord(value)) return false;
-  return Object.values(value).every((entry) => typeof entry === 'number' && Number.isFinite(entry));
-}
-
-function parseSubpatchUiOverrides(
-  value: unknown,
-  groupNodeId: string,
-): PatchNode['subpatchUiOverrides'] | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) {
-    throw new Error(`Node "${groupNodeId}" subpatchUiOverrides must be an object.`);
-  }
-
-  return Object.fromEntries(Object.entries(value).map(([innerNodeId, rawOverride]) => {
-    if (!isRecord(rawOverride)) {
-      throw new Error(`Node "${groupNodeId}" UI override for "${innerNodeId}" must be an object.`);
-    }
-    if (rawOverride.params !== undefined && !isNumberRecord(rawOverride.params)) {
-      throw new Error(`Node "${groupNodeId}" UI override params for "${innerNodeId}" must be numeric.`);
-    }
-    const params = rawOverride.params as Record<string, number> | undefined;
-    const customWave = parseCustomWaveLike(rawOverride.customWave, `${groupNodeId}:${innerNodeId}`);
-    return [innerNodeId, {
-      ...(params ? { params } : {}),
-      ...(customWave ? { customWave: normalizeCustomWave(customWave, params) } : {}),
-    }];
-  }));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function collectSubpatchImportCandidates(patch: Patch): ImportedSubpatchCandidate[] {
   const candidates: ImportedSubpatchCandidate[] = [];
@@ -7774,10 +7540,6 @@ function storeViewport(viewport: Viewport): void {
   }
 }
 
-function normalizeSelectedMidiDeviceIds(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0))];
-}
 
 function patchWithMidiControlVisuals(patch: Patch, visuals: Record<string, MidiControlVisualState>): Patch {
   if (Object.keys(visuals).length === 0) return patch;
@@ -8222,22 +7984,7 @@ function graphSnapshotKey(snapshot: GraphSnapshot): string {
   return JSON.stringify(snapshot);
 }
 
-function expressionInputDefinitions(expression: string): PortDefinition[] {
-  return extractExpressionInputs(expression).map((name) => ({
-    name,
-    defaultValue: 0,
-  }));
-}
 
-function syncParamsToInputs(
-  params: Record<string, number>,
-  inputs: PortDefinition[],
-): Record<string, number> {
-  return Object.fromEntries(inputs.map((input) => [
-    input.name,
-    params[input.name] ?? input.defaultValue ?? 0,
-  ]));
-}
 
 function samePortDefinitions(left: PortDefinition[], right: PortDefinition[]): boolean {
   if (left.length !== right.length) return false;
@@ -9719,7 +9466,7 @@ function duplicateAreaHierarchy(
     const nextId = nodeIdMap.get(node.id);
     if (!nextId) return [];
     const position = dragState.currentNodePositions[node.id] ?? node.position;
-    const patchNode = structuredClone(node.data.patchNode);
+    const patchNode = cloneParameterIds(node.data.patchNode, nextId);
     return [{
       ...node,
       id: nextId,
@@ -9804,7 +9551,7 @@ function duplicateDraggedGraph(
       data: {
         ...node.data,
         patchNode: {
-          ...node.data.patchNode,
+          ...cloneParameterIds(node.data.patchNode, nextId),
           id: nextId,
           params: { ...node.data.patchNode.params },
           position,
@@ -9907,7 +9654,7 @@ function duplicateCopiedGraph(
       data: {
         ...node.data,
         patchNode: {
-          ...node.data.patchNode,
+          ...cloneParameterIds(node.data.patchNode, nextId),
           id: nextId,
           params: { ...node.data.patchNode.params },
           position,
@@ -10352,3 +10099,6 @@ function noopPortNameChange() {}
 function noopPortMove() {}
 function noopCompactToggle() {}
 function noopScopeResize() {}
+
+const emptySubscribe = () => () => undefined;
+const emptySnapshot = () => null;

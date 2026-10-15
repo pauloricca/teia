@@ -28,6 +28,21 @@ const watched = [
   'firmware/fm1/runtime.h', 'firmware/fm1/app.c', 'firmware/fm1/upload.h',
   'firmware/fm1/export-patch.mjs',
   'scripts/fm1-runtime-spike.py', 'scripts/fm1-send-patch.py', 'scripts/fm1-install.py',
+  'editor/src/diagnostics.ts', 'runtime/src/index.ts',
+  'editor/src/graph/parse.ts', 'editor/src/graph/serialize.ts',
+  'editor/src/audio/dspEdit.ts', 'editor/src/audio/patchPackage.ts',
+  'editor/src/hosted/document.ts', 'editor/src/hosted/compiler.ts', 'editor/src/hosted/native.ts',
+  'editor/src/hosted/bridge.ts', 'editor/src/hosted/session.ts', 'editor/src/hosted/assets.ts',
+  'editor/src/hosted/parameters.ts', 'editor/src/hosted/useHostedAudio.ts',
+  'editor/src/hosted/HostedNodeEditor.tsx', 'editor/src/hosted/HostedModeContext.ts',
+  'editor/src/hosted/mockBridge.ts', 'editor/src/hosted/package.ts',
+  'hosted/package.json', 'runtime/package.json', 'rust/teia-kernel/Cargo.toml',
+  'scripts/build-hosted.mjs', 'scripts/build-hosted-conformance.mjs',
+  'rust/teia-kernel/src/state_fields.rs', 'rust/teia-kernel/src/runtime_preparation.rs',
+  'rust/teia-kernel/src/hosted_resources.rs', 'rust/teia-kernel/src/runtime-capabilities.json',
+  'editor/src/hosted/engineCapabilities.json', 'scripts/engine-capabilities.mjs',
+  'rust/teia-kernel/src/lib.rs', 'rust/teia-kernel/src/native_state.rs', 'rust/teia-kernel/src/hosted.rs',
+  'editor/public/audio/audio-worklet-wasm.js',
 ];
 const errors = validateSchema(registry, JSON.parse(read('firmware/fm1/support.schema.json')));
 if (errors.length) { console.error(errors.join('\n')); process.exit(1); }

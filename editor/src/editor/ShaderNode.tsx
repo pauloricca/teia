@@ -167,7 +167,8 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
   const groupUiPreview = isGroup ? data.groupUiPreview : undefined;
   const isSpread = node.type === 'Spread';
   const isSpawn = node.type === 'Spawn';
-  const isRuntimeContainer = isSpread || isSpawn;
+  const isConditional = node.type === 'ConditionalExecution';
+  const isRuntimeContainer = isSpread || isSpawn || isConditional;
   const isAreaCollapsedPresentation = data.isAreaCollapsedPresentation === true;
   const isAreaUiCollapsedPresentation = data.isAreaUiCollapsedPresentation === true;
   const isSelector = node.type === 'Selector';
@@ -1016,25 +1017,25 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
         ) : (
           <div className="spread-port-input">
             <Handle
-              id="in:count"
+              id={isConditional ? 'in:gate' : 'in:count'}
               type="target"
               position={Position.Left}
               className={[
                 'shader-handle shader-handle-input spread-count-handle',
-                selectedLinkInputs.includes('count') ? 'shader-handle-selected-link' : '',
+                selectedLinkInputs.includes(isConditional ? 'gate' : 'count') ? 'shader-handle-selected-link' : '',
               ].filter(Boolean).join(' ')}
             />
-            <span>count</span>
+            <span>{isConditional ? 'gate' : 'count'}</span>
             <NumericScrubber
-              value={node.params.count ?? 1}
-              min={0}
-              integer
-              replacedBySetLink={setLinkInputPorts.has('count')}
-              onChange={(value) => data.onParamChange(node.id, 'count', value)}
+              value={isConditional ? (node.params.gate ?? 0) : (node.params.count ?? 1)}
+              min={isConditional ? undefined : 0}
+              integer={!isConditional}
+              replacedBySetLink={setLinkInputPorts.has(isConditional ? 'gate' : 'count')}
+              onChange={(value) => data.onParamChange(node.id, isConditional ? 'gate' : 'count', value)}
             />
           </div>
         )}
-        {!isAreaUiCollapsedPresentation ? (
+        {!isAreaUiCollapsedPresentation && !isConditional ? (
           <>
             {isSpawn ? (
               <div className="spread-port-output spawn-instance-gate-port">
@@ -1252,7 +1253,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
             input.preview || showAllPorts || connectedInputPorts.has(input.name)
           ));
           const visibleOutputPorts = outputPorts.filter((output) => (
-            output.preview || showAllPorts || connectedOutputPorts.has(output.name)
+            node.type === 'Params' || output.preview || showAllPorts || connectedOutputPorts.has(output.name)
           ));
           const normalOutputPorts = showSequencerDisplay
             ? visibleOutputPorts.filter((output) => output.name === SEQUENCER_INDEX_OUTPUT)

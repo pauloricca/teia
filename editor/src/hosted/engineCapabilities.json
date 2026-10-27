@@ -1,6 +1,6 @@
 {
   "apiVersion": 1,
-  "executionRevision": 4,
+  "executionRevision": 5,
   "validation": "shared Rust program validator",
   "channels": 2,
   "maxBlockFrames": 2048,
@@ -70,5 +70,11 @@
     "maxSamples": 960000,
     "capture": "freeze writes only; exclusive render-owner chunk copies; explicit finish/cancel; reset and replacement invalidate",
     "repeated": "concrete template/item path, maximum depth 4; active items only; tokens follow storage while indices move"
+  },
+  "conditionalExecution": {
+    "gateThreshold": 0.5,
+    "gateRate": "sample",
+    "closedState": "preserved",
+    "closedOutput": 0
   }
 }

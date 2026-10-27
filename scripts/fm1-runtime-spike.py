@@ -66,7 +66,7 @@ def main():
     build = module("felucca_builder", pin.SOURCE / "tools/build.py")
     build.SRC = stage; build.FW = stage / "firmware"; build.OUT = stage / "build"
     build.GEN = stage / "build/gen"; build.LDR = stage / "build/loader"
-    build.DOCKER_IMAGE = pin.IMAGE; build.PRODUCT = "FM-1_921"
+    build.DOCKER_IMAGE = pin.IMAGE; build.PRODUCT = "FM-1_922"
     # Preprocessor identity comes from the shell, not build_app's default flag.
     for rel, expected in build.SDK_SHA256.items():
         pin.require(pin.sha(pin.SDK / "cpu/wl82/tools" / rel) == expected, "SDK file checksum mismatch")
@@ -80,7 +80,7 @@ def main():
         if re.search(r"\s" + re.escape(name) + r"$", syms, re.M): errors.append(f"Unexpected Felucca musical component: {name}")
     for note in notes: print("ok:", note)
     pin.require(not errors, "\n".join(errors))
-    package = build.fm1pkg_make.ufw(build.fm1pkg_make.flash_image(img, build.fm1pkg_make.KEY), ota, "FM-1_921")
+    package = build.fm1pkg_make.ufw(build.fm1pkg_make.flash_image(img, build.fm1pkg_make.KEY), ota, "FM-1_922")
     out = build.OUT
     (out / "teia-fm1-spike.fwsc").write_bytes(package)
     (out / "symbols.txt").write_text(syms)

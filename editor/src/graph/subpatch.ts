@@ -237,6 +237,8 @@ function prefixNode(node: PatchNode, prefix: string): PatchNode {
   return {
     ...cloned,
     id: `${prefix}${node.id}`,
+    ...(cloned.spreadNodeIds ? { spreadNodeIds: cloned.spreadNodeIds.map(id => `${prefix}${id}`) } : {}),
+    ...(cloned.runtimeSpread ? { runtimeSpread: { ...cloned.runtimeSpread, spreadId: `${prefix}${cloned.runtimeSpread.spreadId}` } } : {}),
   };
 }
 

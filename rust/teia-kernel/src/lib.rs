@@ -2769,6 +2769,7 @@ pub extern "C" fn clearDspScopes() {
         kernel_global!(DSP_SCOPE_SLOT_COUNT) = 0;
         for slot in 0..MAX_DSP_SCOPES {
             kernel_global!(DSP_SCOPE_REGS)[slot] = -1;
+            kernel_global!(DSP_SCOPE_GATE_REGS)[slot] = -1;
             kernel_global!(DSP_SCOPE_POINTS_ACTIVE)[slot] = 256;
             kernel_global!(DSP_SCOPE_DECIMATE)[slot] = 1;
             reset_dsp_scope(slot);
@@ -2812,6 +2813,19 @@ pub extern "C" fn setDspScope(
         reset_dsp_scope(slot);
         slot as i32
     }
+}
+
+/// FFT analysis windows advance only for samples executed by their area.
+#[no_mangle]
+pub extern "C" fn setDspScopeGate(slot: u32, register: i32) {
+    if (slot as usize) < MAX_DSP_SCOPES && valid_optional_dsp_register(register) {
+        unsafe { kernel_global!(DSP_SCOPE_GATE_REGS)[slot as usize] = register; }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn dspGateOpen(register: i32) -> u32 {
+    if valid_dsp_register(register) && dsp_reg(register) >= ENVELOPE_TRIGGER_THRESHOLD { 1 } else { 0 }
 }
 
 #[no_mangle]
@@ -2998,8 +3012,12 @@ fn validate_engine_program(ops: &[DspOp], value_count: usize) -> Result<(), usiz
         {
             return Err(index);
         }
-        if op.out >= 0 {
-            defined[op.out as usize] = true;
+        // Multi-output instructions define every result, including a Reverb's
+        // right channel and a Buffer's secondary output, before cable maths.
+        for register in dsp_op_output_registers(*op) {
+            if register >= 0 {
+                defined[register as usize] = true;
+            }
         }
         if matches!(op.opcode, DSP_OP_SPREAD_BEGIN | DSP_OP_SPAWN_BEGIN) {
             if op.b <= index as i32
@@ -3013,6 +3031,7 @@ fn validate_engine_program(ops: &[DspOp], value_count: usize) -> Result<(), usiz
                 || op.value.fract() != 0.0
                 || op.value < 0.0
                 || op.value >= MAX_DSP_SPREADS as f64
+                || (op.opcode == DSP_OP_SPREAD_BEGIN && (op.value3 != 0.0 && op.value3 != 1.0))
                 || op.value2.fract() != 0.0
                 || op.value2 < 0.0
                 || !valid_dsp_state_range(op.state, op.value2 as usize)
@@ -10994,6 +11013,8 @@ mod quantise_tests {
 fn capture_dsp_scopes() {
     unsafe {
         for slot in 0..kernel_global!(DSP_SCOPE_SLOT_COUNT) {
+            let gate = kernel_global!(DSP_SCOPE_GATE_REGS)[slot];
+            if gate >= 0 && dsp_reg(gate) < ENVELOPE_TRIGGER_THRESHOLD { continue; }
             let register = kernel_global!(DSP_SCOPE_REGS)[slot];
             if register < 0 || register as usize >= MAX_DSP_REGS {
                 continue;
@@ -12006,6 +12027,49 @@ unsafe fn render_dsp_block(plan: &mut DspBlockPlan, frames: usize, sample_rate: 
     }
 }
 
+// Most instructions have one output; Buffer and stereo Reverb also write e.
+fn dsp_op_output_registers(op: DspOp) -> [i32; 2] {
+    [op.out, if op.opcode == DSP_OP_BUFFER || (op.opcode == DSP_OP_REVERB && op.value2 >= 1.0) { op.e } else { -1 }]
+}
+
+#[cfg(test)]
+mod conditional_execution_tests {
+    use super::*;
+
+    fn check_freeze_and_zero(bounded: bool) {
+        clearDspProgram();
+        let instructions = [
+            DspOp { opcode: DSP_OP_SPREAD_BEGIN, a: 0, b: 4, state: 0, value2: 1.0, value3: 1.0, ..EMPTY_DSP_OP },
+            DspOp { opcode: DSP_OP_TIME, out: 1, state: 0, ..EMPTY_DSP_OP },
+            DspOp { opcode: DSP_OP_SPREAD_COLLECT, out: 2, a: 1, b: 0, ..EMPTY_DSP_OP },
+            DspOp { opcode: DSP_OP_SPREAD_COLLECT, out: 3, a: 1, b: 1, ..EMPTY_DSP_OP },
+            DspOp { opcode: DSP_OP_SPREAD_END, ..EMPTY_DSP_OP },
+        ];
+        unsafe {
+            for (index, instruction) in instructions.iter().enumerate() {
+                kernel_global!(DSP_OPS)[index] = *instruction;
+            }
+            kernel_global!(DSP_OP_COUNT) = instructions.len();
+        }
+        if bounded { assert_eq!(prepareDspRealtime(8, 1_000_000), 1); }
+        for (gate, expected) in [(1.0, 0.0), (0.5, 0.1), (0.499, 0.0), (0.0, 0.0), (-1.0, 0.0), (0.5, 0.2)] {
+            set_dsp_reg(0, gate);
+            let (mut left, mut right) = (0.0, 0.0);
+            unsafe { render_dsp_ops(0, 10.0, &mut left, &mut right, false); }
+            for register in [1, 2, 3] {
+                assert!((dsp_reg(register) - expected).abs() < 1e-12);
+            }
+        }
+        clearDspProgram();
+    }
+
+    #[test]
+    fn dynamic_instance_freezes_instead_of_being_removed() { check_freeze_and_zero(false); }
+
+    #[test]
+    fn prepared_instance_freezes_instead_of_being_reset() { check_freeze_and_zero(true); }
+}
+
 unsafe fn render_dsp_ops(
     frame: usize,
     sample_rate: f64,
@@ -12043,7 +12107,20 @@ unsafe fn render_dsp_ops(
         if end_index >= kernel_global!(DSP_OP_COUNT) {
             return;
         }
-        let count = dsp_reg(op.a).floor().max(0.0) as usize;
+        let conditional = op.opcode == DSP_OP_SPREAD_BEGIN && op.value3 == 1.0;
+        // A closed conditional does not touch its instance state or resources.
+        // Clear scratch outputs so every outgoing signal (including multiply
+        // collectors and monitor registers) is zero, never a stale last sample.
+        if conditional && !(dsp_reg(op.a) >= ENVELOPE_TRIGGER_THRESHOLD) {
+            for index in (op_index + 1)..end_index {
+                for register in dsp_op_output_registers(kernel_global!(DSP_OPS)[index]) {
+                    set_dsp_reg(register, 0.0);
+                }
+            }
+            op_index = end_index + 1;
+            continue;
+        }
+        let count = if conditional { 1 } else { dsp_reg(op.a).floor().max(0.0) as usize };
         let count = if op.opcode == DSP_OP_SPREAD_BEGIN
             && kernel_global!(DSP_REPEAT_CAPACITY) > 0
             && count > kernel_global!(DSP_REPEAT_CAPACITY)
@@ -12363,6 +12440,9 @@ unsafe fn render_shared_frame(frame: usize, sample_rate: f64, alpha: f64) -> (f6
     capture_dsp_scopes();
     (left, right)
 }
+
+#[no_mangle]
+pub extern "C" fn dspConditionalExecutionSupported() -> u32 { 1 }
 
 #[no_mangle]
 pub extern "C" fn renderDspProgram(frames: u32, sample_rate: f64) {

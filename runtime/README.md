@@ -22,7 +22,7 @@ Build this package from the editor repository with `npm run build:runtime`. Its 
 Editor exports use the `teia-patch` manifest format and name `@pauloricca/teia-runtime`.
 
 
-Runtime 0.3.0 accepts engine APIs 1 and 2. Exports using Audio Input's separate
+The current runtime accepts engine APIs 1, 2 and 3. Conditional Execution requires API 3 and a kernel exposing `dspConditionalExecutionSupported`, so older players reject its execution semantics. Exports using Audio Input's separate
 `left`/`right` channels require API 2 so older players reject them instead of
 silently averaging. Existing mono `signal` packages remain API 1. Manifest 2 and
 program 1 are retained. Params may include additive `persistentId`, step and

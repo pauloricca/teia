@@ -49,10 +49,12 @@ const RESOURCE_NODES = new Set(['Buffer', 'SamplePlayer', 'Image']);
 
 function sharesRuntime(receive: PatchNode, send: PatchNode): boolean {
   if ((receive.routingScope ?? '') !== (send.routingScope ?? '')) return false;
-  if (!receive.runtimeSpread) return !send.runtimeSpread;
-  if (!send.runtimeSpread) return true;
-  return receive.runtimeSpread.spreadId === send.runtimeSpread.spreadId
-    && receive.runtimeSpread.itemIndex === send.runtimeSpread.itemIndex;
+  const receiveRuntime = receive.runtimeSpread?.conditional ? undefined : receive.runtimeSpread;
+  const sendRuntime = send.runtimeSpread?.conditional ? undefined : send.runtimeSpread;
+  if (!receiveRuntime) return !sendRuntime;
+  if (!sendRuntime) return true;
+  return receiveRuntime.spreadId === sendRuntime.spreadId
+    && receiveRuntime.itemIndex === sendRuntime.itemIndex;
 }
 
 function route(node: PatchNode): number {

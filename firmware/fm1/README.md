@@ -5,7 +5,7 @@ musical engines, sample bank, sequencer, arpeggiator, mixer or effects are linke
 Felucca supplies the hardware abstraction, boot/interrupt assembly, USB MIDI,
 TRS MIDI input, LCD transfers and firmware updater. Derived code is GPL-3.0-only.
 
-**Current source target: FM-1_921**, with two RAM patch slots, USB MIDI SysEx uploads and
+**Current source target: FM-1_922**, with two RAM patch slots, USB MIDI SysEx uploads and
 PRESETS selection. It boots silent with empty slots. See the
 [upload/install guide and protocol](UPLOAD.md) for complete commands and controls.
 The editor FM compiler shares the package encoder with the CLI; the Rust/WASM engine is unchanged.
@@ -322,8 +322,9 @@ The device entered the loader, completed writing, rebooted and answered as
 `035ec4f01b3a9904da4126fa3f5bb73da34b4a7e70904296ecad53b89c04186d`.
 
 These results establish basic playback and the normal same-image update path.
-Return to stock, interrupted updates, ROM recovery, sustained load and measured
-pitch/output quality remain unverified. The USB IDs are upstream experimental
+Return to stock was subsequently verified from 922 on 2026-10-18 (see below).
+Interrupted updates, ROM recovery, sustained load and measured pitch/output quality
+remain unverified. The USB IDs are upstream experimental
 IDs, unsuitable for a release. Current upload-spike evidence is recorded in the
 [upload guide](UPLOAD.md); do not treat the original checks as verification of
 new features.
@@ -488,3 +489,7 @@ The MIDI queue holds 256 events. Overflow discards queued events, increments the
 Instructions 54–63 implement completion, MIDI events, repeat brackets, collectors, instance gate and block latch. Older firmware rejects these instructions before activating a patch. Package layouts are unchanged. `patches/midi-spawn.json` demonstrates note-tag release, instance-local pitch/velocity sample holds and envelope completion → kill. `patches/spread-harmonics.json` demonstrates one-based harmonic indexing. `test-events-repeat.c` contains host regression assertions; it has only been statically compiled in this task, not executed.
 
 Rebuild with `.cache/fm1-spike/python/bin/python scripts/fm1-runtime-spike.py`, then install the resulting `FM-1_921` image through the existing firmware installation workflow and re-export/upload the desired patch. No flash, restart or audio verification is implied by the static build. For bench validation, play/release chords, hold/retrigger notes, exercise channel filtering, wait for envelope tails, and reduce/increase Spread count. Check the device's late-buffer counter under the intended voice load.
+
+## Stock restoration evidence (922)
+
+2026-10-18: installed Teia FM-1_922 from FM-1_921 with pinned CLI, exit 0 and reboot identity FM-1_922 (package SHA-256 dc50254da9a18b91b3e36a929e151f7d496c383644cd3e61ed121b21071d14a9). Then restored unchanged official V15 (SHA-256 db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a): 75 package-check reads, loader write completed, exit 0 and reboot identity FM-1_015. This verifies this normal update/return-to-stock path only; interrupted-update recovery, factory preset contents and audio are unverified.

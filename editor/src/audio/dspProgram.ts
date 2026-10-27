@@ -26,7 +26,7 @@ export { DSP_OP } from './dspOpcodes';
 export interface DspProgram {
   version: 1;
   /** Missing means legacy engine API 1 (mono Input selectors ignored). */
-  engineApiVersion?: 1 | 2;
+  engineApiVersion?: 1 | 2 | 3;
   ops: DspOp[];
   values: number[];
   valueBindings: DspValueBinding[];
@@ -133,7 +133,7 @@ export interface DspSequencerBinding {
 
 export interface DspRepeatBinding {
   nodeId: string;
-  type: 'Spread' | 'Spawn';
+  type: 'Spread' | 'Spawn' | 'ConditionalExecution';
   slot: number;
   stateStart: number;
   stateCount: number;
@@ -141,6 +141,7 @@ export interface DspRepeatBinding {
 
 export interface DspFftBinding {
   nodeId: string;
+  gateRegister?: number;
   inputRegister: number;
   minFrequencyValueIndex: number;
   maxFrequencyValueIndex: number;
@@ -413,7 +414,7 @@ export function compilePatchToDspProgram(patch: Patch, optimizationOptions: DspC
 
   return {
     version: 1,
-    engineApiVersion: context.ops.some(op => op.opcode === DSP_OP.Input && (op.b === 0 || op.b === 1)) ? 2 : 1,
+    engineApiVersion: context.ops.some(op => op.opcode === DSP_OP.SpreadBegin && op.value3 === 1) ? 3 : context.ops.some(op => op.opcode === DSP_OP.Input && (op.b === 0 || op.b === 1)) ? 2 : 1,
     ops: context.ops,
     values: context.values,
     valueBindings: context.valueBindings,
@@ -543,11 +544,66 @@ function createContext(patch: Patch): CompileContext {
   };
 }
 
+/** Order execution boundaries by all explicit and virtual upstream dependencies. */
+function orderExecutionContainers(context: CompileContext): PatchNode[] {
+  const containers = context.patch.nodes.filter(node => ['Spread', 'Spawn', 'ConditionalExecution'].includes(node.type));
+  const byId = new Map(containers.map(node => [node.id, node]));
+  const upstream = new Map<string, Set<string>>();
+  const add = (to: string, from: string): void => {
+    if (!upstream.has(to)) upstream.set(to, new Set());
+    upstream.get(to)!.add(from);
+  };
+  for (const link of context.patch.links) {
+    if (link.enabled === false || context.nodeById.get(link.from.node)?.enabled === false || context.nodeById.get(link.to.node)?.enabled === false) continue;
+    add(link.to.node, link.from.node);
+  }
+  for (const receive of context.patch.nodes.filter(node => node.type === 'Receive')) {
+    for (const send of context.patch.nodes.filter(node => node.type === 'Send' && node.enabled !== false)) {
+      if (routingNumber(receive) === routingNumber(send) && routingNodesShareRuntime(receive, send)) add(receive.id, send.id);
+    }
+  }
+  const dependencies = new Map<string, Set<string>>();
+  for (const container of containers) {
+    const members = new Set(context.patch.nodes.filter(node => node.runtimeSpread?.spreadId === container.id).map(node => node.id));
+    const found = new Set<string>();
+    const visited = new Set<string>();
+    const walk = (id: string): void => {
+      if (visited.has(id)) return;
+      visited.add(id);
+      const owner = context.nodeById.get(id)?.runtimeSpread?.spreadId;
+      if (owner) { found.add(owner); return; }
+      for (const source of upstream.get(id) ?? []) walk(source);
+    };
+    for (const target of [...members, container.id]) {
+      for (const source of upstream.get(target) ?? []) if (!members.has(source)) walk(source);
+    }
+    dependencies.set(container.id, found);
+  }
+  const ordered: PatchNode[] = [];
+  const visiting = new Set<string>();
+  const done = new Set<string>();
+  const visit = (id: string): void => {
+    if (done.has(id)) return;
+    if (visiting.has(id)) {
+      context.errors.push(`Feedback across execution boundaries involving "${id}" is not supported. Keep the feedback loop inside one execution area.`);
+      return;
+    }
+    visiting.add(id);
+    for (const source of dependencies.get(id) ?? []) if (byId.has(source)) visit(source);
+    visiting.delete(id);
+    done.add(id);
+    ordered.push(byId.get(id)!);
+  };
+  for (const node of containers) visit(node.id);
+  return ordered;
+}
+
 function compileSpreadTemplates(context: CompileContext): void {
-  const spreads = context.patch.nodes.filter((node) => node.type === 'Spread' || node.type === 'Spawn');
+  const spreads = orderExecutionContainers(context);
 
   for (let spreadSlot = 0; spreadSlot < spreads.length; spreadSlot += 1) {
     const spread = spreads[spreadSlot];
+    if (spread.type === 'ConditionalExecution' && spread.enabled === false) continue;
     const templateNodes = context.patch.nodes.filter((node) => node.runtimeSpread?.spreadId === spread.id);
     const templateIds = new Set(templateNodes.map((node) => node.id));
 
@@ -563,11 +619,16 @@ function compileSpreadTemplates(context: CompileContext): void {
     // explicit external links: compile the Send once before the repeat begins.
     const receives = templateNodes.filter((node) => node.type === 'Receive');
     for (const send of context.patch.nodes) {
-      if (send.type !== 'Send' || send.enabled === false || send.runtimeSpread) continue;
+      if (send.type !== 'Send' || send.enabled === false || (send.runtimeSpread && !send.runtimeSpread.conditional) || templateIds.has(send.id)) continue;
       if (receives.some((receive) => routingNumber(receive) === routingNumber(send)
         && routingNodesShareRuntime(receive, send))) resolveSendSignal(send, context);
     }
 
+    const conditional = spread.type === 'ConditionalExecution';
+    // A conditional boundary always contributes one signal to set-link averaging,
+    // including while closed (when that signal is zero).
+    if (conditional) context.spreadCountRegisterById.set(spread.id, constantRegister(1, context));
+    const gateRegister = conditional ? resolveInput(spread, 'gate', 0, context, 'immediate') : -1;
     const countRegister = spread.type === 'Spread'
       ? ensureSpreadCountRegister(spread, context)
       : nextRegister(context);
@@ -581,13 +642,15 @@ function compileSpreadTemplates(context: CompileContext): void {
     const begin: DspOp = {
       opcode: spread.type === 'Spawn' ? DSP_OP.SpawnBegin : DSP_OP.SpreadBegin,
       out: spread.type === 'Spawn' ? countRegister : -1,
-      a: spread.type === 'Spawn' ? triggerRegister : countRegister,
+      a: conditional ? gateRegister : spread.type === 'Spawn' ? triggerRegister : countRegister,
       b: -1,
       c: -1,
       d: releaseTriggerRegister,
       state: stateStart,
       value: spreadSlot,
       value2: 0,
+      // SpreadBegin mode 1 is one persistent, sample-gated instance.
+      value3: conditional ? 1 : 0,
     };
     context.ops.push(begin);
     context.constantRegisters.clear();
@@ -602,9 +665,19 @@ function compileSpreadTemplates(context: CompileContext): void {
       if (node.type === 'AudioOut') compileAudioOut(node, context);
       else if (node.type === 'FFT') ensureFftBinding(node, context);
       else if (node.type === 'Meter' || node.type === 'Scope') resolveOutput(node, 'signal', context);
-      else if (node.type === 'SamplePlayer') resolveOutput(node, 'signal', context);
+      else if (node.type === 'SamplePlayer' || (conditional && node.type === 'Buffer')) resolveOutput(node, 'signal', context);
       else if (node.enabled !== false && (node.type === 'MidiNoteOnSend' || node.type === 'MidiNoteOffSend')) compileMidiNoteSend(node, context);
       else if (node.enabled !== false && node.type === 'MidiCcSend') compileMidiCcSend(node, context);
+    }
+
+    if (conditional) {
+      for (const node of templateNodes) {
+        if (node.enabled === false) continue;
+        if (node.type === 'Send') resolveSendSignal(node, context);
+        if (node.type === 'Slider') registerSliderMonitor(node, context);
+        if (node.type === 'Sequencer' || node.type === 'Roll') registerSequencerMonitor(node, context);
+        for (const port of getNodeDefinition(node).outputs) resolveOutput(node, port.name, context);
+      }
     }
 
     for (const link of context.patch.links) {
@@ -633,6 +706,11 @@ function compileSpreadTemplates(context: CompileContext): void {
     if (spread.type === 'Spawn' && hasInput(spread, 'kill trigger', context)) {
       begin.c = resolveInput(spread, 'kill trigger', 0, context, 'immediate', spread.id);
     }
+    if (conditional) {
+      for (const binding of context.fftBindings) {
+        if (templateIds.has(binding.nodeId)) binding.gateRegister = gateRegister;
+      }
+    }
     const endIndex = context.ops.length;
     context.ops.push({
       opcode: spread.type === 'Spawn' ? DSP_OP.SpawnEnd : DSP_OP.SpreadEnd,
@@ -643,7 +721,7 @@ function compileSpreadTemplates(context: CompileContext): void {
     begin.value2 = context.stateCount - stateStart;
     context.repeatBindings.push({
       nodeId: spread.id,
-      type: spread.type === 'Spawn' ? 'Spawn' : 'Spread',
+      type: conditional ? 'ConditionalExecution' : spread.type === 'Spawn' ? 'Spawn' : 'Spread',
       slot: spreadSlot,
       stateStart,
       stateCount: context.stateCount - stateStart,
@@ -949,7 +1027,7 @@ function compileNodeOutput(node: PatchNode, port: string, context: CompileContex
   if (node.type === 'Params') {
     return valueRegisterForNodeParam(node, port, 0, context);
   }
-  if (node.type === 'Spread' || node.type === 'Spawn') {
+  if (node.type === 'Spread' || node.type === 'Spawn' || node.type === 'ConditionalExecution') {
     context.errors.push(`${node.type} "${node.id}" does not expose that output.`);
     return null;
   }
@@ -3067,16 +3145,21 @@ function routingNumber(node: PatchNode): number {
 
 function routingNodesShareRuntime(receive: PatchNode, send: PatchNode): boolean {
   if ((receive.routingScope ?? '') !== (send.routingScope ?? '')) return false;
-  if (!receive.runtimeSpread) return !send.runtimeSpread;
-  if (!send.runtimeSpread) return true;
-  return receive.runtimeSpread.spreadId === send.runtimeSpread.spreadId
-    && receive.runtimeSpread.itemIndex === send.runtimeSpread.itemIndex;
+  const receiveRuntime = receive.runtimeSpread?.conditional ? undefined : receive.runtimeSpread;
+  const sendRuntime = send.runtimeSpread?.conditional ? undefined : send.runtimeSpread;
+  if (!receiveRuntime) return !sendRuntime;
+  if (!sendRuntime) return true;
+  return receiveRuntime.spreadId === sendRuntime.spreadId
+    && receiveRuntime.itemIndex === sendRuntime.itemIndex;
 }
 
 function resolveSendSignal(node: PatchNode, context: CompileContext): number {
   const cached = context.sendSignalByNodeId.get(node.id);
   if (cached !== undefined) return cached;
-  const signal = resolveInput(node, 'signal', 0, context);
+  let signal = resolveInput(node, 'signal', 0, context);
+  // Give a conditional Send its own output register: closing it must never
+  // zero a shared outside source, even for a pass-through route.
+  if (node.runtimeSpread?.conditional) signal = emitBinary(DSP_OP.Mul, signal, constantRegister(1, context), context);
   context.sendSignalByNodeId.set(node.id, signal);
   return signal;
 }

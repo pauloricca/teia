@@ -48,7 +48,7 @@ import { useAudioEngine, type BufferCopy, type BufferSnapshot, type LinkMeterRea
 import { normalizeCustomWave } from '../graph/customWave';
 import { demoPatch } from '../graph/demoPatch';
 import { extractExpressionInputs } from '../graph/expression';
-import { defaultParamsFor, getDefinition, getNodeDefinition, rollShape, sequencerShape } from '../graph/nodeTypes';
+import { defaultParamsFor, getDefinition, getNodeDefinition, getNodeTypeLabel, rollShape, sequencerShape } from '../graph/nodeTypes';
 import { normalizePatchCompatibility } from '../graph/patchCompatibility';
 import { patchToJson } from '../graph/serialize';
 import {
@@ -712,7 +712,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     setNodes((current) => {
       let changed = false;
       const next = current.map((node) => {
-        if (node.data.patchNode.type !== 'Spread' && node.data.patchNode.type !== 'Spawn') return node;
+        if (node.data.patchNode.type !== 'Spread' && node.data.patchNode.type !== 'Spawn' && node.data.patchNode.type !== 'ConditionalExecution') return node;
         const area = areas.find((candidate) => candidate.kind === 'spread' && candidate.spreadNodeId === node.id);
         const spreadNodeIds = area?.locked ? [...(area.nodeIds ?? [])] : undefined;
         if (optionalStringArraysEqual(node.data.patchNode.spreadNodeIds, spreadNodeIds)) return node;
@@ -1624,7 +1624,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
                 customWave: normalizeCustomWave(node.data.patchNode.customWave, node.data.patchNode.params),
               } : {}),
               ...(type === 'SamplePlayer' && convertedBufferSample ? { sample: convertedBufferSample } : {}),
-              ...((type === 'Spread' || type === 'Spawn') ? {
+              ...((type === 'Spread' || type === 'Spawn' || type === 'ConditionalExecution') ? {
                 scopeSize: { ...(type === 'Spawn' ? DEFAULT_SPAWN_SIZE : DEFAULT_SPREAD_SIZE) },
               } : {}),
               params: nextParams,
@@ -1641,7 +1641,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     }));
     setAreas((current) => {
       const withoutPreviousSpread = current.filter((area) => area.spreadNodeId !== nodeId);
-      if (type !== 'Spread' && type !== 'Spawn') return withoutPreviousSpread;
+      if (type !== 'Spread' && type !== 'Spawn' && type !== 'ConditionalExecution') return withoutPreviousSpread;
       return [...withoutPreviousSpread, spreadAreaForNode({
         ...relatedNode,
         id: nextId,
@@ -1935,13 +1935,14 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         relatedNode.data.patchNode.type !== 'Sequencer' &&
         relatedNode.data.patchNode.type !== 'Roll' &&
         relatedNode.data.patchNode.type !== 'Spread' &&
-        relatedNode.data.patchNode.type !== 'Spawn'
+        relatedNode.data.patchNode.type !== 'Spawn' &&
+        relatedNode.data.patchNode.type !== 'ConditionalExecution'
       )
     ) {
       return;
     }
 
-    const nextSize = relatedNode.data.patchNode.type === 'Spread' || relatedNode.data.patchNode.type === 'Spawn'
+    const nextSize = relatedNode.data.patchNode.type === 'Spread' || relatedNode.data.patchNode.type === 'Spawn' || relatedNode.data.patchNode.type === 'ConditionalExecution'
       ? {
           width: Math.max(
             relatedNode.data.patchNode.type === 'Spawn' ? MIN_SPAWN_WIDTH : MIN_RUNTIME_CONTAINER_WIDTH,
@@ -1981,7 +1982,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
       if (node.id !== nodeId) return node;
 
       const currentSize = renderedPreviousSize ?? node.data.patchNode.scopeSize ?? (
-        node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn'
+        node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn' || node.data.patchNode.type === 'ConditionalExecution'
           ? (node.data.patchNode.type === 'Spawn' ? DEFAULT_SPAWN_SIZE : DEFAULT_SPREAD_SIZE)
         : node.data.patchNode.type === 'Sequencer'
           ? clampSequencerNodeSize(
@@ -2781,7 +2782,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
   const nodesWithCallbacks = useMemo(() => {
     const nextNodes = nodes.map((node) => {
     const compactPorts = node.data.patchNode.compactPorts === true;
-    const baseZIndex = node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn'
+    const baseZIndex = node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn' || node.data.patchNode.type === 'ConditionalExecution'
       ? 0
       : 1 + nodeZIndex(
           node.selected === true || selectedAreaNodeIds.has(node.id),
@@ -2792,7 +2793,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
 
     return {
       ...node,
-      ...((node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn') ? { draggable: false, selectable: false } : {}),
+      ...((node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn' || node.data.patchNode.type === 'ConditionalExecution') ? { draggable: false, selectable: false } : {}),
       zIndex: temporarilyRevealedNodeId === node.id
         ? temporaryNodeLayer
         : surfacedAreaNodeIds.has(node.id)
@@ -3538,7 +3539,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
       selected: false,
       draggable: false,
       selectable: false,
-      connectable: node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn',
+      connectable: node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn' || node.data.patchNode.type === 'ConditionalExecution',
       // React Flow disables pointer events when a node is neither selectable nor
       // draggable. This presentation is intentionally canvas-locked, but its
       // surfaced controls must remain operable.
@@ -4216,6 +4217,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
       node.id === link.to.node
       && (
         (node.data.patchNode.type === 'Spread' && link.to.port === 'count')
+        || (node.data.patchNode.type === 'ConditionalExecution' && link.to.port === 'gate')
         || (
           node.data.patchNode.type === 'Spawn'
           && (link.to.port === 'trigger' || link.to.port === 'release trigger')
@@ -5569,9 +5571,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         ? {
             ...area,
             title: area.kind === 'spread'
-              ? nodesRef.current.find((node) => node.id === area.spreadNodeId)?.data.patchNode.type === 'Spawn'
-                ? 'Spawn'
-                : 'Spread'
+              ? getNodeTypeLabel(nodesRef.current.find((node) => node.id === area.spreadNodeId)?.data.patchNode.type ?? 'Spread')
               : 'Area',
           }
         : area
@@ -5991,9 +5991,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
                           className="canvas-area-title-input"
                           value={area.title}
                           aria-label={area.kind === 'spread'
-                            ? nodesRef.current.find((node) => node.id === area.spreadNodeId)?.data.patchNode.type === 'Spawn'
-                              ? 'Spawn name'
-                              : 'Spread name'
+                            ? `${getNodeTypeLabel(nodesRef.current.find((node) => node.id === area.spreadNodeId)?.data.patchNode.type ?? 'Spread')} name`
                             : 'Area name'}
                           onPointerDown={(event) => event.stopPropagation()}
                           onDoubleClick={(event) => {
@@ -7225,7 +7223,7 @@ function stripPatchForDsp(patch: Patch): Patch {
   // membership from canvas containment. Ordinary layout changes must not
   // rebuild the program.
   const includesPositionBasedRuntimeContainer = patch.nodes.some((node) => (
-    (node.type === 'Spread' || node.type === 'Spawn') && !node.spreadNodeIds
+    (node.type === 'Spread' || node.type === 'Spawn' || node.type === 'ConditionalExecution') && !node.spreadNodeIds
   ));
   return {
     nodes: patch.nodes.map((node) => stripPatchNodeForDsp(node, includesPositionBasedRuntimeContainer)),
@@ -7412,7 +7410,7 @@ function stripPatchNodeForDsp(node: PatchNode, includeLayout: boolean): PatchNod
     // Canvas coordinates normally are editor-only. Unlocked runtime containers
     // are the exception: their membership is calculated from these bounds.
     ...(includeLayout && node.position ? { position: { ...node.position } } : {}),
-    ...(includeLayout && (node.type === 'Spread' || node.type === 'Spawn') && node.scopeSize
+    ...(includeLayout && (node.type === 'Spread' || node.type === 'Spawn' || node.type === 'ConditionalExecution') && node.scopeSize
       ? { scopeSize: { ...node.scopeSize } }
       : {}),
     ...(node.spreadNodeIds ? { spreadNodeIds: [...node.spreadNodeIds] } : {}),
@@ -8600,7 +8598,7 @@ function viewportNodeSize(node: ShaderFlowNode): { width: number; height: number
     return { width: size.width, height: size.height + NODE_HEADER_HEIGHT };
   }
 
-  if (patchNode.type === 'Spread' || patchNode.type === 'Spawn') {
+  if (patchNode.type === 'Spread' || patchNode.type === 'Spawn' || patchNode.type === 'ConditionalExecution') {
     const size = runtimeContainerSize(patchNode);
     return { width: size.width, height: size.height + NODE_HEADER_HEIGHT };
   }
@@ -8713,7 +8711,7 @@ function lockedAreaNodeBounds(
 
 function flowNodeIsInsideSpread(spread: ShaderFlowNode, node: ShaderFlowNode): boolean {
   if (
-    (spread.data.patchNode.type !== 'Spread' && spread.data.patchNode.type !== 'Spawn')
+    (spread.data.patchNode.type !== 'Spread' && spread.data.patchNode.type !== 'Spawn' && spread.data.patchNode.type !== 'ConditionalExecution')
     || node.id === spread.id
   ) return false;
   if (spread.data.patchNode.spreadNodeIds) {
@@ -8764,6 +8762,7 @@ function runtimeContainerLinkIsAllowed(link: PatchLink, nodes: ShaderFlowNode[])
     && sourceNode
     && (
       (targetNode.data.patchNode.type === 'Spread' && link.to.port === 'count')
+      || (targetNode.data.patchNode.type === 'ConditionalExecution' && link.to.port === 'gate')
       || (
         targetNode.data.patchNode.type === 'Spawn'
         && (link.to.port === 'trigger' || link.to.port === 'release trigger')
@@ -8878,7 +8877,7 @@ function promoteNodeIdsInStackOrder(
 function spreadAreaForNode(node: ShaderFlowNode): EditorArea {
   const size = runtimeContainerSize(node.data.patchNode);
   const portsHeight = runtimeContainerPortsHeight(node.data.patchNode);
-  const title = node.data.patchNode.type === 'Spawn' ? 'Spawn' : 'Spread';
+  const title = getNodeTypeLabel(node.data.patchNode.type!);
   return {
     id: `spread-area:${node.id}`,
     kind: 'spread',
@@ -8899,7 +8898,7 @@ function spreadAreaForNode(node: ShaderFlowNode): EditorArea {
 
 function reconcileSpreadAreas(areas: EditorArea[], nodes: ShaderFlowNode[]): EditorArea[] {
   const spreadNodes = nodes.filter((node) => (
-    node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn'
+    node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn' || node.data.patchNode.type === 'ConditionalExecution'
   ));
   const spreadNodeIds = new Set(spreadNodes.map((node) => node.id));
   let resizedExistingSpawn = false;

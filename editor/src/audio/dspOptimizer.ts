@@ -208,7 +208,17 @@ export function simplifyDspOperations(
       }
       if (op.opcode === DSP_OP.SpreadBegin || op.opcode === DSP_OP.SpawnBegin) repeatDepth -= 1;
     }
+    // Bracket destinations are instruction indices, so removing earlier pure
+    // operations must relocate them along with the instruction stream.
+    const relocated = new Map<number, number>();
+    let nextIndex = 0;
+    keep.forEach((retained, index) => { if (retained) relocated.set(index, nextIndex++); });
     program.ops = program.ops.filter((_, index) => keep[index]);
+    for (const op of program.ops) {
+      if ((op.opcode === DSP_OP.SpreadBegin || op.opcode === DSP_OP.SpawnBegin) && op.b !== undefined) {
+        op.b = relocated.get(op.b) ?? op.b;
+      }
+    }
   }
 
   return {

@@ -59,7 +59,7 @@ const manifest = {
   format: 'teia-hosted-compatibility', version: 1,
   sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   sourceDirty: execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], { cwd: root, encoding: 'utf8' }).length > 0,
-  versions: { packages: Object.fromEntries(await Promise.all(['editor', 'runtime', 'kernel', 'hosted'].map(async path => [path, JSON.parse(await readFile(join(root, path, 'package.json'), 'utf8')).version]))), package: JSON.parse(await readFile(join(root, 'hosted/package.json'), 'utf8')).version, document: 1, legacyDocument: 0, program: 1, runtime: 1, bridge: 2, bridgeCompatible: [1, 2], xpManifest: 2, engineApis: [1, 2] },
+  versions: { packages: Object.fromEntries(await Promise.all(['editor', 'runtime', 'kernel', 'hosted'].map(async path => [path, JSON.parse(await readFile(join(root, path, 'package.json'), 'utf8')).version]))), package: JSON.parse(await readFile(join(root, 'hosted/package.json'), 'utf8')).version, document: 1, legacyDocument: 0, program: 1, runtime: 1, bridge: 2, bridgeCompatible: [1, 2], xpManifest: 2, engineApis: [1, 2, 3] },
   nativeProfile: 'native-scalar-v1', nativeFunctionalVerification: evidenceMatches ? 'WASM/native equivalence; see verification.json for scope' : 'no current source-matched equivalence evidence',
   artifacts: files.sort((a, b) => a.path.localeCompare(b.path)),
   sourceChecksums: await Promise.all(Object.keys(result.metafile.inputs).filter(p => !p.startsWith('hosted:') && !p.startsWith('<') && !p.includes('node_modules/')).sort().map(async path => ({ path, sha256: createHash('sha256').update(await readFile(join(root, path))).digest('hex') }))),

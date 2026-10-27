@@ -49,7 +49,8 @@ export function dspSequencerConfigKey(program: DspProgram): string {
 }
 
 
-/** API 2 adds channel selectors; API 1 programs retain legacy mono Input. */
-export function requiredEngineApi(program: DspProgram): 1 | 2 {
+/** API 2 adds channel selectors; API 3 adds persistent conditional execution. */
+export function requiredEngineApi(program: DspProgram): 1 | 2 | 3 {
+  if (program.ops.some(op => op.opcode === DSP_OP.SpreadBegin && op.value3 === 1)) return 3;
   return program.ops.some(op => op.opcode === DSP_OP.Input && (op.b === 0 || op.b === 1)) ? 2 : 1;
 }

@@ -17,6 +17,7 @@ struct Repeat {
     previous: bool,
     previous_release: bool,
     collectors: Vec<DspOp>,
+    outputs: Vec<i32>,
 }
 struct Item {
     states: Vec<f64>,
@@ -56,6 +57,7 @@ impl BoundedSequence {
                     Instruction::Repeat(repeat) => {
                         repeat.items.capacity() * std::mem::size_of::<Item>()
                             + repeat.collectors.capacity() * std::mem::size_of::<DspOp>()
+                            + repeat.outputs.capacity() * std::mem::size_of::<i32>()
                             + repeat
                                 .items
                                 .iter()
@@ -102,15 +104,16 @@ impl BoundedSequence {
                 + layout.buffer_slots.len() * MAX_DSP_BUFFER_SAMPLES * 4
                 + std::mem::size_of::<Item>()
                 + 512;
-            budget.items = budget.items.checked_add(budget.capacity)?;
+            let capacity = if op.opcode == DSP_OP_SPREAD_BEGIN && op.value3 == 1.0 { 1 } else { budget.capacity };
+            budget.items = budget.items.checked_add(capacity)?;
             budget.bytes = budget
                 .bytes
-                .checked_add(per_item.checked_mul(budget.capacity)?)?;
+                .checked_add(per_item.checked_mul(capacity)?)?;
             if budget.items > MAX_TOTAL_REPEAT_ITEMS || budget.bytes > budget.limit {
                 return None;
             }
-            let mut items = Vec::with_capacity(budget.capacity);
-            for _ in 0..budget.capacity {
+            let mut items = Vec::with_capacity(capacity);
+            for _ in 0..capacity {
                 let body = Self::range(index + 1, end_repeat, depth + 1, budget)?;
                 let resources = DspRepeatResourceState::new(&layout);
                 if !resources.is_prepared() {
@@ -146,6 +149,7 @@ impl BoundedSequence {
                 previous: false,
                 previous_release: false,
                 collectors,
+                outputs: (index + 1..end_repeat).flat_map(|i| dsp_op_output_registers(kernel_global!(DSP_OPS)[i])).filter(|r| *r >= 0).collect(),
             }));
             index = end_repeat + 1;
         }
@@ -210,7 +214,15 @@ impl Repeat {
             0.0
         };
         let release_active = release >= ENVELOPE_TRIGGER_THRESHOLD;
-        if spawn {
+        let conditional = !spawn && self.op.value3 == 1.0;
+        if conditional && !trigger {
+            for &output in &self.outputs { set_dsp_reg(output, 0.0); }
+            return;
+        }
+        if conditional {
+            // Keep the single prepared item intact across gate transitions.
+            self.active = 1;
+        } else if spawn {
             if release_active && !self.previous_release {
                 for item in &mut self.items[..self.active] {
                     if (item.tag - release).abs() <= 0.000001 {

@@ -128,8 +128,8 @@ current media DSP is mono, independently of stereo live audio I/O.
 
 Editor and XP export share preparation. XP manifest 2/program 1 remain. Legacy mono packages retain engine API 1;
 new stereo Input packages require engine API 2 so older players reject them
-instead of silently averaging channels. Runtime 0.3.0 accepts both engine APIs.
-Raw kernel consumers opt into `setDspStereoInputEnabled(1)` for engine API 2;
+instead of silently averaging channels. The current runtime accepts engine APIs 1, 2 and 3; Conditional Execution requires API 3.
+Raw kernel consumers opt into `setDspStereoInputEnabled(1)` for engine API 2 or 3;
 legacy exports default to mono even if unused Input fields contain zero. The
 packaged worklet sets this per installed program, and native hosted instances
 opt in at construction. Legacy `id` lookup stays unchanged and runtime 0.3.0 also accepts persistent IDs; additive
@@ -388,3 +388,5 @@ available, and absent v2 capability flags retain existing host behavior.
 Verification metadata lists the complete fixture corpus separately from the
 resource-free subset compared against Node WASM. Compiling fixtures alone is not
 verification. Import the whole matching `hosted/dist` tree and native source.
+
+Conditional Execution requires engine API 3 and execution revision 5. Hosted builds include the updated editor/compiler and native kernel sources; the host must rebuild its native kernel to execute the new persistent, sample-gated mode. The compatibility manifest declares engine APIs 1, 2 and 3. Static builds do not establish audio or host integration verification.

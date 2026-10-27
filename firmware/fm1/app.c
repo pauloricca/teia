@@ -6,7 +6,7 @@
 #define FELUCCA_CDC 0
 #define FELUCCA_UAC 0
 #define FELUCCA_OTA 1
-#define FELUCCA_ID "FM-1_921"
+#define FELUCCA_ID "FM-1_922"
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #include "fm1_time.h"
 #include "fm1_sys.h"
@@ -331,7 +331,10 @@ static int ota_prog(uint32_t off, const void *p, uint32_t n)
 static int ota_fread(uint32_t off, void *p, uint32_t n)
 {
     uint32_t lock; int rc;
-    if (!flash_ok || !FL_IN(off, n, FL_OTA_LO, FL_OTA_HI)) return -8;
+    /* Official packages must match the installed boot head before their loader
+     * may rewrite it. Permit that comparison; erase/program stay staging-only. */
+    if (!flash_ok || !(FL_IN(off, n, 0u, 0x4000u) ||
+                       FL_IN(off, n, FL_OTA_LO, FL_OTA_HI))) return -8;
     lock = fm1__lock(); rc = FL_FAR(fl_read_ram)(off, p, n); fm1__unlock(lock); return rc;
 }
 static void ota_show(uint32_t step, int32_t code)

@@ -25,6 +25,11 @@ export const NODE_DEFINITIONS: Record<NodeType, NodeDefinition> = {
     inputs: [],
     outputs: [],
   },
+  ConditionalExecution: {
+    type: 'ConditionalExecution',
+    inputs: [{ name: 'gate', defaultValue: 0 }],
+    outputs: [],
+  },
   Spread: {
     type: 'Spread',
     inputs: [{ name: 'count', defaultValue: 1, min: 0, integer: true }],
@@ -628,6 +633,7 @@ export const NODE_TYPE_LIST = Object.keys(NODE_DEFINITIONS) as NodeType[];
 const NODE_TYPE_LABELS: Record<NodeType, string> = {
   Expression: 'Expression',
   Group: 'Group',
+  ConditionalExecution: 'Conditional Execution',
   Spread: 'Spread',
   Spawn: 'Spawn',
   Ins: 'Ins',

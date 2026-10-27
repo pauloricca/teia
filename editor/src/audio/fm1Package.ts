@@ -211,6 +211,9 @@ function lowerFm1Patch(patch: Fm1Patch, program: DspProgram, live = false): Fm1C
         ops.push([49, o.out, o.a, o.c, o.e, tempoStates.get(sourceIndex)!]); break;
       case 41: ops.push([63, o.out, o.a, 0, 0, o.state]); break;
       case 42: case 46: {
+        if (o.opcode === 42 && !fm1Capabilities.compiler.repeat.spreadModes.includes(o.value3 ?? 0)) {
+          throw new Error(`${context}: this execution mode is not supported on FM-1.`);
+        }
         const layout = repeatLayout[o.value];
         const op = [o.opcode === 42 ? 56 : 60, o.opcode === 42 ? 0 : o.out, o.a, 0, o.c, layout.start, o.d, layout.count, capacity, o.value];
         repeatJumps.push({ op, end: o.b }); ops.push(op); break;

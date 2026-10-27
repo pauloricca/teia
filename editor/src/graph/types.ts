@@ -3,6 +3,7 @@ export type NodeType =
   | 'Group'
   | 'Spread'
   | 'Spawn'
+  | 'ConditionalExecution'
   | 'Ins'
   | 'Params'
   | 'Outs'
@@ -118,11 +119,12 @@ export interface PatchNode {
   compactPorts?: boolean;
   /** Nodes are enabled unless explicitly disabled. Disabled nodes mute their incident links. */
   enabled?: boolean;
-  /** Locked Spread/Spawn membership, mirroring an area's node snapshot. */
+  /** Locked runtime-container membership, mirroring an area's node snapshot. */
   spreadNodeIds?: string[];
   /** Compiler-only metadata attached to nodes cloned from a Spread or Spawn. */
   runtimeSpread?: {
     spreadId: string;
+    conditional?: boolean;
     itemIndex: number;
     originalNodeId: string;
   };

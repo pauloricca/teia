@@ -1052,7 +1052,7 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
     const repeatBindings = Array.isArray(program.repeatBindings)
       ? program.repeatBindings.map((binding) => ({
         nodeId: String(binding?.nodeId || ""),
-        type: binding?.type === "Spawn" ? "Spawn" : "Spread",
+        type: binding?.type === "ConditionalExecution" ? "ConditionalExecution" : binding?.type === "Spawn" ? "Spawn" : "Spread",
         slot: Math.max(0, Math.trunc(Number(binding?.slot) || 0)),
         stateStart: Math.max(0, Math.trunc(Number(binding?.stateStart) || 0)),
         stateCount: Math.max(0, Math.trunc(Number(binding?.stateCount) || 0)),
@@ -1062,6 +1062,7 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
       ? program.fftBindings.map((binding) => ({
         nodeId: String(binding?.nodeId || ""),
         inputRegister: Math.trunc(Number(binding?.inputRegister ?? -1)),
+        gateRegister: Math.trunc(Number(binding?.gateRegister ?? -1)),
         minFrequencyValueIndex: Math.trunc(Number(binding?.minFrequencyValueIndex ?? -1)),
         maxFrequencyValueIndex: Math.trunc(Number(binding?.maxFrequencyValueIndex ?? -1)),
         frequencyValueIndex: Math.trunc(Number(binding?.frequencyValueIndex ?? -1)),
@@ -1114,7 +1115,7 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
 
     return {
       version: 1,
-      engineApiVersion: program.engineApiVersion === 2 ? 2 : 1,
+      engineApiVersion: program.engineApiVersion === 3 ? 3 : program.engineApiVersion === 2 ? 2 : 1,
       ops,
       values,
       immediateValueIndexes,
@@ -1413,11 +1414,14 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
   syncDspProgram(preservedState = null, repeatMigration = null, sampleMigration = null) {
     if (!this.wasm?.clearDspProgram || !this.dspProgram) return;
 
+    if (this.dspProgram.engineApiVersion >= 3 && this.wasm.dspConditionalExecutionSupported?.() !== 1) {
+      throw new Error("This patch needs a kernel with Conditional Execution support. Rebuild the WASM engine and refresh.");
+    }
     const hasProgramMigration = repeatMigration !== null || sampleMigration !== null;
     if (hasProgramMigration) this.wasm.beginDspProgramUpdate();
     this.wasm.clearDspProgram();
     this.wasm.clearGraph?.();
-    this.wasm.setDspStereoInputEnabled?.(this.dspProgram.engineApiVersion === 2 ? 1 : 0);
+    this.wasm.setDspStereoInputEnabled?.(this.dspProgram.engineApiVersion >= 2 ? 1 : 0);
     this.maxVoices = this.dspProgram.maxVoices;
     this.nodes = [];
     this.nodesById = new Map();
@@ -1672,7 +1676,15 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
           && existing.register === register
           && sameScopeRequest(existing.request, request);
       });
-    if (scopeConfigurationIsUnchanged) return;
+    if (scopeConfigurationIsUnchanged) {
+      // Graph edits can change an FFT's execution boundary without changing
+      // its signal register or scope dimensions.
+      for (const { request, slot } of nextScopes) {
+        const fft = this.dspProgram.fftBindings.find(binding => binding.nodeId === request.linkId);
+        this.wasm.setDspScopeGate?.(slot, fft?.gateRegister ?? -1);
+      }
+      return;
+    }
 
     // A new DSP program can move monitor registers even when the user has not
     // changed a scope. Preserve the ring buffer so the trace can continue
@@ -1695,6 +1707,8 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
     for (const { request, register, slot } of nextScopes) {
       const scopeSlot = this.wasm.setDspScope(slot, register, request.seconds, request.points, sampleRate);
       if (scopeSlot < 0) continue;
+      const fft = this.dspProgram.fftBindings.find(binding => binding.nodeId === request.linkId);
+      this.wasm.setDspScopeGate?.(slot, fft?.gateRegister ?? -1);
       const ptr = this.wasm.dspScopePtr(slot);
       if (!ptr) continue;
       const samples = new Float32Array(this.wasm.memory.buffer, ptr, 1024);
@@ -3022,7 +3036,7 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
     for (const state of this.dspScopeStates.values()) {
       const samples = this.dspScopeFrameSamples(state);
       const fftBinding = (this.dspProgram?.fftBindings || []).find((binding) => binding.nodeId === state.request.linkId);
-      if (fftBinding) {
+      if (fftBinding && (fftBinding.gateRegister < 0 || this.wasm.dspGateOpen?.(fftBinding.gateRegister) === 1)) {
         const minFrequency = this.dspProgram.values[fftBinding.minFrequencyValueIndex];
         const maxFrequency = this.dspProgram.values[fftBinding.maxFrequencyValueIndex];
         const peak = dominantSpectrumPeak(samples, state.request.seconds, minFrequency, maxFrequency);
@@ -3045,6 +3059,7 @@ class TeiaWasmEngine extends AudioWorkletProcessor {
     if (this.dspScopeStates.size === 0 || this.sampleCursor < this.nextLinkMeterPostSample) return;
     this.nextLinkMeterPostSample = this.sampleCursor + Math.max(1, Math.round(sampleRate / 30));
     for (const binding of this.dspProgram?.fftBindings || []) {
+      if (binding.gateRegister >= 0 && this.wasm.dspGateOpen?.(binding.gateRegister) !== 1) continue;
       const state = this.dspScopeStates.get(binding.nodeId);
       if (!state) continue;
       const samples = this.dspScopeFrameSamples(state);

@@ -14,8 +14,14 @@ export interface SpreadExpansion {
 }
 
 export function expandSpreads(patch: Patch): SpreadExpansion {
-  let expanded = patch;
   const errors: string[] = [];
+  patch = { ...patch, nodes: patch.nodes.map(node => {
+    if (node.type !== 'Group' || !node.subpatch) return node;
+    const inner = expandSpreads(node.subpatch);
+    errors.push(...inner.errors.map(error => `Group "${node.id}": ${error}`));
+    return { ...node, subpatch: inner.patch };
+  }) };
+  let expanded = patch;
   const spreads = patch.nodes.filter(isRuntimeContainer);
   const memberships = new Map<string, string[]>();
 
@@ -27,7 +33,7 @@ export function expandSpreads(patch: Patch): SpreadExpansion {
   }
   for (const [nodeId, spreadIds] of memberships) {
     if (spreadIds.length > 1) {
-      errors.push(`Node "${nodeId}" is inside multiple Spread/Spawn containers (${spreadIds.join(', ')}). Move it into exactly one container.`);
+      errors.push(`Node "${nodeId}" is inside multiple execution containers (${spreadIds.join(', ')}). Move it into exactly one container.`);
     }
   }
   if (errors.length > 0) return { patch, errors };
@@ -93,7 +99,7 @@ function expandOneSpread(patch: Patch, spreadId: string): SpreadExpansion {
   const clonedNodes: PatchNode[] = [];
   for (const node of internalNodes) {
     if (isRuntimeContainer(node)) continue;
-    clonedNodes.push(cloneSpreadNode(node, spread.id, 0));
+    clonedNodes.push(cloneSpreadNode(spread.type === 'ConditionalExecution' && spread.enabled === false ? { ...node, enabled: false } : node, spread.id, 0, spread.type === 'ConditionalExecution'));
   }
   if (spread.type === 'Spread') {
     clonedNodes.push({
@@ -102,7 +108,7 @@ function expandOneSpread(patch: Patch, spreadId: string): SpreadExpansion {
       params: { value: 1 },
       runtimeSpread: { spreadId: spread.id, itemIndex: 0, originalNodeId: '__item_index__' },
     });
-  } else {
+  } else if (spread.type === 'Spawn') {
     clonedNodes.push({
       id: spawnInstanceGateNodeId(spread.id, 0),
       type: 'Constant',
@@ -120,7 +126,7 @@ function expandOneSpread(patch: Patch, spreadId: string): SpreadExpansion {
     const isInternalControlLink = sourceInternal
       && link.to.node === spread.id
       && (
-        link.to.port === (spread.type === 'Spread' ? 'count' : 'trigger')
+        link.to.port === (spread.type === 'Spread' ? 'count' : spread.type === 'ConditionalExecution' ? 'gate' : 'trigger')
         || (spread.type === 'Spawn' && link.to.port === 'release trigger')
       );
     const isKillLink = spread.type === 'Spawn' && link.to.node === spread.id && link.to.port === 'kill trigger';
@@ -200,10 +206,10 @@ function nestedRuntimeContainer(patch: Patch): string | null {
 }
 
 function isRuntimeContainer(node: PatchNode): boolean {
-  return node.type === 'Spread' || node.type === 'Spawn';
+  return node.type === 'Spread' || node.type === 'Spawn' || node.type === 'ConditionalExecution';
 }
 
-function cloneSpreadNode(node: PatchNode, spreadId: string, itemIndex: number): PatchNode {
+function cloneSpreadNode(node: PatchNode, spreadId: string, itemIndex: number, conditional = false): PatchNode {
   return {
     ...node,
     id: spreadCloneNodeId(spreadId, itemIndex, node.id),
@@ -212,7 +218,7 @@ function cloneSpreadNode(node: PatchNode, spreadId: string, itemIndex: number): 
     ...(node.outputs ? { outputs: node.outputs.map((port) => ({ ...port })) } : {}),
     ...(node.subpatchUiOverrides ? { subpatchUiOverrides: structuredClone(node.subpatchUiOverrides) } : {}),
     ...(node.subpatch ? { subpatch: structuredClone(node.subpatch) } : {}),
-    runtimeSpread: { spreadId, itemIndex, originalNodeId: node.id },
+    runtimeSpread: { spreadId, itemIndex, originalNodeId: node.id, ...(conditional ? { conditional: true } : {}) },
   };
 }
 

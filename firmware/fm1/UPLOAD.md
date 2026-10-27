@@ -38,6 +38,29 @@ slots empty; every sound comes from an uploaded Teia graph. Firmware updates
 still use `fm1_install.py` and `.fwsc`; ordinary patch uploads use the separate
 sender below and do not write flash or restart the device.
 
+## Return to official V15
+
+Install Teia **922 or newer** first. Version 921 blocks the read-only boot-head
+comparison required by the official loader; an attempted stock restore stops
+after four package requests before writing. 922 permits that comparison while
+keeping erase/program access restricted to loader staging. The comparison still
+rejects a mismatched boot head; do not bypass it.
+
+Close other MIDI clients and use the pinned installer with the unmodified official
+`FM-1.fwsc` downloaded from M-VAVE (SHA-256
+`db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a`):
+
+```sh
+.cache/fm1-spike/install-env/bin/python .cache/fm1-spike/Felucca/tools/fm1_install.py firmware/fm1/FM-1.fwsc --yes
+```
+
+Keep USB connected through writing and reboot identity verification (`FM-1_015`).
+This clears volatile Teia patches. Felucca's web restore backup step requires its
+own backup service and times out on Teia; the CLI does not perform that backup.
+A successful Teia update does not itself verify stock restoration.
+
+2026-10-18: installed Teia FM-1_922 from FM-1_921 with pinned CLI, exit 0 and reboot identity FM-1_922 (package SHA-256 dc50254da9a18b91b3e36a929e151f7d496c383644cd3e61ed121b21071d14a9). Then restored unchanged official V15 (SHA-256 db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a): 75 package-check reads, loader write completed, exit 0 and reboot identity FM-1_015. This verifies this normal update/return-to-stock path only; interrupted-update recovery, factory preset contents and audio are unverified.
+
 ## Build and install firmware
 
 Connect one FM-1 with a USB data cable, then run from the repository root:

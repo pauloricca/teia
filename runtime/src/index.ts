@@ -62,7 +62,7 @@ export class PatchPlayer {
     const bytes = packageFile instanceof Blob ? await packageFile.arrayBuffer() : packageFile;
     const files = readPackageZip(bytes);
     const manifest = readJson<Manifest>(files, 'manifest.json');
-    if (manifest.format !== 'teia-patch' || manifest.version !== 2 || ![1, 2].includes(manifest.engineApiVersion)
+    if (manifest.format !== 'teia-patch' || manifest.version !== 2 || ![1, 2, 3].includes(manifest.engineApiVersion)
       || manifest.runtimePackage !== '@pauloricca/teia-runtime') {
       throw new Error('Unsupported patch package or engine API version.');
     }

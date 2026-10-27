@@ -238,7 +238,8 @@ fn repeat_access(op: DspOp) -> Option<(Vec<i32>, usize)> {
 
 fn repeat_plan(ops: &[DspOp], start: usize, end: usize) -> Option<RepeatPlan> {
     let spawn = ops[start].opcode == DSP_OP_SPAWN_BEGIN;
-    if (!spawn && ops[start].opcode != DSP_OP_SPREAD_BEGIN) || end <= start + 1 {
+    if (!spawn && ops[start].opcode != DSP_OP_SPREAD_BEGIN) || end <= start + 1
+        || (ops[start].opcode == DSP_OP_SPREAD_BEGIN && ops[start].value3 == 1.0) {
         return None;
     }
     let collector_indices: Vec<usize> = (start + 1..end)

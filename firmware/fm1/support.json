@@ -1,39 +1,39 @@
 {
   "schemaVersion": 2,
-  "firmware": "FM-1_921",
-  "reviewedOn": "2026-10-15",
+  "firmware": "FM-1_922",
+  "reviewedOn": "2026-10-18",
   "reviewedSources": {
-    "editor/src/graph/types.ts": "84df856c4053473ec409753e072d0292d34c5a6cdf5d49c4e8fd60b4423ff61b",
-    "editor/src/graph/nodeTypes.ts": "2e7ae45e2ee35df2587980de14b6e4184c52af9ed4890eb185221bf34012431a",
-    "editor/src/graph/subpatch.ts": "56fd60b9c664479761eefaa1e4d5264160156974687bc529aba01716ed2fbeb5",
-    "editor/src/graph/spread.ts": "58bec3d980343612b1fc6e31059ab2926b50455f7a547129ffd24b071d81a0da",
+    "editor/src/graph/types.ts": "c7b66a34b52fdec8777ac0849f1a0d7df412aac7c71790b0a4a6550d036e7aae",
+    "editor/src/graph/nodeTypes.ts": "07b6e81a92b44ef2051bacf476db2d9b567c3f13dc2e2a06b21af123911e23fc",
+    "editor/src/graph/subpatch.ts": "c3419ec30594ede927fde73dc68bcbd5e12f0e6f4f8a24513872bf9736cb3ab0",
+    "editor/src/graph/spread.ts": "ff9876196ef254667a8e7559849e3390f463303f23c9632f856e2ef70412bf98",
     "editor/src/graph/expression.ts": "3d9ffced8af6611ed9b59414f2917895aa21fbf2d0f145d59eeab71a9ab34995",
-    "editor/src/audio/dspProgram.ts": "724626d8bba01ffb3a83c0296612cf88fb7617b372b80ba14915f1682f7f78b7",
+    "editor/src/audio/dspProgram.ts": "11b041e72063545729aad383c45bf802886c2935a67e206054f29ea4749138eb",
     "editor/src/audio/dspOpcodes.ts": "3e605442a356c87dd1c6aef58ce0d00d762c5ed31da0499b90e962181fed55ee",
-    "editor/src/audio/fm1Package.ts": "f63cff9f1feaf41aef939d0c540684ee1cb7dd99601204af693bc007cbe27c9c",
+    "editor/src/audio/fm1Package.ts": "46c5d1df2f12af8a58689fd89513e38d0ac6dedd6f2f4886c154ab77eb341c1c",
     "editor/src/audio/fm1Optimizer.ts": "c4aefb17286a0f80a2dcc2553b3e4c5bbe8fcb8f302c4e9eec095c1b3a03e9f0",
     "editor/src/audio/fm1Upload.ts": "77e2e199f523b95bb047e9dada2aa4725e03d8b9eb112d66a9d0c412fb0f0b96",
     "editor/src/audio/useFm1LiveEdit.ts": "f713142b090b52bd6f8322e9fda1648dbf2f7a3dde08aa99a4c5c657776fdb7e",
-    "editor/src/editor/NodeEditor.tsx": "4270b1560b3ae214c4851290f5482f9b762f83a156519857e204d5c5a3c10cb9",
-    "editor/src/editor/ShaderNode.tsx": "71ebe5d2157861e5edfd70b77a4f41db5ef1d0cddc238ba0f9bb8392f2d690b3",
+    "editor/src/editor/NodeEditor.tsx": "70f4d77110e6cf6d17f4ff858358a3de79cabc77bbd5bb1c717af8b5992ad1a9",
+    "editor/src/editor/ShaderNode.tsx": "97b5f0b66892733902403e8bdd87d5763f9cd7afa0860c8d55d003ebc45752b5",
     "editor/src/editor/Fm1ModeContext.ts": "cc1bc130ec1638f62f27ce14997e86f8dae35e3a891d44702cab054b496fc5fd",
     "editor/src/audio/fm1Support.ts": "c7bc3b9979a76822aaf3b72acb914ce2e75e1abf37ff761c965e6e07e7ae363d",
     "editor/src/audio/fm1Capabilities.ts": "7a29929da790792dc3e54b3139cda2a4230e8f971fc5e101dade126a33a556cd",
     "editor/src/editor/Fm1SupportPage.tsx": "4f634b0db59887bc62a1a8a0dbe811e563683ee4cfa534a3a4aa8a1760264f49",
     "editor/src/App.tsx": "a7ab18f0eea1c2c9e395d4c01b34d58621d483f7e9069b4325e82ff3a7da4eee",
-    "editor/src/styles.css": "1d6282781f9ea269a5638c0a5a3b1a90f570a94d48c8b70b8500752fbae73aa0",
+    "editor/src/styles.css": "3bb7019ac6dcf5ec2dfe6239719e10ddd07a827ae92baeb017210bdbd8af543f",
     "firmware/fm1/runtime.h": "7537b66a1045b93e2d5db70cb42c37d90a123322b687073a4fd1527c3c2480ad",
-    "firmware/fm1/app.c": "3d32135afb8c1f704f3cee8266386ca56b78e8b285633fa7ce8b24b4c5075c00",
+    "firmware/fm1/app.c": "4bdc0897184608ebeac9d0ac96d7b338ce365dede44de5ccf5092d8a6a6945e0",
     "firmware/fm1/upload.h": "fe5d2b0469e85b0ae7af404089885b4f50561a0fd7f7dd3e5b1f80a19433b266",
     "firmware/fm1/export-patch.mjs": "f4080ecd3b6e5c20490cba612cc582a1396527ef5d9cfd4c85fc60e191645e55",
-    "scripts/fm1-runtime-spike.py": "c1456307c522e6d52494e1f6d51921bc196482d6b5946b1dadde0405378ae958",
+    "scripts/fm1-runtime-spike.py": "901130e85880bcb858fa01ff509aa3879ee586431f465d6255087bbd7ffe0753",
     "scripts/fm1-send-patch.py": "8dff7e8ae136c2fce5ef04c8d0b3d15f745f971cf6d94418d7f393f4b1623cad",
     "scripts/fm1-install.py": "cb0b4d51615e40b164fd767964d845a65f3931c194d698c650b724f9825f228c",
     "editor/src/diagnostics.ts": "eeed709b3d569dc320dccaaf956dc903ea0c192e88d890440a5c9c2cd9ca8480",
-    "runtime/src/index.ts": "428283ed669a780a0a1d31c3ae63f85c9c6cbf30952c27023065ec62a74dcb05",
+    "runtime/src/index.ts": "3243845fb86550aacd4745149769827538000d72694ee76b6c9b5b8406de83d6",
     "editor/src/graph/parse.ts": "769600d7bc6858f0d2c83a4e9cd3b50329df0adbced9331f1da85c70dbe3f2e8",
     "editor/src/graph/serialize.ts": "b79eeb691c8f22ec11bb4cfa750b5720cc8af4674d0e9eabf13aa642d876109a",
-    "editor/src/audio/dspEdit.ts": "04dc064fc4b22afa52ab4aaa6a0382b0b9466d8f0a2c507c63e8f7c05ed04076",
+    "editor/src/audio/dspEdit.ts": "df1a59da7a3e6d1c017b5134347977e6db6724b89715c6d4aaf434244e1622d5",
     "editor/src/audio/patchPackage.ts": "da3021756b4a8fa10606056bfd8d282248e4ff0a3e63892227284a3931d6decf",
     "editor/src/hosted/document.ts": "2c8dc864316db5c6d789485449d94f7e76492a52dc7ccfa81430b6279ae866fd",
     "editor/src/hosted/compiler.ts": "a6649dc7b3dc1da06139a47576b2189fde1b0ef3ec06ee7fcbeb24f9fb4ac0a1",
@@ -50,23 +50,23 @@
     "hosted/package.json": "b158aac159e3ce2937d6675845b53cbee26a1bc4e2c77ade6c71f5dc607e61af",
     "runtime/package.json": "948d13582e59a070522d2cd4d57898eea40936264c4ce747c54d683c278e39a1",
     "rust/teia-kernel/Cargo.toml": "bf4525d61264227f363fe583fc05d6da82b517487a8fa7418240f5ede6594ad7",
-    "scripts/build-hosted.mjs": "5e2a6d6eec2f9f21252a31bbb0871d74015577a45510ce2cddcb6e785a705574",
+    "scripts/build-hosted.mjs": "bf301f6a4267c854755496ba601034f5ff806840ec9c74d1a24fb51cba75146a",
     "scripts/build-hosted-conformance.mjs": "e10f5785cb07c1a6fe98d2d8654853719bc628c97b85d04c6a1a6c9dfbb21928",
-    "rust/teia-kernel/src/state_fields.rs": "e01c2ef270fb46a904c850c68a7cd6bcfc82436fad36cfc97751f4ddc5d037a9",
+    "rust/teia-kernel/src/state_fields.rs": "8c0b94d50a38b833b5cf3a6f0299263afcc28bff657ebf9f5d4bb46451aae589",
     "rust/teia-kernel/src/runtime_preparation.rs": "2a066fdf79bc109459897fe7f0d22ccf4bacbf2631ede31b13d29115b02b577c",
     "rust/teia-kernel/src/hosted_resources.rs": "51f57778dc523816f0e711ba4e5829c7d574ab4e853f4d410824cfcaa5d5e77b",
     "rust/teia-kernel/src/hosted_observation.rs": "ad005c16d4303329bcd938938484097324c9aaca038ed86a18e5c19953c75a1e",
-    "rust/teia-kernel/src/bounded_repeats.rs": "2f3e45a04f788f95a12a58dd7f1b84207e5e1a5fa9b4c829f5ee4dfb2e4fb998",
-    "rust/teia-kernel/src/runtime-capabilities.json": "27f6454d5ffe27aeeb6ff1f8ba96da317bf6456285f52ba357b2bc3095a34733",
-    "editor/src/hosted/engineCapabilities.json": "27f6454d5ffe27aeeb6ff1f8ba96da317bf6456285f52ba357b2bc3095a34733",
+    "rust/teia-kernel/src/bounded_repeats.rs": "62ed8a413a9c9b966007e40f8b52974b092f313649adea06595d712f19877ee1",
+    "rust/teia-kernel/src/runtime-capabilities.json": "219c6e0dc9b463ff0260344e1d7ebf2e4ff070d7c455f88a84f943b5309e7d2a",
+    "editor/src/hosted/engineCapabilities.json": "219c6e0dc9b463ff0260344e1d7ebf2e4ff070d7c455f88a84f943b5309e7d2a",
     "scripts/engine-capabilities.mjs": "1250e52155d1ba3931976ce63706728bf24a81fc39fa05dc4d2923af601a65e3",
-    "rust/teia-kernel/src/lib.rs": "46315080c923b0c736bc43e2c526dc81dd480d5c79e5ba257485f2c0c00f86ae",
+    "rust/teia-kernel/src/lib.rs": "fd69a49705391c0f2a97d49682f3970a5713c32147dc20d897206b5730384589",
     "rust/teia-kernel/src/native_state.rs": "8a0824dc795694aed1f03ee73830d158debd70b6e59d44abd137d6d7f8897259",
     "rust/teia-kernel/src/hosted.rs": "5131a2be03b43f3f4fc1b2298d6f335416dda830a93e07da641b63617864c332",
     "rust/teia-kernel/src/reverb.rs": "1063173e05cccbeb7d9f3bc67096e4f04f3b2bdbaba35ebaa0f43d5e1b6d3ae6",
-    "rust/teia-kernel/src/parallel.rs": "0a132296c6fd2ac9b96262f3cddb551baf9e13cc9daea6e2c1e233d4e642cf13",
-    "editor/src/audio/dspOptimizer.ts": "21e45b7aca38a7a696006dbc99b518c71f65eefdb36d77b3bf2bea2c9ec4d91f",
-    "editor/public/audio/audio-worklet-wasm.js": "566b31a68db9d30ad5adc75eebce49f446e3b5e0ab5dc9a7b76a53aa7905e3c0"
+    "rust/teia-kernel/src/parallel.rs": "afe932594cc8674f08564b492f2f63961f5b8dd7e9e816d361c80a8f2c9c7ac1",
+    "editor/src/audio/dspOptimizer.ts": "4e5956318a99aee26087115fc513f71448a08b240ca53bbfce322a0444d6afb8",
+    "editor/public/audio/audio-worklet-wasm.js": "5b678e344a2150bc166f61abb5e8208ffbea79790df1ea4d119316d9c1351811"
   },
   "features": [
     {
@@ -119,6 +119,27 @@
       }
     },
     {
+      "id": "ConditionalExecution",
+      "category": "node",
+      "status": "unsupported",
+      "since": null,
+      "verification": "source reviewed",
+      "notes": "Web/native Conditional Execution uses a sample-rate gate (>= 0.5), skips the entire contained DSP template while closed, retains instance state/resources and zeros all outgoing signals. FM-1 has no matching conditional execution mode. Enabled nodes block export. Implementation reviewed; audio and hardware unverified.",
+      "evidence": [
+        "editor/src/graph/spread.ts",
+        "editor/src/audio/dspProgram.ts",
+        "rust/teia-kernel/src/lib.rs",
+        "rust/teia-kernel/src/bounded_repeats.rs"
+      ],
+      "blockedInputs": [],
+      "blockedOutputs": [],
+      "drift": {
+        "webBehavior": "A single persistent execution instance runs only while gate >= 0.5. Closed gates zero outputs without calling contained DSP or changing state/resources.",
+        "firmwareBehavior": "Existing repeat instructions reset removed instances and do not implement persistent sample-gated execution. Conditional Execution is rejected before export.",
+        "requiredWork": "Implement conditional brackets, persistent frozen state/resources, zero outgoing signals and compiler/package mode validation, then verify sample gating and state preservation on host/hardware."
+      }
+    },
+    {
       "id": "Spawn",
       "category": "node",
       "status": "partial",
@@ -158,7 +179,7 @@
       "status": "partial",
       "since": 916,
       "verification": "source reviewed",
-      "notes": "K1–K4 edit the first four Params outputs. Select browses remaining outputs in saved order, clamping at either end; Algorithm edits the single visible extra parameter. Each value is retained when browsing. Parameters share the 128-value patch budget. Five screen rows show labels, declared-unit values and aligned outlined range bars. Requires firmware 916 and package v5 for more than six outputs; v1–v4 remain readable with the new control layout. Hardware validation pending. 919 removes the ALG prefix, supports longer names, and redraws parameter rows only when their displayed content changes. Names accept spaces, punctuation and Unicode without a length limit in the source patch; the UTF-8 screen preview is cropped to 31 bytes at a character boundary. Latin-1 glyphs render directly; other glyphs appear as ?. Package v6 uses 32-byte label fields; versions 1–5 remain readable. 920 puts the cropped name, complete value and aligned 46-pixel bar on one row, retaining change-only redraws. Hardware display verification pending.",
+      "notes": "K1–K4 edit the first four Params outputs. Select browses remaining outputs in saved order, clamping at either end; Algorithm edits the single visible extra parameter. Each value is retained when browsing. Parameters share the 128-value patch budget. Five screen rows show labels, declared-unit values and aligned outlined range bars. Requires firmware 916 and package v5 for more than six outputs; v1–v4 remain readable with the new control layout. Hardware validation pending. 919 removes the ALG prefix, supports longer names, and redraws parameter rows only when their displayed content changes. Names accept spaces, punctuation and Unicode without a length limit in the source patch; the UTF-8 screen preview is cropped to 31 bytes at a character boundary. Latin-1 glyphs render directly; other glyphs appear as ?. Package v6 uses 32-byte label fields; versions 1–5 remain readable. 920 puts the cropped name, complete value and aligned 46-pixel bar on one row, retaining change-only redraws. Hardware display verification pending. Editor parameter rows and their default/min/max controls remain visible regardless of selection, parameter count or compact-port mode. This presentation fix does not change DSP, exported parameters or firmware behavior.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "firmware/fm1/runtime.h",
@@ -980,7 +1001,7 @@
       "status": "unsupported",
       "since": null,
       "verification": "source reviewed",
-      "notes": "Web/native Reverb has original (default), Dattorro plate and eight-line feedback delay network modes. FM-1 has no supported Reverb lowering, opcode or effect buffer implementation; all modes remain unsupported. Source reviewed only; new modes have no audio or hardware verification.",
+      "notes": "Web/native Reverb has original (default), Dattorro plate and eight-line feedback delay network modes. FM-1 has no supported Reverb lowering, opcode or effect buffer implementation; all modes remain unsupported. Source reviewed only; new modes and the secondary-output validation fix have no audio or hardware verification.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "editor/src/audio/dspProgram.ts",
@@ -991,7 +1012,7 @@
       "blockedInputs": [],
       "blockedOutputs": [],
       "drift": {
-        "webBehavior": "A non-connectable mode dropdown selects original (0, default), Dattorro plate (1) or feedback delay network (2). Original keeps the existing identical left/right output; plate and FDN produce decorrelated stereo. Size, decay and mix remain live controls. Mode changes clear the tail; repeat instances own all delay/filter state.",
+        "webBehavior": "A non-connectable mode dropdown selects original (0, default), Dattorro plate (1) or feedback delay network (2). Original keeps the existing identical left/right output; plate and FDN produce decorrelated stereo. Size, decay and mix remain live controls. Mode changes clear the tail; repeat instances own all delay/filter state. Program validation recognizes both output registers, allowing either channel to feed downstream cables independently.",
         "firmwareBehavior": "FM-1_921 has no Reverb compiler lowering or DSP implementation for any mode. Enabled Reverb nodes block export.",
         "requiredWork": "Implement resource allocation, mode selection, mono-to-stereo DSP and compiler/package lowering for all three modes, then verify stability, modulation, stereo routing and repeat state isolation on host/hardware."
       }
@@ -1547,12 +1568,13 @@
       "category": "maintenance",
       "status": "partial",
       "since": 904,
-      "verification": "source reviewed",
-      "notes": "916 source identity assigned; installation and reboot unverified. Prior 904 installation evidence is historical only; return to stock and interrupted-update recovery unverified. The fm1:install wrapper audits sources, rebuilds changed/missing packages, checks package hashes and invokes the pinned installer with post-reboot identity verification; wrapper execution remains unverified.",
+      "verification": "hardware verified",
+      "notes": "922 permits read-only access to flash boot head [0, 0x4000) for the official loader compatibility comparison. Erase/program remain restricted to loader staging. 921 rejected that read after four package requests, preventing stock V15 restoration; user confirmed Teia reinstallation succeeds. 922 installation from 921 and subsequent unchanged official V15 restore completed on 2026-10-18, each with exit 0 and matching reboot identity. Interrupted-update recovery remains unverified. The fm1:install wrapper audits sources, rebuilds changed/missing packages, checks package hashes and invokes the pinned installer with post-reboot identity verification. Historical verification remains version-specific.",
       "evidence": [
         "firmware/fm1/README.md",
         "firmware/fm1/UPLOAD.md",
-        "scripts/fm1-install.py"
+        "scripts/fm1-install.py",
+        "firmware/fm1/app.c"
       ]
     },
     {
@@ -1796,6 +1818,16 @@
       "firmware": "FM-1_917",
       "scope": "Two one-second 16-bit delays, fractional interpolation and time smoothing. Pinned linker/MMIO/ROM-call checks passed; runtime arena is 182652 bytes and pool total 226140 of 368640 bytes. Static checks do not establish audio quality or real-time performance. New delay regression assertions compile but have not been executed.",
       "source": "docs/spikes/fm1-results/delay-917.json"
+    },
+    {
+      "date": "2026-10-18",
+      "firmware": "FM-1_922",
+      "verification": "hardware verified",
+      "features": [
+        "firmware update"
+      ],
+      "scope": "2026-10-18: installed Teia FM-1_922 from FM-1_921 with pinned CLI, exit 0 and reboot identity FM-1_922 (package SHA-256 dc50254da9a18b91b3e36a929e151f7d496c383644cd3e61ed121b21071d14a9). Then restored unchanged official V15 (SHA-256 db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a): 75 package-check reads, loader write completed, exit 0 and reboot identity FM-1_015. This verifies this normal update/return-to-stock path only; interrupted-update recovery, factory preset contents and audio are unverified.",
+      "source": "firmware/fm1/UPLOAD.md"
     }
   ],
   "$schema": "./support.schema.json",
@@ -1979,6 +2011,9 @@
       "blockedOpcodes": [
         12,
         32
+      ],
+      "spreadModes": [
+        0
       ]
     }
   },

@@ -2806,6 +2806,16 @@ function sampleWaveformPath(
 ): string {
   if (bins.length === 0) return '';
   const innerHeight = height - verticalPadding * 2;
+  // Native hosts publish point samples as equal min/max pairs. Separate
+  // vertical strokes would have zero length, so connect these as a trace.
+  if (bins.every((bin) => bin.min === bin.max)) {
+    const trace = bins.map((bin, index) => {
+      const x = startX + (index / Math.max(1, bins.length - 1)) * (endX - startX);
+      const y = verticalPadding + (1 - (clamp(bin.max, -1, 1) + 1) / 2) * innerHeight;
+      return `${index === 0 ? 'M' : 'L'}${roundPathNumber(x)} ${roundPathNumber(y)}`;
+    }).join(' ');
+    return bins.length === 1 ? `${trace} H${roundPathNumber(endX)}` : trace;
+  }
   return bins.map((bin, index) => {
     const x = startX + (index / Math.max(1, bins.length - 1)) * (endX - startX);
     const top = verticalPadding + (1 - (clamp(bin.max, -1, 1) + 1) / 2) * innerHeight;

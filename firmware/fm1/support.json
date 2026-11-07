@@ -15,7 +15,7 @@
     "editor/src/audio/fm1Upload.ts": "77e2e199f523b95bb047e9dada2aa4725e03d8b9eb112d66a9d0c412fb0f0b96",
     "editor/src/audio/useFm1LiveEdit.ts": "f713142b090b52bd6f8322e9fda1648dbf2f7a3dde08aa99a4c5c657776fdb7e",
     "editor/src/editor/NodeEditor.tsx": "70f4d77110e6cf6d17f4ff858358a3de79cabc77bbd5bb1c717af8b5992ad1a9",
-    "editor/src/editor/ShaderNode.tsx": "97b5f0b66892733902403e8bdd87d5763f9cd7afa0860c8d55d003ebc45752b5",
+    "editor/src/editor/ShaderNode.tsx": "8f2c61f1abe717fe505ee6d897b9574c3170ae18cf7d1fc4c5a591d013f5101b",
     "editor/src/editor/Fm1ModeContext.ts": "cc1bc130ec1638f62f27ce14997e86f8dae35e3a891d44702cab054b496fc5fd",
     "editor/src/audio/fm1Support.ts": "c7bc3b9979a76822aaf3b72acb914ce2e75e1abf37ff761c965e6e07e7ae363d",
     "editor/src/audio/fm1Capabilities.ts": "7a29929da790792dc3e54b3139cda2a4230e8f971fc5e101dade126a33a556cd",
@@ -455,7 +455,7 @@
       "status": "unsupported",
       "since": null,
       "verification": "source reviewed",
-      "notes": "No supported FM-1 lowering for this node operation or resource; browser support does not imply device support. Hosted asset requirements and XP packaging/player now resolve preserved snapshots inside subpatchs using the compiled group scope.",
+      "notes": "No supported FM-1 lowering for this node operation or resource; browser support does not imply device support. Hosted asset requirements and XP packaging/player now resolve preserved snapshots inside subpatchs using the compiled group scope. The editor renders equal min/max preview points as a connected trace for native hosts; this presentation-only fix does not change Buffer DSP, ports, or FM-1 support.",
       "evidence": [
         "editor/src/audio/fm1Package.ts",
         "editor/src/audio/dspProgram.ts"

@@ -314,7 +314,9 @@ with an updated acknowledgement, without editing defaults. Internal controls
 edit the working document and use classified deltas when compatible. Optional
 Buffer mutation capability supplies acknowledged clear/copy commands. Media
 selection carries correlated context and ignores superseded responses; it is redirected through optional `bridge.assets.selectMedia`. Waveform
-previews require supplied bounded bins; image previews require prepared Blobs.
+previews require supplied bounded bins; equal min/max point samples (including
+native Buffer observations) render as a connected trace, while min/max ranges
+render as vertical strokes. Image previews require prepared Blobs.
 Neither hosted preview creates an AudioContext/OfflineAudioContext or fetches the
 source URL. Direct video preview/recording/upload/library/device operations are
 omitted or show clear reasons when no host adapter exists. Preferences currently

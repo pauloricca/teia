@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@xyflow/react/dist/style.css';
+import '@pauloricca/spagbol/styles.css';
 import { App } from './App';
 import { installDiagnostics } from './diagnostics';
 import './themes.css';

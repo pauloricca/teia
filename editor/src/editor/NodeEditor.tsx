@@ -1,38 +1,22 @@
+import { portName } from '../spagbol/patchCodec';
+import { isFm1NodeImplemented } from '../audio/fm1Support';
+import { NODE_TYPE_LIST } from '../graph/nodeTypes';
+import { SpagbolCanvas, groupPanelLayout, graphAt } from '@pauloricca/spagbol';
+import '@pauloricca/spagbol/styles.css';
+import { graphKind, graphToPatch, nodeToPatch, patchToGraph, teiaLinkIds, patchType } from '../spagbol/patchCodec';
+import { useTeiaGraph } from '../spagbol/useTeiaGraph';
+import { TeiaGraphBindings, teiaNodeViews } from '../spagbol/TeiaNodeView';
 import { useSyncExternalStore } from 'react';
 import { HostedParameters } from '../hosted/HostedParameters';
 import { HostedSession } from '../hosted/session';
 import { useHostedAudio } from '../hosted/useHostedAudio';
 import { HostedModeContext } from '../hosted/HostedModeContext';
 import { preparePatch } from '../hosted/compiler';
-import { withParameterIds, cloneParameterIds, retainNestedBufferReferences } from '../hosted/document';
+import { withParameterIds, retainNestedBufferReferences } from '../hosted/document';
 import type { AudioEngineState } from '../audio/useAudioEngine';
-import { parsePatchJson, normalizeSelectedMidiDeviceIds, expressionInputDefinitions, syncParamsToInputs, isRecord, isNodeType, isNumberRecord, isSampleAsset, isImageAsset } from '../graph/parse';
-import {
-  applyEdgeChanges,
-  applyNodeChanges,
-  Background,
-  Connection,
-  ConnectionMode,
-  ControlButton,
-  Controls,
-  EdgeChange,
-  HandleType,
-  NodeChange,
-  OnConnectEnd,
-  OnConnectStartParams,
-  type ReactFlowProps,
-  Position,
-  ReactFlow,
-  ReactFlowInstance,
-  ReactFlowProvider,
-  SelectionMode,
-  ViewportPortal,
-  Viewport,
-  useNodesInitialized,
-  useStoreApi,
-  type CoordinateExtent,
-} from '@xyflow/react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent, type FocusEvent as ReactFocusEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { parsePatchJson, normalizeSelectedMidiDeviceIds, expressionInputDefinitions, syncParamsToInputs, isRecord, isImageAsset } from '../graph/parse';
+import { ReactFlowInstance, Viewport } from '@xyflow/react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent } from 'react';
 import { DSP_OP, compilePatchToDspProgram, type DspProgram } from '../audio/dspProgram';
 import { Fm1ModeContext } from './Fm1ModeContext';
 import { useFm1LiveEdit } from '../audio/useFm1LiveEdit';
@@ -44,27 +28,14 @@ import {
   storeBufferAssetData,
   storeBufferSnapshot,
 } from '../audio/bufferStorage';
-import { useAudioEngine, type BufferCopy, type BufferSnapshot, type LinkMeterReading, type MidiControlChange, type MidiInputState, type ScopeCaptureRequest } from '../audio/useAudioEngine';
+import { useAudioEngine, type BufferSnapshot, type LinkMeterReading, type MidiControlChange, type MidiInputState, type ScopeCaptureRequest } from '../audio/useAudioEngine';
 import { normalizeCustomWave } from '../graph/customWave';
 import { demoPatch } from '../graph/demoPatch';
-import { extractExpressionInputs } from '../graph/expression';
-import { defaultParamsFor, getDefinition, getNodeDefinition, getNodeTypeLabel, rollShape, sequencerShape } from '../graph/nodeTypes';
-import { normalizePatchCompatibility } from '../graph/patchCompatibility';
+import { getNodeDefinition, rollShape, sequencerShape } from '../graph/nodeTypes';
 import { patchToJson } from '../graph/serialize';
-import {
-  DEFAULT_SPAWN_SIZE,
-  DEFAULT_SPREAD_SIZE,
-  MIN_RUNTIME_CONTAINER_WIDTH,
-  MIN_SPAWN_WIDTH,
-  SPAWN_PORTS_HEIGHT,
-  SPREAD_PORTS_HEIGHT,
-  runtimeContainerPortsHeight,
-  runtimeContainerSize,
-  spreadCloneNodeId,
-} from '../graph/spread';
+import { DEFAULT_SPAWN_SIZE, DEFAULT_SPREAD_SIZE, MIN_RUNTIME_CONTAINER_WIDTH, MIN_SPAWN_WIDTH, runtimeContainerPortsHeight, runtimeContainerSize, spreadCloneNodeId } from '../graph/spread';
 import type { BufferAsset, CustomWaveSettings, ImageAsset, LinkMode, NodeType, Patch, PatchLink, PatchNode, PortDefinition, SampleAsset } from '../graph/types';
-import { EdgeOverlayProvider } from './EdgeOverlayContext';
-import { canvasHeaderTitleScale, USER_ZOOM_BASELINE } from './canvasZoom';
+import { USER_ZOOM_BASELINE } from './canvasZoom';
 import { scopedDspNodeId } from './dspNodeScope';
 import {
   edgeFromLink,
@@ -97,125 +68,21 @@ import {
   toFlowEdges,
   toFlowNodes,
 } from './flowPatch';
-import { getShaderEdgePath, ShaderEdge, VirtualRouteEdge } from './ShaderEdge';
-import { makeNodeId, routingNodeColor, ShaderNode } from './ShaderNode';
-
-const nodeTypes = { shaderNode: ShaderNode };
-const edgeTypes = { shaderEdge: ShaderEdge, virtualRoute: VirtualRouteEdge };
+import { makeNodeId } from './TeiaNodeContent';
 const STORAGE_KEY = 'teia.editor-state.v1';
 const VIEWPORT_STORAGE_KEY = 'teia.viewport.v1';
-const HISTORY_LIMIT = 100;
-const DRAFT_NODE_PREVIEW_ID = '__draft_node_preview__';
-const DUPLICATE_NODE_PREVIEW_PREFIX = '__duplicate_node_preview__:';
-const DUPLICATE_AREA_PREVIEW_PREFIX = '__duplicate_area_preview__:';
 const COMPACT_NODE_Z_INDEX = 0;
 const EXPANDED_NODE_Z_INDEX = 1;
 const SELECTED_NODE_Z_INDEX = 2;
-const SELECTED_EDGE_Z_INDEX = 10000;
-const DEFAULT_FIT_VIEW_PADDING = 0.2;
 const MIN_CANVAS_ZOOM = 0.05;
-const ZOOM_RESET_TARGET = USER_ZOOM_BASELINE;
-const ZOOM_SETTLE_THRESHOLD = USER_ZOOM_BASELINE * 0.1;
-const ZOOM_CHANGE_EPSILON = 0.0001;
 const GRAPH_DETAIL_ZOOM_SETTLE_MS = 80;
 const BUFFER_CHECKPOINT_INTERVAL_MS = 5000;
-const PASTE_OFFSET = { x: 36, y: 36 };
 const DRAFT_NODE_WIDTH = 168;
-const DRAFT_NODE_HANDLE_X_OFFSET = 13;
-const DRAFT_NODE_FIRST_PORT_Y = 52;
-const DEFAULT_EXPRESSION = 'a';
-const FLOW_INFINITE_EXTENT: CoordinateExtent = [[Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY], [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY]];
-const MAX_EMPTY_SCREEN_RATIO = 0.7;
 const DEFAULT_NODE_BOUNDS_SIZE = { width: 240, height: 96 };
 const NODE_HEADER_HEIGHT = 32;
 const DSP_ERROR_PANEL_LIMIT = 4;
-const FIT_VIEW_OPTIONS = { padding: DEFAULT_FIT_VIEW_PADDING };
-const CONNECTION_LINE_COLORS: Record<LinkMode, string> = {
-  set: 'var(--color-link-set)',
-  add: 'var(--color-link-add)',
-  multiply: 'var(--color-link-multiply)',
-  bend: 'var(--color-link-bend)',
-};
-const DELETE_KEY_CODES = ['Backspace', 'Delete'];
-const MULTI_SELECTION_KEY_CODES = ['Meta', 'Shift'];
-const REACT_FLOW_PRO_OPTIONS = { hideAttribution: true };
 
 let subpatchCloneSequence = 0;
-
-type GraphSnapshot = Pick<PersistedEditorState, 'nodes' | 'edges' | 'areas'>;
-type HistoryState = { past: GraphSnapshot[]; future: GraphSnapshot[] };
-
-interface DraftNodeConnection {
-  originNodeId: string;
-  originHandleId: string;
-  originHandleType: HandleType;
-  pointer: { x: number; y: number };
-  modifierActive: boolean;
-  mode: LinkMode;
-}
-
-interface DuplicateDragState {
-  nodeIds: Set<string>;
-  originalPositions: Record<string, { x: number; y: number }>;
-  currentPositions: Record<string, { x: number; y: number }>;
-  duplicating: boolean;
-  linkExternal: boolean;
-}
-
-interface NodeDragSelectionSnapshot {
-  nodeId: string;
-  preserveSelection: boolean;
-  nodeSelection: Record<string, boolean>;
-  edgeSelection: Record<string, boolean>;
-}
-
-interface ScreenPoint {
-  x: number;
-  y: number;
-}
-
-interface AreaDrawState {
-  start: ScreenPoint;
-  current: ScreenPoint;
-}
-
-interface AreaDragState {
-  areaId: string;
-  start: ScreenPoint;
-  captureTarget: HTMLElement;
-  areaPositions: Record<string, { x: number; y: number }>;
-  nodePositions: Record<string, { x: number; y: number }>;
-  currentAreaPositions: Record<string, { x: number; y: number }>;
-  currentNodePositions: Record<string, { x: number; y: number }>;
-  duplicating: boolean;
-  linkExternal: boolean;
-  historyCommitted: boolean;
-}
-
-interface AreaResizeState {
-  areaId: string;
-  start: ScreenPoint;
-  corner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-  originalPosition: { x: number; y: number };
-  originalSize: { width: number; height: number };
-  historyCommitted: boolean;
-}
-
-interface AreaUiResizeState {
-  areaId: string;
-  start: ScreenPoint;
-  originalUiHeight: number;
-  historyCommitted: boolean;
-}
-
-interface SubpatchEditFrame {
-  groupId: string;
-  parentNodes: ShaderFlowNode[];
-  parentEdges: ShaderFlowEdge[];
-  parentAreas: EditorArea[];
-  parentPatchName: string;
-  parentHistory: HistoryState;
-}
 
 interface BoundaryPortSelection {
   nodeId: string;
@@ -333,15 +200,10 @@ interface MidiControlVisualState {
   lastRawValue?: number;
 }
 
-interface CopiedGraph {
-  nodes: ShaderFlowNode[];
-  edges: ShaderFlowEdge[];
-}
-
 export function NodeEditor({ hosted }: { hosted?: HostedSession } = {}) {
-  return <ReactFlowProvider>{hosted
+  return <>{hosted
     ? <HostedEditorInner key={hosted.sessionId} hosted={hosted} />
-    : <StandaloneEditorInner />}</ReactFlowProvider>;
+    : <StandaloneEditorInner />}</>;
 }
 function StandaloneEditorInner() {
   const [options, setOptions] = useState({});
@@ -356,8 +218,6 @@ function HostedEditorInner({ hosted }: { hosted: HostedSession }) {
 function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngineState; hosted?: HostedSession; onAudioOptions?: (options: { selectedMidiInputDeviceIds: string[]; selectedMidiOutputDeviceIds: string[]; midiClockOutputEnabled: boolean; recordingPatchName: string }) => void }) {
   // Backend and initial source are chosen at construction, before device/storage hooks.
   const hostedState = useSyncExternalStore(hosted?.subscribe ?? emptySubscribe, hosted?.getSnapshot ?? emptySnapshot, hosted?.getSnapshot ?? emptySnapshot);
-  const flowStore = useStoreApi();
-  const nodesInitialized = useNodesInitialized();
   const initialState = useMemo(() => {
     if (!hosted) return loadInitialEditorState();
     const document = hosted.getDocument();
@@ -387,29 +247,30 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
   }, []);
 
   const viewportRef = useRef<Viewport>(initialViewport);
-  const [canvasLocked, setCanvasLocked] = useState(false);
+
   const [settledGraphZoom, setSettledGraphZoom] = useState(initialViewport.zoom);
   const [editorSize, setEditorSize] = useState({ width: 0, height: 0 });
-  const [editingTypeNodeId, setEditingTypeNodeId] = useState<string | null>(null);
   const [reactFlow, setReactFlow] = useState<ReactFlowInstance<ShaderFlowNode, ShaderFlowEdge> | null>(null);
-  const [edgeOverlayElement, setEdgeOverlayElement] = useState<HTMLElement | null>(null);
-  const [nodes, setNodes] = useState<ShaderFlowNode[]>(() => {
-    const callbacks = nodeCallbacksPlaceholder();
-    return initialState
-      ? editorStateToFlowNodes(initialState, callbacks, null)
-      : toFlowNodes(demoPatch, callbacks, null);
+  const initialPatch = useMemo(() => initialState
+    ? { ...patchFromFlow(editorStateToFlowNodes(initialState, nodeCallbacksPlaceholder(), null), editorStateToFlowEdges(initialState, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder), initialState.areas), name: initialState.ui?.patchName, buffers: initialState.buffers }
+    : demoPatch, []);
+  const legacyCallbacks = useMemo(nodeCallbacksPlaceholder, []);
+  const shared = useTeiaGraph(initialPatch, legacyCallbacks, event => {
+    const graph = graphAt(event.document, event.path);
+    const presentation = toFlowNodes(graphToPatch(graph), legacyCallbacks, null);
+    const copies = event.fragment.nodes.flatMap((node, index) => {
+      if (node.kind !== 'Buffer') return [];
+      const source = presentation.find(item => item.id === node.id);
+      const target = presentation.find(item => item.id === event.nodeIds[index]);
+      return source && target ? [{ sourceNodeId: runtimeDspNodeIdForFlowNode(source, presentation, event.path), targetNodeId: runtimeDspNodeIdForFlowNode(target, presentation, event.path) }] : [];
+    });
+    audio.copyBuffers(copies);
+    const assets = copies.flatMap(copy => bufferAssetsRef.current[copy.sourceNodeId] ? [[copy.targetNodeId, bufferAssetsRef.current[copy.sourceNodeId]]] : []);
+    if (assets.length) replaceBufferAssets({ ...bufferAssetsRef.current, ...Object.fromEntries(assets) });
   });
-  const [areas, setAreas] = useState<EditorArea[]>(() => initialState?.areas ?? []);
-  const [nodeStackOrder, setNodeStackOrder] = useState<string[]>(() => nodes.map((node) => node.id));
-  const [edges, setEdges] = useState<ShaderFlowEdge[]>(() => {
-    return initialState
-      ? editorStateToFlowEdges(initialState, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder)
-      : toFlowEdges(demoPatch, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder);
-  });
-  const [weightTargetEdgeId, setWeightTargetEdgeId] = useState<string | null>(null);
-  const [reconnectingEdgeId, setReconnectingEdgeId] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryState>({ past: [], future: [] });
-  const zoomInteractionRef = useRef({ zoomChanged: false, lastZoom: initialViewport.zoom });
+  const { nodes, edges, areas, setNodes, setEdges, setAreas } = shared;
+  const [nodeStackOrder, setNodeStackOrder] = useState<string[]>(() => nodes.map(node => node.id));
+  const canvasLocked = shared.snapshot.mode !== 'edit';
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -428,42 +289,14 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
   const renderedNodeCacheRef = useRef<ShaderFlowNode[]>([]);
   const areasRef = useRef(areas);
   const edgesRef = useRef(edges);
-  const weightTargetEdgeIdRef = useRef<string | null>(null);
   const editorShellRef = useRef<HTMLElement | null>(null);
-  const historyGroupRef = useRef<{ key: string; time: number } | null>(null);
-  const draftNodeConnectionRef = useRef<DraftNodeConnection | null>(null);
-  const provisionalNodeIdsRef = useRef(new Set<string>());
-  const duplicateDragRef = useRef<DuplicateDragState | null>(null);
-  const pendingNodeDragChangesRef = useRef<Map<string, NodeChange<ShaderFlowNode>>>(new Map());
   const nodeDragAnimationFrameRef = useRef<number | null>(null);
-  const pendingNodeDragSelectionRef = useRef<NodeDragSelectionSnapshot | null>(null);
-  const activeNodeDragSelectionRef = useRef<NodeDragSelectionSnapshot | null>(null);
-  const routingAppendicesRef = useRef<Array<{
-    id: string;
-    ownerId: string;
-    offset: { x: number; y: number };
-  }>>([]);
-  const selectionDragStartRef = useRef<ScreenPoint | null>(null);
-  const canvasDragPointerRef = useRef<ScreenPoint | null>(null);
-  const canvasDragActiveRef = useRef(false);
-  const canvasDragPointerIdRef = useRef<number | null>(null);
-  const ignoreSyntheticSelectionPointerDownRef = useRef(false);
-  const ignoreSyntheticSelectionPointerUpRef = useRef(false);
-  const areaDrawRef = useRef<AreaDrawState | null>(null);
-  const areaDragRef = useRef<AreaDragState | null>(null);
-  const areaResizeRef = useRef<AreaResizeState | null>(null);
-  const areaUiResizeRef = useRef<AreaUiResizeState | null>(null);
   const pendingBoundaryPortRef = useRef<BoundaryPortSelection | null>(null);
-  const [draftNodeConnection, setDraftNodeConnection] = useState<DraftNodeConnection | null>(null);
   const [temporarilyRevealedNodeId, setTemporarilyRevealedNodeId] = useState<string | null>(null);
-  const [duplicateDrag, setDuplicateDrag] = useState<DuplicateDragState | null>(null);
-  const [areaDuplicateDrag, setAreaDuplicateDrag] = useState<AreaDragState | null>(null);
-  const [editingStack, setEditingStack] = useState<SubpatchEditFrame[]>([]);
+  const graphPath = shared.snapshot.path;
   const [pendingBoundaryPort, setPendingBoundaryPort] = useState<BoundaryPortSelection | null>(null);
   const [selectedBoundaryPort, setSelectedBoundaryPort] = useState<BoundaryPortSelection | null>(null);
   const [newPatchConfirmationOpen, setNewPatchConfirmationOpen] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const moreMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const fm1BusyRef = useRef(false);
   const [fm1Mode, setFm1Mode] = useState(() => !hosted && initialState?.ui?.fm1Mode === true);
   const [fm1Live, setFm1Live] = useState(false);
@@ -489,8 +322,6 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
   const [midiControlVisuals, setMidiControlVisuals] = useState<Record<string, MidiControlVisualState>>({});
   const midiControlVisualsRef = useRef<Record<string, MidiControlVisualState>>({});
   const [bufferAssets, setBufferAssets] = useState<Record<string, BufferAsset>>(() => initialState?.buffers ?? {});
-  const copiedGraphRef = useRef<CopiedGraph | null>(null);
-  const pasteCountRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const sampleFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -511,14 +342,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
   const bufferLoadGenerationRef = useRef(0);
   const persistedEditorStateJsonRef = useRef<string | null>(null);
   const selectedLocalPatchOptionRef = useRef<HTMLButtonElement | null>(null);
-  const reconnectingEdgeRef = useRef(false);
-  const reconnectFixedHandleRef = useRef<HandleType | null>(null);
-  const reconnectCompletedRef = useRef(false);
-  const reconnectCancelledRef = useRef(false);
-  const nodeConnectionCompletedRef = useRef(false);
-  const reconnectDuplicateRef = useRef(false);
-  const reconnectingEdgeSnapshotRef = useRef<ShaderFlowEdge | null>(null);
-  const rootPatchName = editingStack[0]?.parentPatchName ?? patchName;
+  const rootPatchName = patchName;
   useEffect(() => {
     onAudioOptions?.({ selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds, midiClockOutputEnabled, recordingPatchName: rootPatchName });
   }, [onAudioOptions, selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds, midiClockOutputEnabled, rootPatchName]);
@@ -574,7 +398,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
 
   const requestBufferSampleName = useCallback((nodeId: string, defaultName: string): Promise<string | null> => {
     bufferSamplePromptResolverRef.current?.(null);
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       bufferSamplePromptResolverRef.current = resolve;
       setBufferSamplePrompt({ nodeId, name: defaultName });
     });
@@ -608,14 +432,10 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     ? formatRecordingTimestamp(audio.recording.elapsedSeconds)
     : 'REC';
   const localPatchStorageEnabled = useMemo(() => !hosted && canUseLocalPatchStorage(), []);
-  const [reconnectPreviewEdge, setReconnectPreviewEdge] = useState<ShaderFlowEdge | null>(null);
-  const [areaDraw, setAreaDraw] = useState<AreaDrawState | null>(null);
-  const [resumedSelectionDraw, setResumedSelectionDraw] = useState<AreaDrawState | null>(null);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
   const [surfacedAreaId, setSurfacedAreaId] = useState<string | null>(null);
   const [editingAreaId, setEditingAreaId] = useState<string | null>(null);
   const areaTitleInputRef = useRef<HTMLInputElement | null>(null);
-  const areaTitlePointerStartRef = useRef<ScreenPoint | null>(null);
 
   useEffect(() => {
     if (!editingAreaId) return;
@@ -707,31 +527,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     midiControlVisualsRef.current = midiControlVisuals;
   }, [midiControlVisuals]);
 
-  useEffect(() => {
-    areasRef.current = areas;
-    setNodes((current) => {
-      let changed = false;
-      const next = current.map((node) => {
-        if (node.data.patchNode.type !== 'Spread' && node.data.patchNode.type !== 'Spawn' && node.data.patchNode.type !== 'ConditionalExecution') return node;
-        const area = areas.find((candidate) => candidate.kind === 'spread' && candidate.spreadNodeId === node.id);
-        const spreadNodeIds = area?.locked ? [...(area.nodeIds ?? [])] : undefined;
-        if (optionalStringArraysEqual(node.data.patchNode.spreadNodeIds, spreadNodeIds)) return node;
-        changed = true;
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            patchNode: { ...node.data.patchNode, spreadNodeIds },
-          },
-        };
-      });
-      return changed ? next : current;
-    });
-  }, [areas]);
-
-  useEffect(() => {
-    setAreas((current) => reconcileSpreadAreas(current, nodesRef.current));
-  }, [nodes]);
+  useEffect(() => { areasRef.current = areas; }, [areas]);
 
   useEffect(() => {
     edgesRef.current = edges;
@@ -761,42 +557,11 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     pendingBoundaryPortRef.current = pendingBoundaryPort;
   }, [pendingBoundaryPort]);
 
-  const updateDraftNodeConnection = useCallback((
-    value: DraftNodeConnection | null | ((current: DraftNodeConnection | null) => DraftNodeConnection | null),
-  ) => {
-    const next = typeof value === 'function' ? value(draftNodeConnectionRef.current) : value;
-    draftNodeConnectionRef.current = next;
-    setDraftNodeConnection(next);
-  }, []);
-
-  const updateDuplicateDrag = useCallback((
-    value: DuplicateDragState | null | ((current: DuplicateDragState | null) => DuplicateDragState | null),
-  ) => {
-    const next = typeof value === 'function' ? value(duplicateDragRef.current) : value;
-    duplicateDragRef.current = next;
-    setDuplicateDrag(next);
-  }, []);
-
-  const commitHistory = useCallback((groupKey?: string) => {
-    const now = Date.now();
-    const lastGroup = historyGroupRef.current;
-    if (groupKey && lastGroup?.key === groupKey && now - lastGroup.time < 800) {
-      historyGroupRef.current = { key: groupKey, time: now };
-      return;
-    }
-
-    const snapshot = graphSnapshot(nodesRef.current, edgesRef.current, areasRef.current);
-    const snapshotKey = graphSnapshotKey(snapshot);
-    setHistory((current) => {
-      const lastSnapshot = current.past[current.past.length - 1];
-      if (lastSnapshot && graphSnapshotKey(lastSnapshot) === snapshotKey) return current;
-      return {
-        past: [...current.past, snapshot].slice(-HISTORY_LIMIT),
-        future: [],
-      };
-    });
-    historyGroupRef.current = groupKey ? { key: groupKey, time: now } : null;
-  }, []);
+  const commitHistory = useCallback((_groupKey?: string) => {
+    if (shared.editor.getSnapshot().gesture) return;
+    shared.editor.beginGesture('Edit Teia control');
+    queueMicrotask(() => { if (shared.editor.getSnapshot().gesture) shared.editor.commitGesture(); });
+  }, [shared.editor]);
 
   const [hostedTransient, setHostedTransient] = useState<Record<string, Record<string, number>>>({});
   const sendHostedGesture = useCallback((nodeId: string, type: string | null, values: Record<string, number>) => {
@@ -818,7 +583,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
 
   const updateNodeParam = useCallback((nodeId: string, port: string, value: number) => {
     const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-    if (sendHostedGesture(scopedDspNodeId(nodeId, editingStack.map(frame => frame.groupId)), relatedNode?.data.patchNode.type ?? null, { [port]: value })) return;
+    if (sendHostedGesture(scopedDspNodeId(nodeId, graphPath), relatedNode?.data.patchNode.type ?? null, { [port]: value })) return;
     commitHistory(`param:${nodeId}:${port}`);
     if (relatedNode?.data.patchNode.type === 'Joystick') {
       const clearX = port === 'xMidiChannel' || port === 'xMidiCc';
@@ -855,6 +620,12 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     )
       ? resizedPatternScopeSize(relatedNode.data.patchNode as PatchNode, { ...relatedNode.data.patchNode.params, [port]: value })
       : undefined;
+    if (!nextPatchNode && !nextPatternScopeSize && relatedNode?.data.patchNode.type !== 'Ins' && relatedNode?.data.patchNode.type !== 'Params') {
+      const node = shared.editor.graph.nodes.find(node => node.id === nodeId);
+      const id = node?.ports?.find(candidate => candidate.direction === 'input' && portName(node, candidate.id, 'input') === port)?.id ?? port;
+      shared.editor.setValue(nodeId, id, value);
+      return;
+    }
     setNodes((current) => current.map((node) => node.id === nodeId
       ? {
           ...node,
@@ -880,12 +651,12 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         return nextDefinition.outputs.some((output) => output.name === link.from.port) ? [edge] : [];
       })));
     }
-  }, [commitHistory, sendHostedGesture, editingStack]);
+  }, [commitHistory, sendHostedGesture, graphPath, shared.editor]);
 
   const updateNodeParams = useCallback((nodeId: string, values: Record<string, number>) => {
     if (Object.keys(values).length === 0) return;
     const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-    if (sendHostedGesture(scopedDspNodeId(nodeId, editingStack.map(frame => frame.groupId)), relatedNode?.data.patchNode.type ?? null, values)) return;
+    if (sendHostedGesture(scopedDspNodeId(nodeId, graphPath), relatedNode?.data.patchNode.type ?? null, values)) return;
     commitHistory(`params:${nodeId}`);
     if (relatedNode?.data.patchNode.type === 'Joystick') {
       const clearX = Object.hasOwn(values, 'x');
@@ -898,19 +669,63 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         });
       }
     }
-    setNodes((current) => current.map((node) => node.id === nodeId
-      ? {
-          ...node,
-          data: {
-            ...node.data,
-            patchNode: {
-              ...node.data.patchNode,
-              params: { ...node.data.patchNode.params, ...values },
-            },
-          },
+    const node = shared.editor.graph.nodes.find(node => node.id === nodeId);
+    shared.editor.setValues(nodeId, Object.fromEntries(Object.entries(values).map(([name, value]) => [node?.ports?.find(port => port.direction === 'input' && portName(node, port.id, 'input') === name)?.id ?? name, value])));
+  }, [commitHistory, sendHostedGesture, graphPath, shared.editor]);
+
+  const updateNodeType = useCallback(async (nodeId: string, type: NodeType) => {
+    let relatedNode = nodesRef.current.find((node) => node.id === nodeId);
+    if (!relatedNode) return;
+    if (['Group', 'Ins', 'Outs'].includes(type)) { shared.editor.changeNodeKind(nodeId, graphKind(type)); return; }
+
+    let convertedBufferSample: SampleAsset | undefined;
+    if (relatedNode.data.patchNode.type === 'Buffer' && type === 'SamplePlayer') {
+      if (hosted) { setImportError('Buffer to Sample conversion requires a host media conversion adapter.'); return; }
+      const dspNodeId = runtimeDspNodeIdForFlowNode(
+        relatedNode,
+        nodesRef.current,
+        graphPath,
+      );
+      const snapshot = await audio.captureBuffer(dspNodeId);
+      relatedNode = nodesRef.current.find((node) => node.id === nodeId);
+      if (!relatedNode || relatedNode.data.patchNode.type !== 'Buffer') return;
+
+      if (!snapshot && bufferVisualizationContainsAudio(audio.buffers[dspNodeId])) {
+        setImportError('The recorded Buffer could not be read, so it was kept unchanged. Try switching it to Sample again.');
+        return;
+      }
+
+      if (snapshot && bufferContainsAudio(snapshot.samples)) {
+        const requestedName = await requestBufferSampleName(
+          nodeId,
+          relatedNode.data.patchNode.customLabel?.trim() || `${nodeId}-buffer`,
+        );
+        relatedNode = nodesRef.current.find((node) => node.id === nodeId);
+        if (!relatedNode || relatedNode.data.patchNode.type !== 'Buffer') return;
+
+        if (requestedName === null) {
+          convertedBufferSample = undefined;
+        } else {
+          try {
+            const wav = encodeMonoSamplesAsWav(snapshot.samples, snapshot.sampleRate);
+            const file = new File([wav], sampleRecordingFileName(requestedName, '.wav'), { type: 'audio/wav' });
+            convertedBufferSample = await uploadLocalSample(file);
+            relatedNode = nodesRef.current.find((node) => node.id === nodeId);
+            if (!relatedNode || relatedNode.data.patchNode.type !== 'Buffer') return;
+            setImportError(null);
+          } catch (error) {
+            setImportError(error instanceof Error ? error.message : String(error));
+            return;
+          }
         }
-      : node));
-  }, [commitHistory, sendHostedGesture, editingStack]);
+      }
+    }
+
+    shared.editor.changeNodeKind(nodeId, graphKind(type), JSON.parse(JSON.stringify({
+      ...(type === 'CustomWave' ? { customWave: normalizeCustomWave(relatedNode.data.patchNode.customWave, relatedNode.data.patchNode.params) } : {}),
+      ...(type === 'SamplePlayer' && convertedBufferSample ? { sample: convertedBufferSample } : {}),
+    })));
+  }, [audio.captureBuffer, audio.buffers, hosted, graphPath, requestBufferSampleName, shared.editor]);
 
   const updateNodeCustomWave = useCallback((nodeId: string, customWave: CustomWaveSettings, historyKey?: string) => {
     const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
@@ -971,36 +786,6 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         return !link || link.to.node !== nodeId || nextInputNames.has(link.to.port);
       }));
     }
-  }, [commitHistory]);
-
-  const updateGroupSubpatchName = useCallback((nodeId: string, requestedName: string) => {
-    const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-    if (!relatedNode || relatedNode.data.patchNode.type !== 'Group') return;
-
-    const nextName = normalizeSubpatchName(requestedName, relatedNode.data.patchNode.subpatchName ?? nodeId);
-    if (nextName === relatedNode.data.patchNode.subpatchName) return;
-
-    const cloneId = relatedNode.data.patchNode.subpatchCloneId;
-    commitHistory(`subpatch-name:${nodeId}`);
-    setNodes((current) => current.map((node) => {
-      const isLinkedGroup = node.id === nodeId || (
-        node.data.patchNode.type === 'Group' &&
-        cloneId !== undefined &&
-        node.data.patchNode.subpatchCloneId === cloneId
-      );
-      if (!isLinkedGroup) return node;
-
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          patchNode: {
-            ...node.data.patchNode,
-            subpatchName: nextName,
-          },
-        },
-      };
-    }));
   }, [commitHistory]);
 
   const updateNodeSample = useCallback((nodeId: string, sample: SampleAsset) => {
@@ -1426,264 +1211,6 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     ));
   }, [commitHistory]);
 
-  const updateEdgeEnabled = useCallback((edgeIdToUpdate: string, enabled: boolean) => {
-    commitHistory();
-    setEdges((current) => current.map((edge) => edge.id === edgeIdToUpdate
-      ? {
-          ...edge,
-          data: {
-            ...edge.data,
-            weight: edge.data?.weight ?? 1,
-            mode: edge.data?.mode ?? 'set',
-            enabled,
-            onWeightChange: updateEdgeWeightPlaceholder,
-            onModeChange: updateEdgeModePlaceholder,
-            onInsertNode: insertNodeOnEdgePlaceholder,
-          },
-        }
-      : edge,
-    ));
-  }, [commitHistory]);
-
-  const toggleSelectedEdges = useCallback(() => {
-    const selectedEdgeIds = new Set(
-      edgesRef.current.filter((edge) => edge.selected === true).map((edge) => edge.id),
-    );
-    if (selectedEdgeIds.size === 0) return false;
-
-    commitHistory();
-    setEdges((current) => current.map((edge) => (
-      selectedEdgeIds.has(edge.id)
-        ? {
-            ...edge,
-            data: {
-              ...edge.data,
-              weight: edge.data?.weight ?? 1,
-              mode: edge.data?.mode ?? 'set',
-              enabled: edge.data?.enabled === false,
-              onWeightChange: updateEdgeWeightPlaceholder,
-              onModeChange: updateEdgeModePlaceholder,
-              onInsertNode: insertNodeOnEdgePlaceholder,
-            },
-          }
-        : edge
-    )));
-    return true;
-  }, [commitHistory]);
-
-  const setSelectedEdgesMode = useCallback((mode: LinkMode) => {
-    const selectedEdgeIds = new Set(
-      edgesRef.current
-        .filter((edge) => edge.selected === true && (edge.data?.mode ?? 'set') !== mode)
-        .map((edge) => edge.id),
-    );
-    if (selectedEdgeIds.size === 0) return false;
-
-    commitHistory(`mode:${mode}`);
-    setEdges((current) => current.map((edge) => (
-      selectedEdgeIds.has(edge.id)
-        ? {
-            ...edge,
-            data: {
-              ...edge.data,
-              weight: edge.data?.weight ?? 1,
-              mode,
-              enabled: edge.data?.enabled !== false,
-              onWeightChange: updateEdgeWeightPlaceholder,
-              onModeChange: updateEdgeModePlaceholder,
-              onInsertNode: insertNodeOnEdgePlaceholder,
-            },
-          }
-        : edge
-    )));
-    return true;
-  }, [commitHistory]);
-
-  const updateNodeId = useCallback((nodeId: string, requestedId: string) => {
-    const nextId = uniqueNodeId(requestedId, nodeId, nodesRef.current);
-    if (!nextId || nextId === nodeId) return;
-
-    commitHistory();
-    setNodes((current) => current.map((node) => node.id === nodeId
-      ? {
-          ...node,
-          id: nextId,
-          data: {
-            ...node.data,
-            patchNode: { ...node.data.patchNode, id: nextId },
-          },
-        }
-      : node,
-    ));
-    setEdges((current) => transformEdgeTree(current, (edge) => renameEdgeNode(edge, nodeId, nextId)));
-    setEditingTypeNodeId((current) => current === nodeId ? nextId : current);
-  }, [commitHistory]);
-
-  const updateNodeType = useCallback(async (nodeId: string, type: NodeType) => {
-    let relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-    if (!relatedNode) return;
-
-    let convertedBufferSample: SampleAsset | undefined;
-    if (relatedNode.data.patchNode.type === 'Buffer' && type === 'SamplePlayer') {
-      if (hosted) { setImportError('Buffer to Sample conversion requires a host media conversion adapter.'); return; }
-      const dspNodeId = runtimeDspNodeIdForFlowNode(
-        relatedNode,
-        nodesRef.current,
-        editingStack.map((frame) => frame.groupId),
-      );
-      const snapshot = await audio.captureBuffer(dspNodeId);
-      relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-      if (!relatedNode || relatedNode.data.patchNode.type !== 'Buffer') return;
-
-      if (!snapshot && bufferVisualizationContainsAudio(audio.buffers[dspNodeId])) {
-        setImportError('The recorded Buffer could not be read, so it was kept unchanged. Try switching it to Sample again.');
-        return;
-      }
-
-      if (snapshot && bufferContainsAudio(snapshot.samples)) {
-        const requestedName = await requestBufferSampleName(
-          nodeId,
-          relatedNode.data.patchNode.customLabel?.trim() || `${nodeId}-buffer`,
-        );
-        relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-        if (!relatedNode || relatedNode.data.patchNode.type !== 'Buffer') return;
-
-        if (requestedName === null) {
-          convertedBufferSample = undefined;
-        } else {
-          try {
-            const wav = encodeMonoSamplesAsWav(snapshot.samples, snapshot.sampleRate);
-            const file = new File([wav], sampleRecordingFileName(requestedName, '.wav'), { type: 'audio/wav' });
-            convertedBufferSample = await uploadLocalSample(file);
-            relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-            if (!relatedNode || relatedNode.data.patchNode.type !== 'Buffer') return;
-            setImportError(null);
-          } catch (error) {
-            setImportError(error instanceof Error ? error.message : String(error));
-            return;
-          }
-        }
-      }
-    }
-
-    provisionalNodeIdsRef.current.delete(nodeId);
-
-    const previousDefinition = relatedNode.data.patchNode.type
-      ? getNodeDefinition(relatedNode.data.patchNode as PatchNode)
-      : null;
-    const nextId = shouldAutoRenameForTypeChange(nodeId, relatedNode.data.patchNode.type)
-      ? nextTypeNodeId(nodeId, type, nodesRef.current)
-      : nodeId;
-    const expression = type === 'Expression' ? DEFAULT_EXPRESSION : undefined;
-    const expressionInputs = expression ? expressionInputDefinitions(expression) : undefined;
-    const nextDefinition = expressionInputs
-      ? { ...getDefinition(type), inputs: expressionInputs }
-      : getDefinition(type);
-    const groupPatchNode = type === 'Group'
-      ? {
-          id: nextId,
-          type: 'Group' as const,
-          params: {},
-          position: relatedNode.position,
-          inputs: [] as PortDefinition[],
-          outputs: [] as PortDefinition[],
-        }
-      : null;
-    const groupSubpatch = groupPatchNode ? emptySubpatchForGroup(groupPatchNode, relatedNode.position) : undefined;
-    const nextParams = expressionInputs
-      ? syncParamsToInputs({}, expressionInputs)
-      : defaultParamsFor(type);
-
-    previousDefinition?.inputs.forEach((input) => {
-      const nextInput = nextDefinition.inputs.find((candidate) => candidate.name === input.name);
-      if (!nextInput) return;
-      const previousValue = relatedNode.data.patchNode.params[input.name];
-      if (previousValue !== undefined) nextParams[nextInput.name] = previousValue;
-    });
-
-    commitHistory();
-    setNodes((current) => current.map((node) => node.id === nodeId
-      ? {
-          ...node,
-          id: nextId,
-          data: {
-            ...node.data,
-            patchNode: {
-              id: nextId,
-              type,
-              ...(node.data.patchNode.customLabel ? { customLabel: node.data.patchNode.customLabel } : {}),
-              ...(type === 'Group' ? {
-                subpatchName: node.data.patchNode.subpatchName ?? nextId,
-                subpatchCloneId: node.data.patchNode.subpatchCloneId ?? makeSubpatchCloneId(nextId),
-                inputs: [] as PortDefinition[],
-                outputs: [] as PortDefinition[],
-                subpatch: groupSubpatch,
-              } : {}),
-              ...(expression !== undefined ? { expression } : {}),
-              ...(type === 'CustomWave' ? {
-                customWave: normalizeCustomWave(node.data.patchNode.customWave, node.data.patchNode.params),
-              } : {}),
-              ...(type === 'SamplePlayer' && convertedBufferSample ? { sample: convertedBufferSample } : {}),
-              ...((type === 'Spread' || type === 'Spawn' || type === 'ConditionalExecution') ? {
-                scopeSize: { ...(type === 'Spawn' ? DEFAULT_SPAWN_SIZE : DEFAULT_SPREAD_SIZE) },
-              } : {}),
-              params: nextParams,
-              position: node.position,
-              ...(expressionInputs ? { inputs: expressionInputs } : {}),
-            },
-          },
-        }
-      : node,
-    ));
-    setEdges((current) => transformEdgeTree(current, (edge) => {
-      const renamed = renameEdgeNode(edge, nodeId, nextId);
-      return remapEdgeForNodeType(renamed, nextId, previousDefinition, nextDefinition);
-    }));
-    setAreas((current) => {
-      const withoutPreviousSpread = current.filter((area) => area.spreadNodeId !== nodeId);
-      if (type !== 'Spread' && type !== 'Spawn' && type !== 'ConditionalExecution') return withoutPreviousSpread;
-      return [...withoutPreviousSpread, spreadAreaForNode({
-        ...relatedNode,
-        id: nextId,
-        data: {
-          ...relatedNode.data,
-          patchNode: {
-            ...relatedNode.data.patchNode,
-            id: nextId,
-            type,
-            scopeSize: { ...(type === 'Spawn' ? DEFAULT_SPAWN_SIZE : DEFAULT_SPREAD_SIZE) },
-          },
-        },
-      })];
-    });
-    setEditingTypeNodeId((current) => current === nodeId ? nextId : current);
-  }, [audio, commitHistory, editingStack, requestBufferSampleName]);
-
-  const convertNodeToArea = useCallback((nodeId: string) => {
-    const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-    if (!relatedNode) return;
-
-    const nodeSize = viewportNodeSize(relatedNode);
-    const areaId = `area-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-
-    provisionalNodeIdsRef.current.delete(nodeId);
-    commitHistory();
-    setNodes((current) => current.filter((node) => node.id !== nodeId));
-    setEdges((current) => current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
-    setAreas((current) => [...current, {
-      id: areaId,
-      title: 'Area',
-      position: { ...relatedNode.position },
-      size: {
-        width: Math.max(48, nodeSize.width),
-        height: Math.max(48, nodeSize.height),
-      },
-    }]);
-    setEditingTypeNodeId(null);
-    setSelectedAreaId(areaId);
-    setSurfacedAreaId(areaId);
-  }, [commitHistory]);
-
   const updateNodeCustomLabel = useCallback((nodeId: string, requestedLabel: string) => {
     const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
     if (!relatedNode) return;
@@ -1849,71 +1376,6 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         },
       };
     }));
-  }, [commitHistory]);
-
-  const updateNodeCompactPorts = useCallback((nodeId: string, compact: boolean) => {
-    const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-    if (!relatedNode || relatedNode.data.patchNode.compactPorts === compact) return;
-
-    commitHistory(`compact:${nodeId}`);
-    setNodes((current) => current.map((node) => node.id === nodeId
-      ? {
-          ...node,
-          selected: compact ? false : node.selected,
-          data: {
-            ...node.data,
-            patchNode: {
-              ...node.data.patchNode,
-              compactPorts: compact,
-            },
-          },
-        }
-      : node,
-    ));
-  }, [commitHistory]);
-
-  const updateNodeEnabled = useCallback((nodeId: string, enabled: boolean) => {
-    const relatedNode = nodesRef.current.find((node) => node.id === nodeId);
-    if (!relatedNode || (relatedNode.data.patchNode.enabled !== false) === enabled) return;
-
-    commitHistory(`node-enabled:${nodeId}`);
-    setNodes((current) => current.map((node) => node.id === nodeId
-      ? {
-          ...node,
-          data: {
-            ...node.data,
-            patchNode: {
-              ...node.data.patchNode,
-              ...(enabled ? { enabled: undefined } : { enabled: false }),
-            },
-          },
-        }
-      : node,
-    ));
-  }, [commitHistory]);
-
-  const toggleSelectedNodes = useCallback(() => {
-    const selectedNodeIds = new Set(nodesRef.current.filter((node) => node.selected === true).map((node) => node.id));
-    if (selectedNodeIds.size === 0) return false;
-
-    const shouldEnable = [...selectedNodeIds].some((nodeId) => (
-      nodesRef.current.find((node) => node.id === nodeId)?.data.patchNode.enabled === false
-    ));
-    commitHistory('node-enabled');
-    setNodes((current) => current.map((node) => selectedNodeIds.has(node.id)
-      ? {
-          ...node,
-          data: {
-            ...node.data,
-            patchNode: {
-              ...node.data.patchNode,
-              ...(shouldEnable ? { enabled: undefined } : { enabled: false }),
-            },
-          },
-        }
-      : node,
-    ));
-    return true;
   }, [commitHistory]);
 
   const updateNodeScopeSize = useCallback((nodeId: string, size: ScopeNodeSize, anchor: 'left' | 'right', renderedPreviousSize?: ScopeNodeSize) => {
@@ -2114,541 +1576,6 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     setEdges((current) => dedupeEdges(current.flatMap((edge) => remapSelectorEdgeAfterRemoval(edge, nodeId, portMap, removedIndex))));
   }, [commitHistory, updateNodeParam]);
 
-  const addDraftNode = useCallback((position: { x: number; y: number }) => {
-    const id = makeNodeId('node', new Set(nodesRef.current.map((node) => node.id)));
-    provisionalNodeIdsRef.current.add(id);
-    commitHistory();
-    setNodes((current) => [
-      ...current.map((node) => ({ ...node, selected: false })),
-      {
-        id,
-        type: 'shaderNode',
-        position,
-        selected: true,
-        data: {
-          patchNode: { id, type: null, params: {}, position },
-          ...nodeCallbacksPlaceholder(),
-          isTypePickerOpen: true,
-        },
-      },
-    ]);
-    setEditingTypeNodeId(id);
-  }, [commitHistory]);
-
-  const cancelProvisionalNode = useCallback((nodeId: string) => {
-    if (!provisionalNodeIdsRef.current.delete(nodeId)) {
-      setEditingTypeNodeId(null);
-      return;
-    }
-
-    setNodes((current) => current.filter((node) => node.id !== nodeId));
-    setEdges((current) => current.filter((edge) => {
-      const link = linkFromEdge(edge);
-      return !link || (link.from.node !== nodeId && link.to.node !== nodeId);
-    }));
-    setEditingTypeNodeId((current) => current === nodeId ? null : current);
-    setHistory((current) => ({
-      ...current,
-      past: current.past.slice(0, -1),
-    }));
-  }, []);
-
-  const insertNodeOnEdges = useCallback((relatedEdges: ShaderFlowEdge[]) => {
-    if (relatedEdges.length === 0) return;
-
-    const firstLink = edgeEndpoints(relatedEdges[0]);
-    if (!firstLink) return;
-
-    const sourceNode = nodesRef.current.find((node) => node.id === firstLink.from.node);
-    const targetNode = nodesRef.current.find((node) => node.id === firstLink.to.node);
-    const position = midpointPosition(sourceNode?.position, targetNode?.position);
-    const id = makeNodeId('node', new Set(nodesRef.current.map((node) => node.id)));
-    const relatedEdgeIds = new Set(relatedEdges.map((edge) => edge.id));
-
-    commitHistory();
-    setNodes((current) => [
-      ...current.map((node) => ({ ...node, selected: false })),
-      {
-        id,
-        type: 'shaderNode',
-        position,
-        selected: true,
-        data: {
-          patchNode: { id, type: null, params: {}, position },
-          ...nodeCallbacksPlaceholder(),
-          isTypePickerOpen: true,
-        },
-      },
-    ]);
-    setEdges((current) => {
-      const incoming: ShaderFlowEdge[] = [];
-      const downstream = transformEdgeTree(current, (edge) => {
-        if (!relatedEdgeIds.has(edge.id)) return { ...edge, selected: false };
-        const link = edgeEndpoints(edge);
-        if (!link) return edge;
-        incoming.push(edgeFromLink({ from: link.from, to: { node: id, port: 'value' },
-          weight: 1, mode: 'set', enabled: link.enabled,
-        }, updateEdgeWeight, updateEdgeMode, insertNodeOnEdgePlaceholder));
-        if (edge.data?.modulatesEdgeId) {
-          return { ...edge, source: id, sourceHandle: 'out:value', selected: false };
-        }
-        return edgeFromLink({ ...link, from: { node: id, port: 'value' } },
-          updateEdgeWeight, updateEdgeMode, insertNodeOnEdgePlaceholder);
-      });
-      return dedupeEdges([...incoming, ...downstream]);
-    });
-    setEditingTypeNodeId(id);
-  }, [commitHistory, updateEdgeMode, updateEdgeWeight]);
-
-  const insertNodeOnEdge = useCallback((edgeIdToInsert: string) => {
-    const edge = edgesRef.current.find((candidate) => candidate.id === edgeIdToInsert);
-    if (!edge) return;
-    insertNodeOnEdges([edge]);
-  }, [insertNodeOnEdges]);
-
-  const insertNodeOnPort = useCallback((nodeId: string, side: 'input' | 'output', port: string) => {
-    const relatedEdges = edgesRef.current.filter((edge) => {
-      const link = linkFromEdge(edge);
-      if (!link) return false;
-      return side === 'output'
-        ? link.from.node === nodeId && link.from.port === port
-        : link.to.node === nodeId && link.to.port === port;
-    });
-    insertNodeOnEdges(relatedEdges);
-  }, [insertNodeOnEdges]);
-
-  const deleteSelectedNodesWithBridge = useCallback(() => {
-    const selectedNodeIds = new Set(
-      nodesRef.current
-        .filter((node) => node.selected)
-        .map((node) => node.id),
-    );
-    if (selectedNodeIds.size === 0) return false;
-
-    const bridgeEdges = buildBridgeEdges(nodesRef.current, edgesRef.current, selectedNodeIds, updateEdgeWeight, updateEdgeMode, insertNodeOnEdgePlaceholder);
-    // Strength connections are real editor edges too. Filtering via
-    // linkFromEdge would discard all of them, including unrelated cables.
-    // The tree transform also removes descendants of a removed target cable.
-    const remainingEdges = transformEdgeTree(edgesRef.current, (edge) => (
-      selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target) ? null : edge
-    ));
-
-    commitHistory();
-    setNodes((current) => current.filter((node) => !selectedNodeIds.has(node.id)));
-    setEdges(dedupeEdges([...remainingEdges, ...bridgeEdges]));
-    setEditingTypeNodeId((current) => current && selectedNodeIds.has(current) ? null : current);
-    return true;
-  }, [commitHistory, updateEdgeMode, updateEdgeWeight]);
-
-  const deleteSelectedBoundaryPort = useCallback(() => {
-    const selected = selectedBoundaryPort;
-    if (!selected) return false;
-
-    const relatedNode = nodesRef.current.find((node) => node.id === selected.nodeId);
-    if (!relatedNode || !canRenameBoundaryPort(relatedNode.data.patchNode as PatchNode, selected.side)) return false;
-
-    commitHistory();
-    setNodes((current) => current.map((node) => {
-      if (node.id !== selected.nodeId) return node;
-
-      const nextInputs = selected.side === 'input'
-        ? (node.data.patchNode.inputs ?? []).filter((port) => port.name !== selected.port)
-        : node.data.patchNode.inputs;
-      const nextOutputs = selected.side === 'output'
-        ? (node.data.patchNode.outputs ?? []).filter((port) => port.name !== selected.port)
-        : node.data.patchNode.outputs;
-      const nextParams = boundaryPortHasDefaultValue(node.data.patchNode as PatchNode, selected.side) || selected.side === 'input'
-        ? Object.fromEntries(Object.entries(node.data.patchNode.params).filter(([key]) => key !== selected.port))
-        : node.data.patchNode.params;
-
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          patchNode: {
-            ...node.data.patchNode,
-            params: nextParams,
-            ...(nextInputs ? { inputs: nextInputs } : {}),
-            ...(nextOutputs ? { outputs: nextOutputs } : {}),
-          },
-        },
-      };
-    }));
-    setEdges((current) => dedupeEdges(current.filter((edge) => {
-      const link = linkFromEdge(edge);
-      if (!link) return true;
-
-      if (selected.side === 'input') {
-        return !(link.to.node === selected.nodeId && link.to.port === selected.port);
-      }
-
-      return !(link.from.node === selected.nodeId && link.from.port === selected.port);
-    })));
-
-    const frame = editingStack[editingStack.length - 1];
-    if (frame) {
-      setEditingStack((current) => current.map((entry, index) => {
-        if (index !== current.length - 1) return entry;
-
-        const parentEdges = dedupeEdges(entry.parentEdges.filter((edge) => {
-          const link = linkFromEdge(edge);
-          if (!link) return true;
-
-          if (relatedNode.data.patchNode.type === 'Ins' && selected.side === 'output') {
-            return !(link.to.node === entry.groupId && link.to.port === selected.port);
-          }
-
-          if (relatedNode.data.patchNode.type === 'Outs' && selected.side === 'input') {
-            return !(link.from.node === entry.groupId && link.from.port === selected.port);
-          }
-
-          return true;
-        }));
-
-        const parentNodes = entry.parentNodes.map((node) => {
-          if (node.id !== entry.groupId) return node;
-
-          if (relatedNode.data.patchNode.type === 'Ins' && selected.side === 'output') {
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                patchNode: {
-                  ...node.data.patchNode,
-                  params: Object.fromEntries(Object.entries(node.data.patchNode.params).filter(([key]) => key !== selected.port)),
-                  inputs: (node.data.patchNode.inputs ?? []).filter((port) => port.name !== selected.port),
-                },
-              },
-            };
-          }
-
-          if (relatedNode.data.patchNode.type === 'Outs' && selected.side === 'input') {
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                patchNode: {
-                  ...node.data.patchNode,
-                  params: Object.fromEntries(Object.entries(node.data.patchNode.params).filter(([key]) => key !== selected.port)),
-                  outputs: (node.data.patchNode.outputs ?? []).filter((port) => port.name !== selected.port),
-                },
-              },
-            };
-          }
-
-          return node;
-        });
-
-        return {
-          ...entry,
-          parentEdges,
-          parentNodes,
-        };
-      }));
-    }
-
-    setPendingBoundaryPort((current) => (
-      current && current.nodeId === selected.nodeId && current.side === selected.side && current.port === selected.port
-        ? null
-        : current
-    ));
-    setSelectedBoundaryPort(null);
-    return true;
-  }, [commitHistory, editingStack, selectedBoundaryPort]);
-
-  const copySelectedNodes = useCallback(() => {
-    const selectedGraph = selectedGraphFromNodes(nodesRef.current, edgesRef.current);
-    if (!selectedGraph) return false;
-
-    copiedGraphRef.current = selectedGraph;
-    pasteCountRef.current = 1;
-    void writeCopiedGraphToClipboard(selectedGraph);
-    return true;
-  }, []);
-
-  const groupSelectedNodes = useCallback(() => {
-    const groupedGraph = groupSelectedGraph(nodesRef.current, edgesRef.current, updateEdgeWeight, updateEdgeMode, insertNodeOnEdgePlaceholder);
-    if (!groupedGraph) return false;
-
-    commitHistory();
-    setNodes(groupedGraph.nodes);
-    setEdges(groupedGraph.edges);
-    setEditingTypeNodeId(null);
-    return true;
-  }, [commitHistory, updateEdgeMode, updateEdgeWeight]);
-
-  const scaleSelectedNodes = useCallback((factor: number) => {
-    const selectedNodes = nodesRef.current.filter((node) => node.selected);
-    if (selectedNodes.length === 0) return false;
-
-    const bounds = selectedNodes.map((node) => {
-      const width = node.measured?.width ?? node.width ?? DEFAULT_NODE_BOUNDS_SIZE.width;
-      const height = node.measured?.height ?? node.height ?? DEFAULT_NODE_BOUNDS_SIZE.height;
-      return { node, width, height };
-    });
-    const minX = Math.min(...bounds.map(({ node }) => node.position.x));
-    const minY = Math.min(...bounds.map(({ node }) => node.position.y));
-    const maxX = Math.max(...bounds.map(({ node, width }) => node.position.x + width));
-    const maxY = Math.max(...bounds.map(({ node, height }) => node.position.y + height));
-    const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-    const selectedById = new Map(bounds.map((entry) => [entry.node.id, entry]));
-
-    commitHistory();
-    setNodes((current) => current.map((node) => {
-      const entry = selectedById.get(node.id);
-      if (!entry) return node;
-
-      const nextWidth = entry.width * factor;
-      const nextHeight = entry.height * factor;
-      const currentCenter = {
-        x: node.position.x + entry.width / 2,
-        y: node.position.y + entry.height / 2,
-      };
-      const nextCenter = {
-        x: center.x + (currentCenter.x - center.x) * factor,
-        y: center.y + (currentCenter.y - center.y) * factor,
-      };
-      const position = { x: nextCenter.x - nextWidth / 2, y: nextCenter.y - nextHeight / 2 };
-      return {
-        ...node,
-        position,
-        data: {
-          ...node.data,
-          patchNode: {
-            ...node.data.patchNode,
-            position,
-            scale: (node.data.patchNode.scale ?? 1) * factor,
-          },
-        },
-      };
-    }));
-    return true;
-  }, [commitHistory]);
-
-  const pasteCopiedNodes = useCallback(async () => {
-    const clipboardGraph = await readCopiedGraphFromClipboard();
-    const copiedGraph = clipboardGraph ?? copiedGraphRef.current;
-    if (!copiedGraph) return false;
-
-    if (clipboardGraph) {
-      copiedGraphRef.current = clipboardGraph;
-      if (pasteCountRef.current === 0) pasteCountRef.current = 1;
-    }
-    const pasteOffset = {
-      x: PASTE_OFFSET.x * pasteCountRef.current,
-      y: PASTE_OFFSET.y * pasteCountRef.current,
-    };
-    const duplicatedGraph = duplicateCopiedGraph(
-      copiedGraph,
-      nodesRef.current,
-      pasteOffset,
-      updateEdgeWeight,
-      updateEdgeMode,
-      insertNodeOnEdgePlaceholder,
-    );
-    if (duplicatedGraph.nodes.length === 0) return false;
-
-    const bufferCopies = duplicatedBufferCopies(
-      copiedGraph.nodes,
-      duplicatedGraph.nodes,
-      nodesRef.current,
-      [...nodesRef.current, ...duplicatedGraph.nodes],
-      editingStack.map((frame) => frame.groupId),
-    );
-
-    pasteCountRef.current += 1;
-    commitHistory();
-    setNodes((current) => [
-      ...current.map((node) => ({ ...node, selected: false })),
-      ...duplicatedGraph.nodes.map((node) => ({ ...node, selected: true })),
-    ]);
-    setEdges((current) => dedupeEdges([
-      ...current.map((edge) => ({ ...edge, selected: false })),
-      ...duplicatedGraph.edges,
-    ]));
-    copyBufferAssets(bufferCopies, bufferAssetsRef.current, replaceBufferAssets);
-    audio.copyBuffers(bufferCopies);
-    setEditingTypeNodeId(null);
-    return true;
-  }, [audio.copyBuffers, commitHistory, editingStack, replaceBufferAssets, updateEdgeMode, updateEdgeWeight]);
-
-  const createDraftNodeFromConnection = useCallback((draftConnection = draftNodeConnectionRef.current) => {
-    if (!draftConnection || !draftConnection.modifierActive || !reactFlow) return;
-
-    const id = makeNodeId('node', new Set(nodesRef.current.map((node) => node.id)));
-    const position = draftNodePosition(draftConnection, reactFlow);
-    const link = linkForDraftNodeConnection(draftConnection, id);
-    if (!link) return;
-
-    provisionalNodeIdsRef.current.add(id);
-    commitHistory();
-    setNodes((current) => [
-      ...current.map((node) => ({ ...node, selected: false })),
-      {
-        id,
-        type: 'shaderNode',
-        position,
-        selected: true,
-        data: {
-          patchNode: { id, type: null, params: {}, position },
-          ...nodeCallbacksPlaceholder(),
-          isTypePickerOpen: true,
-        },
-      },
-    ]);
-    setEdges((current) => dedupeEdges([
-      ...current.map((edge) => ({ ...edge, selected: false })),
-      edgeFromLink(link, updateEdgeWeight, updateEdgeMode, insertNodeOnEdgePlaceholder),
-    ]));
-    setEditingTypeNodeId(id);
-  }, [commitHistory, reactFlow, updateEdgeMode, updateEdgeWeight]);
-
-  const materializePendingBoundaryPort = useCallback((pending: BoundaryPortSelection): void => {
-    const relatedNode = nodesRef.current.find((node) => node.id === pending.nodeId);
-    if (!relatedNode || !canRenameBoundaryPort(relatedNode.data.patchNode as PatchNode, pending.side)) return;
-
-    setNodes((current) => current.map((node) => {
-      if (node.id !== pending.nodeId) return node;
-
-      const nextPort: PortDefinition = boundaryPortHasDefaultValue(relatedNode.data.patchNode as PatchNode, pending.side)
-        ? { name: pending.port, defaultValue: 0, ...(relatedNode.data.patchNode.type === 'Params' ? { min: 0, max: 1 } : {}) }
-        : { name: pending.port };
-      const ports = pending.side === 'input'
-        ? node.data.patchNode.inputs ?? []
-        : node.data.patchNode.outputs ?? [];
-      if (ports.some((port) => port.name === pending.port)) return node;
-
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          patchNode: {
-            ...node.data.patchNode,
-            inputs: pending.side === 'input'
-              ? [...ports, nextPort]
-              : node.data.patchNode.inputs,
-            outputs: pending.side === 'output'
-              ? [...ports, nextPort]
-              : node.data.patchNode.outputs,
-            params: boundaryPortHasDefaultValue(node.data.patchNode as PatchNode, pending.side)
-              ? { ...node.data.patchNode.params, [pending.port]: 0 }
-              : node.data.patchNode.params,
-          },
-        },
-      };
-    }));
-  }, []);
-
-  const enterGroupNode = useCallback((node: ShaderFlowNode) => {
-    const patchNode = node.data.patchNode;
-    if (patchNode.type !== 'Group') return false;
-
-    const subpatch = patchNode.subpatch ?? emptySubpatchForGroup(patchNode as PatchNode, node.position);
-    setEditingStack((current) => [
-      ...current,
-      {
-        groupId: node.id,
-        parentNodes: nodesRef.current.map(cloneFlowNodeSnapshot),
-        parentEdges: edgesRef.current.map(cloneFlowEdgeSnapshot),
-        parentAreas: structuredClone(areasRef.current),
-        parentPatchName: patchName,
-        parentHistory: history,
-      },
-    ]);
-    const callbacks = nodeCallbacksPlaceholder();
-    setNodes(toFlowNodes(subpatch, callbacks, null));
-    setEdges(toFlowEdges(subpatch, updateEdgeWeight, updateEdgeMode, insertNodeOnEdgePlaceholder));
-    setAreas(structuredClone(subpatch.areas ?? []));
-    setSelectedAreaId(null);
-    setSurfacedAreaId(null);
-    setPatchName(patchNode.subpatchName ?? node.id);
-    setEditingTypeNodeId(null);
-    setPendingBoundaryPort(null);
-    copiedGraphRef.current = null;
-    pasteCountRef.current = 0;
-    historyGroupRef.current = null;
-    setHistory({ past: [], future: [] });
-    return true;
-  }, [history, patchName, updateEdgeMode, updateEdgeWeight]);
-
-  const exitSubpatch = useCallback(() => {
-    const frame = editingStack[editingStack.length - 1];
-    if (!frame) return false;
-
-    const subpatch = patchFromFlow(nodesRef.current, edgesRef.current, areasRef.current);
-    const parentGraph = applySubpatchToParent(frame, subpatch, patchName);
-    const previousParentSnapshot = graphSnapshot(frame.parentNodes, frame.parentEdges, frame.parentAreas);
-
-    setEditingStack((current) => current.slice(0, -1));
-    setNodes(parentGraph.nodes);
-    setEdges(parentGraph.edges);
-    setAreas(structuredClone(frame.parentAreas));
-    setSelectedAreaId(null);
-    setSurfacedAreaId(null);
-    setPatchName(frame.parentPatchName);
-    setEditingTypeNodeId(null);
-    setPendingBoundaryPort(null);
-    copiedGraphRef.current = null;
-    pasteCountRef.current = 0;
-    historyGroupRef.current = null;
-    setHistory({
-      past: [...frame.parentHistory.past, previousParentSnapshot].slice(-HISTORY_LIMIT),
-      future: [],
-    });
-    return true;
-  }, [editingStack, patchName]);
-
-  const updateGroupUiNodeOverride = useCallback((
-    groupId: string,
-    innerNodeId: string,
-    historyKey: string,
-    update: (override: NonNullable<PatchNode['subpatchUiOverrides']>[string]) => NonNullable<PatchNode['subpatchUiOverrides']>[string],
-  ) => {
-    const group = nodesRef.current.find((node) => node.id === groupId)?.data.patchNode;
-    if (group?.type !== 'Group' || !group.subpatch) return;
-    commitHistory(`group-ui:${groupId}:${historyKey}`);
-    setNodes((current) => current.map((node) => {
-      const patchNode = node.data.patchNode;
-      if (node.id !== groupId || patchNode.type !== 'Group' || !patchNode.subpatch) return node;
-      const currentOverrides = patchNode.subpatchUiOverrides ?? {};
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          patchNode: {
-            ...patchNode,
-            subpatchUiOverrides: {
-              ...currentOverrides,
-              [innerNodeId]: update(currentOverrides[innerNodeId] ?? {}),
-            },
-          },
-        },
-      };
-    }));
-  }, [commitHistory]);
-
-  const resetGroupUiNodeOverride = useCallback((groupId: string, innerNodeId: string) => {
-    const group = nodesRef.current.find((node) => node.id === groupId)?.data.patchNode;
-    if (group?.type !== 'Group' || !group.subpatchUiOverrides?.[innerNodeId]) return;
-
-    commitHistory();
-    setNodes((current) => current.map((node) => {
-      const patchNode = node.data.patchNode;
-      if (node.id !== groupId || patchNode.type !== 'Group' || !patchNode.subpatchUiOverrides?.[innerNodeId]) return node;
-      const { [innerNodeId]: _removed, ...remainingOverrides } = patchNode.subpatchUiOverrides;
-      const { subpatchUiOverrides: _previousOverrides, ...sharedPatchNode } = patchNode;
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          patchNode: Object.keys(remainingOverrides).length > 0
-            ? { ...sharedPatchNode, subpatchUiOverrides: remainingOverrides }
-            : sharedPatchNode,
-        },
-      };
-    }));
-  }, [commitHistory]);
-
   const selectedLinkPortsByNode = useMemo(() => {
     const portsByNode = new Map<string, { inputs: Set<string>; outputs: Set<string> }>();
     const ensureEntry = (nodeId: string) => {
@@ -2726,17 +1653,6 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     () => routingSelectionHighlights(nodes, edges),
     [edges, nodes],
   );
-  const selectNodeFromTitle = useCallback((nodeId: string, additive: boolean) => {
-    setSelectedAreaId(null);
-    setNodes((current) => current.map((node) => {
-      if (node.id === nodeId) return { ...node, selected: additive ? !node.selected : true };
-      return additive || !node.selected ? node : { ...node, selected: false };
-    }));
-    setEdges((current) => updateSelection(current, new Set()));
-  }, []);
-  const finishTypeEdit = useCallback(() => {
-    setEditingTypeNodeId(null);
-  }, []);
   const selectBoundaryPort = useCallback((nodeId: string, side: 'input' | 'output', port: string) => {
     setSelectedBoundaryPort({ nodeId, side, port });
   }, []);
@@ -2766,18 +1682,10 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
       ? nodeIdsContainedByAreaHierarchy(areas, nodes, surfacedAreaId)
       : new Set<string>()
   ), [areas, nodes, surfacedAreaId]);
-  const surfacedAreaRanks = useMemo(() => new Map(
-    areas
-      .filter((area) => surfacedAreaIds.has(area.id))
-      .map((area, index) => [area.id, index]),
-  ), [areas, surfacedAreaIds]);
   const baseNodeLayerSize = Math.max(1, nodes.length);
   const surfacedAreaLayerBase = (SELECTED_NODE_Z_INDEX + 1) * baseNodeLayerSize + 1;
   const surfacedNodeLayerBase = surfacedAreaLayerBase + surfacedAreaIds.size;
   const temporaryNodeLayer = surfacedNodeLayerBase + (SELECTED_NODE_Z_INDEX + 1) * baseNodeLayerSize;
-  const updateTemporaryPortReveal = useCallback((nodeId: string, revealed: boolean) => {
-    setTemporarilyRevealedNodeId((current) => revealed ? nodeId : (current === nodeId ? null : current));
-  }, []);
 
   const nodesWithCallbacks = useMemo(() => {
     const nextNodes = nodes.map((node) => {
@@ -2807,28 +1715,17 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         onAudioInputDeviceChange: audio.setAudioInputDeviceId,
         onAudioInputRefresh: audio.refreshAudioInputDevices,
         onMidiInputRefresh: audio.refreshMidiInputDevices,
-        onTypeChange: updateNodeType,
-        onConvertToArea: convertNodeToArea,
         onCustomLabelChange: updateNodeCustomLabel,
         onSequencerRowLabelsChange: updateSequencerRowLabels,
-        onTitleSelect: canvasLocked ? undefined : selectNodeFromTitle,
         onExpressionCommit: updateExpression,
-        onTypeEditStart: setEditingTypeNodeId,
-        onTypeEditEnd: finishTypeEdit,
-        onTypeEditCancel: cancelProvisionalNode,
-        onIdChange: updateNodeId,
-        onSubpatchNameChange: updateGroupSubpatchName,
         onSampleSelect: openSampleLibrary,
         onSampleDrop: uploadDroppedSampleFiles,
         onImageSelect: openImageLibrary,
-        onPortDoubleClick: insertNodeOnPort,
         onPortSelect: selectBoundaryPort,
         onPortNameChange: updateBoundaryPortName,
         onParamRangeChange: updateParamRange,
         onPortAdd: addBoundaryPort,
         onPortMove: updateBoundaryPortOrder,
-        onCompactToggle: updateNodeCompactPorts,
-        onEnabledChange: updateNodeEnabled,
         onScopeResize: updateNodeScopeSize,
         onSelectorInputAdd: addSelectorInput,
         onSelectorInputClear: clearSelectorInput,
@@ -2848,18 +1745,9 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         setLinkInputPorts: setLinkInputPortsByNode.get(node.id),
         isCanvasLocked: canvasLocked,
         canvasZoom: settledGraphZoom,
-        previewPort: pendingBoundaryPort && pendingBoundaryPort.nodeId === node.id
-          ? { side: pendingBoundaryPort.side, name: pendingBoundaryPort.port }
-          : null,
-        selectedPort: selectedBoundaryPort && selectedBoundaryPort.nodeId === node.id
-          ? { side: selectedBoundaryPort.side, name: selectedBoundaryPort.port }
-          : null,
         isOnlySelected: node.selected === true && selectedNodeCount === 1,
         routingHighlighted: node.selected !== true && routingSelection.nodeIds.has(node.id),
-        isConnecting: draftNodeConnection !== null || reconnectingEdgeId !== null,
-        onTemporaryPortRevealChange: updateTemporaryPortReveal,
-        isTypePickerOpen: editingTypeNodeId === node.id,
-        isEditingSubpatch: editingStack.length > 0,
+        isEditingSubpatch: graphPath.length > 0,
       },
     };
     });
@@ -2870,14 +1758,8 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     canvasLocked,
     connectedPortsByNode,
     setLinkInputPortsByNode,
-    draftNodeConnection,
-    reconnectingEdgeId,
-    editingStack.length,
-    editingTypeNodeId,
-    finishTypeEdit,
-    insertNodeOnPort,
+    graphPath.length,
     nodes,
-    pendingBoundaryPort,
     openSampleLibrary,
     uploadDroppedSampleFiles,
     openImageLibrary,
@@ -2887,319 +1769,38 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     surfacedNodeLayerBase,
     temporaryNodeLayer,
     temporarilyRevealedNodeId,
-    updateTemporaryPortReveal,
-    selectedBoundaryPort,
     selectedLinkPortsByNode,
     routingSelection,
     selectBoundaryPort,
-    selectNodeFromTitle,
     settledGraphZoom,
     updateBoundaryPortName,
     addBoundaryPort,
     updateBoundaryPortOrder,
     updateExpression,
-    updateGroupSubpatchName,
     addSelectorInput,
     clearSelectorInput,
-    cancelProvisionalNode,
-    convertNodeToArea,
     audio.audioInput,
     audio.midiInput,
     audio.refreshAudioInputDevices,
     audio.refreshMidiInputDevices,
     audio.setAudioInputDeviceId,
-    updateNodeCompactPorts,
-    updateNodeEnabled,
     updateNodeCustomWave,
     updateNodeScopeSize,
-    updateNodeId,
     updateNodeParam,
     updateNodeParams,
     updateParamRange,
     updateNodeCustomLabel,
     updateSequencerRowLabels,
-    updateNodeType,
     selectedNodeCount,
   ]);
 
-  const onReconnectStart = useCallback((event: ReactMouseEvent, edge: ShaderFlowEdge, handleType: HandleType) => {
-    if (canvasLocked) return;
-    const duplicateActive = isReconnectDuplicateModifierPressed(event);
-    reconnectingEdgeRef.current = true;
-    setReconnectingEdgeId(edge.id);
-    reconnectFixedHandleRef.current = handleType;
-    reconnectCompletedRef.current = false;
-    reconnectCancelledRef.current = false;
-    reconnectDuplicateRef.current = duplicateActive;
-    reconnectingEdgeSnapshotRef.current = cloneFlowEdgeSnapshot(edge);
-    setReconnectPreviewEdge(duplicateActive ? reconnectPreviewEdgeFromEdge(edge) : null);
-
-    let nextPending: BoundaryPortSelection | null = null;
-    if (editingStack.length > 0 || nodesRef.current.some((node) => node.data.patchNode.type === 'Params')) {
-      // React Flow reports the endpoint that stays attached during a reconnect,
-      // so a fixed target means the source endpoint is the one being moved.
-      if (handleType === 'target') {
-        const insNode = nodesRef.current.find((node) => node.data.patchNode.type === (editingStack.length > 0 ? 'Ins' : 'Params'));
-        if (insNode && edge.target !== insNode.id) {
-          const usedNames = new Set((insNode.data.patchNode.outputs ?? []).map((port) => port.name));
-          nextPending = {
-            nodeId: insNode.id,
-            side: 'output',
-            port: uniquePortName(editingStack.length > 0 ? 'new input' : 'new parameter', usedNames),
-          };
-        }
-      } else {
-        const outsNode = nodesRef.current.find((node) => node.data.patchNode.type === 'Outs');
-        if (outsNode && edge.source !== outsNode.id) {
-          const usedNames = new Set((outsNode.data.patchNode.inputs ?? []).map((port) => port.name));
-          nextPending = {
-            nodeId: outsNode.id,
-            side: 'input',
-            port: uniquePortName('new output', usedNames),
-          };
-        }
-      }
-    }
-    pendingBoundaryPortRef.current = nextPending;
-    setPendingBoundaryPort(nextPending);
-    updateDraftNodeConnection(null);
-  }, [canvasLocked, editingStack.length, updateDraftNodeConnection]);
-
-  const onReconnectEnd = useCallback<NonNullable<ReactFlowProps<ShaderFlowNode, ShaderFlowEdge>['onReconnectEnd']>>((event, edge, fixedHandle, connectionState) => {
-    // React Flow commits node-pin drops through onReconnect. A cable body is
-    // not a React Flow handle, so its drop must be committed here instead.
-    const pointer = clientPointFromEvent(event);
-    if (!canvasLocked && !reconnectCancelledRef.current && fixedHandle === 'source' && !reconnectCompletedRef.current && !connectionState.toHandle && pointer) {
-      const targetId = linkAtScreenPoint(pointer, edgesRef.current.filter(
-        (candidate) => strengthTargetIsAllowed(edge.id, candidate.id, edgesRef.current),
-      ));
-      const target = edgesRef.current.find((candidate) => candidate.id === targetId);
-      if (target) {
-        const duplicate = reconnectDuplicateRef.current;
-        const replacement: ShaderFlowEdge = {
-          ...edge,
-          id: duplicate ? `weight-modulation:${crypto.randomUUID()}` : edge.id,
-          target: target.target,
-          targetHandle: target.targetHandle,
-          selected: true,
-          data: { ...edge.data!, modulatesEdgeId: target.id, isFeedback: false },
-        };
-        commitHistory();
-        setNodes((current) => current.map((node) => ({ ...node, selected: false })));
-        setEdges((current) => duplicate
-          ? dedupeEdges([...current.map((candidate) => ({ ...candidate, selected: false })), replacement])
-          : transformEdgeTree(current, (candidate) => candidate.id === edge.id
-            ? replacement : { ...candidate, selected: false }));
-      }
-    }
-    reconnectingEdgeRef.current = false;
-    reconnectCancelledRef.current = false;
-    setReconnectingEdgeId(null);
-    reconnectFixedHandleRef.current = null;
-    reconnectCompletedRef.current = false;
-    reconnectDuplicateRef.current = false;
-    reconnectingEdgeSnapshotRef.current = null;
-    pendingBoundaryPortRef.current = null;
-    setPendingBoundaryPort(null);
-    setReconnectPreviewEdge(null);
-    weightTargetEdgeIdRef.current = null;
-    setWeightTargetEdgeId(null);
-    updateDraftNodeConnection(null);
-  }, [canvasLocked, commitHistory, updateDraftNodeConnection]);
-
-  useEffect(() => {
-    const updateReconnectDuplicateModifier = (event: KeyboardEvent) => {
-      if (!reconnectingEdgeRef.current) return;
-      if (event.key === 'Escape') {
-        reconnectCancelledRef.current = true;
-        flowStore.getState().cancelConnection();
-        setReconnectingEdgeId(null);
-        setReconnectPreviewEdge(null);
-        weightTargetEdgeIdRef.current = null;
-        setWeightTargetEdgeId(null);
-        return;
-      }
-      if (reconnectCancelledRef.current) return;
-      const duplicateActive = isReconnectDuplicateModifierPressed(event);
-      reconnectDuplicateRef.current = duplicateActive;
-      setReconnectPreviewEdge(
-        duplicateActive && reconnectingEdgeSnapshotRef.current
-          ? reconnectPreviewEdgeFromEdge(reconnectingEdgeSnapshotRef.current)
-          : null,
-      );
-    };
-
-    window.addEventListener('keydown', updateReconnectDuplicateModifier);
-    window.addEventListener('keyup', updateReconnectDuplicateModifier);
-    return () => {
-      window.removeEventListener('keydown', updateReconnectDuplicateModifier);
-      window.removeEventListener('keyup', updateReconnectDuplicateModifier);
-    };
-  }, [flowStore]);
-
-  const onReconnect = useCallback((oldEdge: ShaderFlowEdge, connection: Connection) => {
-    if (canvasLocked || reconnectCancelledRef.current) return;
-    reconnectCompletedRef.current = true;
-    if (oldEdge.data?.modulatesEdgeId && reconnectFixedHandleRef.current === 'target') {
-      const sourceHandle = connection.sourceHandle ? parseHandleId(connection.sourceHandle) : null;
-      if (!connection.source || sourceHandle?.kind !== 'out') return;
-      if (oldEdge.source === connection.source && oldEdge.sourceHandle === connection.sourceHandle) return;
-      commitHistory();
-      const pending = pendingBoundaryPortRef.current;
-      if (pending?.side === 'output' && connection.source === pending.nodeId && connection.sourceHandle === `out:${pending.port}`) {
-        materializePendingBoundaryPort(pending);
-      }
-      setNodes((current) => current.map((node) => ({ ...node, selected: false })));
-      const shouldDuplicate = reconnectDuplicateRef.current;
-      const replacement = { ...oldEdge, id: shouldDuplicate ? `weight-modulation:${crypto.randomUUID()}` : oldEdge.id,
-        source: connection.source, sourceHandle: connection.sourceHandle, selected: true };
-      setEdges((current) => dedupeEdges(shouldDuplicate
-        ? [...current.map((edge) => ({ ...edge, selected: false })), replacement]
-        : current.map((edge) => edge.id === oldEdge.id ? replacement : { ...edge, selected: false })));
-      return;
-    }
-    const candidate: ShaderFlowEdge = {
-      ...oldEdge,
-      data: oldEdge.data ? { ...oldEdge.data, modulatesEdgeId: undefined } : undefined,
-      source: connection.source ?? '',
-      sourceHandle: connection.sourceHandle,
-      target: connection.target ?? '',
-      targetHandle: connection.targetHandle,
-    };
-    const link = linkFromEdge(candidate);
-    if (!link) return;
-    if (!runtimeContainerLinkIsAllowed(link, nodesRef.current)) return;
-
-    const oldLink = linkFromEdge(oldEdge);
-    const weight = oldEdge.data?.weight ?? oldLink?.weight ?? 1;
-    const mode = oldEdge.data?.mode ?? oldLink?.mode ?? 'set';
-    const enabled = oldEdge.data?.enabled ?? oldLink?.enabled ?? true;
-    const nextEdge = {
-      ...edgeFromLink({ from: link.from, to: link.to, weight, mode, enabled }, updateEdgeWeight, updateEdgeMode, insertNodeOnEdge),
-      selected: true,
-      reconnectable: true,
-    };
-    const nextLink = linkFromEdge(nextEdge);
-    if (!nextLink) return;
-    const nextEdgeId = edgeId(nextLink);
-    if (oldEdge.id === nextEdgeId && oldLink && samePatchLink(oldLink, nextLink)) return;
-
-    const shouldDuplicate = reconnectDuplicateRef.current;
-    commitHistory();
-    const pending = pendingBoundaryPortRef.current;
-    if (pending) {
-      const isPendingSource = pending.side === 'output'
-        && connection.source === pending.nodeId
-        && connection.sourceHandle === `out:${pending.port}`;
-      const isPendingTarget = pending.side === 'input'
-        && connection.target === pending.nodeId
-        && connection.targetHandle === `in:${pending.port}`;
-      if (isPendingSource || isPendingTarget) {
-        materializePendingBoundaryPort(pending);
-      }
-    }
-    setNodes((current) => current.map((node) => ({ ...node, selected: false })));
-    setEdges((current) => {
-      const duplicate = current.find((edge) => {
-        if (edge.id === oldEdge.id) return false;
-        const existing = linkFromEdge(edge);
-        return existing ? samePatchLink(existing, nextLink) : false;
-      });
-
-      if (duplicate) {
-        if (shouldDuplicate) return current.map((edge) => ({ ...edge, selected: edge.id === duplicate.id }));
-        return transformEdgeTree(current, (edge) => edge.id === oldEdge.id
-          ? { ...duplicate, selected: true }
-          : { ...edge, selected: edge.id === duplicate.id });
-      }
-
-      if (shouldDuplicate) {
-        return dedupeEdges([
-          ...current.map((edge) => ({ ...edge, selected: false })),
-          nextEdge,
-        ]);
-      }
-
-      return transformEdgeTree(current, (edge) => edge.id === oldEdge.id
-        ? nextEdge
-        : { ...edge, selected: false });
-    });
-  }, [canvasLocked, commitHistory, insertNodeOnEdge, materializePendingBoundaryPort, updateEdgeMode, updateEdgeWeight]);
-
-  const edgesWithCallbacks = useMemo(() => {
-    const selectedEdgeCount = edges.filter((edge) => edge.selected).length;
-    const selectedNodeIds = new Set(
-      nodes.filter((node) => node.selected).map((node) => node.id),
-    );
-    const disabledNodeIds = new Set(
-      nodes.filter((node) => node.data.patchNode.enabled === false).map((node) => node.id),
-    );
-    const hasHighlightedLinks = selectedEdgeCount > 0 || selectedNodeIds.size > 0;
-    return edges.map((edge) => {
-      const link = linkFromEdge(edge);
-      const sourceNode = link ? nodes.find((node) => node.id === link.from.node) : undefined;
-      const targetNode = link ? nodes.find((node) => node.id === link.to.node) : undefined;
-      // Runtime-container lifecycle pins live inside the container's body.
-      // Unlike ordinary boundary pins, their endpoint drag target would
-      // otherwise be painted behind the node and the Handle would always begin
-      // a new connection. Elevate just these endpoint targets above the
-      // container so an attached cable can be grabbed at its visible pin.
-      const hasInternalRuntimeEndpoint = Boolean(link && (
-        ((sourceNode?.data.patchNode.type === 'Spread' && link.from.port === 'item index')
-          || (sourceNode?.data.patchNode.type === 'Spawn' && link.from.port === 'instance gate'))
-        || (targetNode?.data.patchNode.type === 'Spawn' && link.to.port === 'kill trigger')
-      ));
-      const isConnectedToSelectedNode = isEdgeConnectedToSelectedNode(edge, selectedNodeIds)
-        || routingSelection.edgeIds.has(edge.id);
-      const isHighlighted = edge.selected === true || isConnectedToSelectedNode;
-      return {
-        ...edge,
-        // Keep endpoint reconnection available even before an edge is selected.
-        // Otherwise a pointer down where an edge meets a Spawn/Spread's internal
-        // handle is captured by that handle and begins a second link instead of
-        // moving the endpoint the user grabbed.
-        reconnectable: edge.data?.modulatesEdgeId ? 'source' as const : true,
-        // Incident-node emphasis stays in the normal edge layer so the selected
-        // node and its controls remain unobscured. Internal runtime endpoints
-        // are the sole exception because their visible pins are inside a node.
-        zIndex: edge.selected || hasInternalRuntimeEndpoint ? SELECTED_EDGE_Z_INDEX : undefined,
-        className: [edge.className, hasInternalRuntimeEndpoint ? 'shader-edge-internal-runtime-endpoint' : '']
-          .filter(Boolean)
-          .join(' '),
-        data: {
-          ...edge.data,
-          weight: edge.data?.weight ?? 1,
-          mode: edge.data?.mode ?? 'set',
-          enabled: edge.data?.enabled !== false,
-          isIncidentToDisabledNode: disabledNodeIds.has(edge.source) || disabledNodeIds.has(edge.target),
-          onWeightChange: updateEdgeWeight,
-          onModeChange: updateEdgeMode,
-          onEnabledChange: updateEdgeEnabled,
-          onInsertNode: insertNodeOnEdge,
-          onReconnect,
-          onReconnectStart,
-          onReconnectEnd,
-          isReconnecting: edge.id === reconnectingEdgeId,
-          showLinkControls: edge.selected === true && selectedEdgeCount === 1,
-          isConnectedToSelectedNode,
-          isDimmedBySelection: hasHighlightedLinks && !isHighlighted,
-        },
-      };
-    });
-  }, [edges, insertNodeOnEdge, nodes, routingSelection, onReconnect, onReconnectStart, onReconnectEnd, reconnectingEdgeId, updateEdgeEnabled, updateEdgeMode, updateEdgeWeight]);
-
-  const materializedGraph = useMemo(
-    () => materializeRootGraph(nodesWithCallbacks, edgesWithCallbacks, areas, editingStack, patchName),
-    [areas, edgesWithCallbacks, editingStack, nodesWithCallbacks, patchName],
-  );
-  const isEditingSubpatch = editingStack.length > 0;
-  const canGroupSelection = useMemo(() => (
-    nodes.some((node) => node.selected) &&
-    nodes.filter((node) => node.selected).every((node) => node.data.patchNode.type !== null)
-  ), [nodes]);
-  const canScaleSelection = selectedNodeCount > 0;
+  const materializedGraph = useMemo(() => {
+    const root = graphToPatch(shared.snapshot.document);
+    return { nodes: toFlowNodes(root, legacyCallbacks, null), edges: toFlowEdges(root, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder) };
+  }, [shared.snapshot.document, legacyCallbacks]);
+  const isEditingSubpatch = graphPath.length > 0;
   const patch = useMemo(() => ({
-    ...patchFromFlow(materializedGraph.nodes, materializedGraph.edges, editingStack.length === 0 ? areas : editingStack[0]?.parentAreas),
+    ...graphToPatch(shared.snapshot.document),
     name: rootPatchName,
     ...(hosted?.getDocument().schemaVersion ? { schemaVersion: 1 as const } : {}),
     ...(selectedMidiInputDeviceIds.length > 0 || selectedMidiOutputDeviceIds.length > 0 || midiClockOutputEnabled
@@ -3209,7 +1810,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         ...(midiClockOutputEnabled ? { sendClock: true } : {}),
       } }
       : {}),
-  }), [areas, editingStack, materializedGraph, midiClockOutputEnabled, rootPatchName, selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds]);
+  }), [areas, graphPath, materializedGraph, midiClockOutputEnabled, rootPatchName, selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds]);
   const hostedInitialViewRef = useRef(false);
   useEffect(() => {
     if (hosted && !hostedInitialViewRef.current) { hostedInitialViewRef.current = true; return; }
@@ -3249,7 +1850,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         } }
         : {}),
     });
-    state.areas = areas;
+    state.areas = graphToPatch(shared.snapshot.document).areas;
     state.buffers = referencedBufferAssets;
     return JSON.stringify(state);
   }, [areas, fm1Mode, materializedGraph, midiClockOutputEnabled, referencedBufferAssets, rootPatchName, selectedMidiInputDeviceIds, selectedMidiOutputDeviceIds]);
@@ -3265,12 +1866,14 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     }
     return linkIdsByNode;
   }, [audioGraph]);
-  const activeDspGroupIds = useMemo(() => editingStack.map((frame) => frame.groupId), [editingStack]);
+  const activeDspGroupIds = useMemo(() => graphPath, [graphPath]);
 
   const nodesWithGroupUi = useMemo(() => nodesWithCallbacks.map((node) => {
     const groupNode = node.data.patchNode;
     if (groupNode.type !== 'Group' || !groupNode.subpatch) return node;
-    const layout = groupUiPreviewLayout(groupNode.subpatch);
+    const coreGroup = shared.editor.graph.nodes.find(item => item.id === node.id);
+    const coreLayout = coreGroup && groupPanelLayout(coreGroup);
+    const layout = coreLayout && { position: coreLayout.position, size: coreLayout.size, nodes: coreLayout.nodes.map(nodeToPatch) };
     if (!layout) return node;
     const previewNodes = layout.nodes.map((innerNode) => {
       const previewId = `__group_ui__${node.id}__${innerNode.id}`;
@@ -3304,19 +1907,6 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
               onMidiInputRefresh: audio.refreshMidiInputDevices,
             }
           : {}),
-        onParamChange: (_previewNodeId: string, port: string, value: number) => sendHostedGesture(dspNodeId, innerNode.type, { [port]: value }) || updateGroupUiNodeOverride(
-          node.id, innerNode.id, `param:${innerNode.id}:${port}`,
-          (current) => ({ ...current, params: { ...current.params, [port]: value } }),
-        ),
-        onParamsChange: (_previewNodeId: string, values: Record<string, number>) => sendHostedGesture(dspNodeId, innerNode.type, values) || updateGroupUiNodeOverride(
-          node.id, innerNode.id, `params:${innerNode.id}`,
-          (current) => ({ ...current, params: { ...current.params, ...values } }),
-        ),
-        onCustomWaveChange: (_previewNodeId: string, customWave: CustomWaveSettings, historyKey?: string) => updateGroupUiNodeOverride(
-          node.id, innerNode.id, historyKey ?? `custom-wave:${innerNode.id}`,
-          (current) => ({ ...current, customWave: normalizeCustomWave(customWave, { ...innerNode.params, ...current.params }) }),
-        ),
-        onHeaderDoubleClick: () => resetGroupUiNodeOverride(node.id, innerNode.id),
         ...(monitorLinkId && innerNode.type === 'Meter' ? { audioMeter: audio.linkMeters[monitorLinkId] } : {}),
         ...(monitorLinkId && innerNode.type === 'Scope' ? { audioScope: audio.linkScopes[dspNodeId] } : {}),
         ...(monitorLinkId && innerNode.type === 'FFT' ? { audioSpectrum: audio.linkScopes[dspNodeId] } : {}),
@@ -3371,8 +1961,6 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     monitorLinkIdByNode,
     nodesWithCallbacks,
     settledGraphZoom,
-    resetGroupUiNodeOverride,
-    updateGroupUiNodeOverride,
   ]);
 
   const renderedNodes = useMemo(() => {
@@ -3449,338 +2037,14 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     return reconciledNodes;
   }, [hostedTransient, activeDspGroupIds, audio.buffers, audio.linkMeters, audio.linkScopes, audio.playheads, audio.status, clearBufferRecording, dspDiagnostics, midiControlVisuals, monitorLinkIdByNode, nodesWithGroupUi]);
 
-  const renderedEdges = useMemo<ShaderFlowEdge[]>(() => {
-    const edgeById = new Map(edgesWithCallbacks.map((edge) => [edge.id, edge]));
-    const midpoint = (edge: ShaderFlowEdge, visited = new Set<string>()): { x: number; y: number } | null => {
-      if (visited.has(edge.id)) return null;
-      const sourceNode = reactFlow?.getInternalNode(edge.source);
-      const sourceHandle = sourceNode?.internals.handleBounds?.source?.find((handle) => handle.id === edge.sourceHandle);
-      const parent = edge.data?.modulatesEdgeId ? edgeById.get(edge.data.modulatesEdgeId) : undefined;
-      const parentPoint = parent ? midpoint(parent, new Set([...visited, edge.id])) : null;
-      const targetNode = reactFlow?.getInternalNode(edge.target);
-      const targetHandle = targetNode?.internals.handleBounds?.target?.find((handle) => handle.id === edge.targetHandle);
-      if (sourceNode && sourceHandle && (parentPoint || (targetNode && targetHandle))) {
-        const [, x, y] = getShaderEdgePath({
-          source: edge.source,
-          target: edge.target,
-          data: edge.data,
-          sourceX: sourceNode.internals.positionAbsolute.x + sourceHandle.x + sourceHandle.width / 2,
-          sourceY: sourceNode.internals.positionAbsolute.y + sourceHandle.y + sourceHandle.height / 2,
-          sourcePosition: sourceHandle.position,
-          targetX: parentPoint?.x ?? targetNode!.internals.positionAbsolute.x + targetHandle!.x + targetHandle!.width / 2,
-          targetY: parentPoint?.y ?? targetNode!.internals.positionAbsolute.y + targetHandle!.y + targetHandle!.height / 2,
-          targetPosition: parentPoint ? Position.Left : targetHandle!.position,
-        });
-        return { x, y };
-      }
-      const source = nodes.find((node) => node.id === edge.source);
-      const target = nodes.find((node) => node.id === edge.target);
-      return source && target ? { x: (source.position.x + target.position.x) / 2, y: (source.position.y + target.position.y) / 2 } : null;
-    };
-    return [...edgesWithCallbacks.map((edge) => {
-      const dspErrors = dspDiagnostics.edgeErrors.get(edge.id) ?? [];
-      const targetPoint = edge.data?.modulatesEdgeId
-        ? midpoint(edgeById.get(edge.data.modulatesEdgeId) ?? edge)
-        : null;
-      if (dspErrors.length === 0 && edge.id !== weightTargetEdgeId && !targetPoint) return edge;
-      return {
-        ...edge,
-        data: {
-          ...edge.data!,
-          ...(dspErrors.length > 0 ? { dspErrors } : {}),
-          isWeightTarget: edge.id === weightTargetEdgeId,
-          ...(targetPoint ? { visualTarget: targetPoint } : {}),
-        },
-      };
-    }), ...routingSelection.pairs.map(([source, target]): ShaderFlowEdge => ({
-      id: `virtual-route:${JSON.stringify([source, target])}`,
-      type: 'virtualRoute',
-      source,
-      target,
-      sourceHandle: 'virtual:send',
-      targetHandle: 'virtual:receive',
-      selectable: false,
-      deletable: false,
-      reconnectable: false,
-      focusable: false,
-      style: {
-        pointerEvents: 'none',
-        color: routingNodeColor(nodes.find((node) => node.id === source)?.data.patchNode.params.number),
-      },
-    }))];
-  }, [dspDiagnostics, edgesWithCallbacks, reactFlow, routingSelection, nodes, nodesInitialized, weightTargetEdgeId]);
-
-  const collapsedAreaByNode = useMemo(() => {
-    const collapsedAreas = areas.filter((area) => area.collapsed);
-    return new Map(renderedNodes.flatMap((node) => {
-      const area = innermostAreaContainingNode(collapsedAreas, node);
-      return area ? [[node.id, area] as const] : [];
-    }));
-  }, [areas, renderedNodes]);
-
-  const collapsedUiAreaByNode = useMemo(() => new Map(renderedNodes.flatMap((node) => {
-    const area = collapsedAreaByNode.get(node.id);
-    return area && (
-      nodeIsInAreaUiSection(area, node)
-      || (area.kind === 'spread' && area.spreadNodeId === node.id)
-    ) ? [[node.id, area] as const] : [];
-  })), [collapsedAreaByNode, renderedNodes]);
-
-  const collapsedRenderedNodes = useMemo(() => renderedNodes.map((node) => (
-    collapsedAreaByNode.has(node.id) && !collapsedUiAreaByNode.has(node.id) ? {
-      ...node,
-      selected: false,
-      draggable: false,
-      selectable: false,
-      connectable: false,
-      data: { ...node.data, isAreaCollapsedPresentation: true },
-    } : collapsedUiAreaByNode.has(node.id) ? {
-      ...node,
-      selected: false,
-      draggable: false,
-      selectable: false,
-      connectable: node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn' || node.data.patchNode.type === 'ConditionalExecution',
-      // React Flow disables pointer events when a node is neither selectable nor
-      // draggable. This presentation is intentionally canvas-locked, but its
-      // surfaced controls must remain operable.
-      style: { ...node.style, pointerEvents: 'all' as const },
-      data: { ...node.data, isAreaUiCollapsedPresentation: true },
-    } : node
-  )), [collapsedAreaByNode, collapsedUiAreaByNode, renderedNodes]);
-
-  const collapsedRenderedEdges = useMemo(() => renderedEdges.flatMap((edge) => {
-    const containedSourceArea = collapsedAreaByNode.get(edge.source);
-    const containedTargetArea = collapsedAreaByNode.get(edge.target);
-    if (
-      containedSourceArea?.kind === 'spread'
-      && containedSourceArea.spreadNodeId === edge.source
-      && containedSourceArea.id === containedTargetArea?.id
-    ) {
-      return [];
-    }
-    if (
-      containedTargetArea?.kind === 'spread'
-      && containedTargetArea.spreadNodeId === edge.target
-      && containedTargetArea.id === containedSourceArea?.id
-    ) {
-      return [];
-    }
-    const sourceArea = containedSourceArea?.kind === 'spread' && containedSourceArea.spreadNodeId === edge.source
-      ? undefined
-      : containedSourceArea;
-    const targetArea = containedTargetArea?.kind === 'spread' && containedTargetArea.spreadNodeId === edge.target
-      ? undefined
-      : containedTargetArea;
-
-    // Links completely inside one collapsed area have no external presentation.
-    if (sourceArea && sourceArea.id === targetArea?.id) return [];
-
-    if (!sourceArea && !targetArea) return [edge];
-    return [{
-      ...edge,
-      reconnectable: false,
-      data: {
-        ...edge.data,
-        isAreaCollapsedPresentation: true,
-        weight: edge.data?.weight ?? 1,
-        mode: edge.data?.mode ?? 'set',
-        enabled: edge.data?.enabled !== false,
-        onWeightChange: edge.data?.onWeightChange ?? updateEdgeWeightPlaceholder,
-        onModeChange: edge.data?.onModeChange ?? updateEdgeModePlaceholder,
-        onInsertNode: edge.data?.onInsertNode ?? insertNodeOnEdgePlaceholder,
-        showLinkControls: false,
-        ...(sourceArea ? { visualSource: collapsedAreaOutputPin(sourceArea) } : {}),
-        ...(targetArea ? { visualTarget: collapsedAreaInputPin(targetArea) } : {}),
-      },
-    }];
-  }), [collapsedAreaByNode, renderedEdges]);
-
-  const duplicateDragPreview = useMemo(() => {
-    if (!duplicateDrag?.duplicating) return null;
-
-    const idMap = new Map([...duplicateDrag.nodeIds].map((nodeId) => [nodeId, duplicatePreviewNodeId(nodeId)]));
-    const previewNodes = renderedNodes
-      .filter((node) => duplicateDrag.nodeIds.has(node.id))
-      .map((node): ShaderFlowNode => {
-        const id = idMap.get(node.id) ?? duplicatePreviewNodeId(node.id);
-        const position = duplicateDrag.currentPositions[node.id] ?? node.position;
-
-        return {
-          ...node,
-          id,
-          position,
-          draggable: false,
-          selectable: false,
-          connectable: false,
-          deletable: false,
-          className: ['shader-node-preview', node.className ?? ''].filter(Boolean).join(' '),
-          data: {
-            ...node.data,
-            patchNode: {
-              ...node.data.patchNode,
-              id: node.data.patchNode.id,
-              params: { ...node.data.patchNode.params },
-              position,
-            },
-            ...nodeCallbacksPlaceholder(),
-            isTypePickerOpen: false,
-          },
-        };
-      });
-
-    const previewEdges = renderedEdges.flatMap((edge) => {
-      const link = linkFromEdge(edge);
-      if (!link) return [];
-
-      const fromSelected = duplicateDrag.nodeIds.has(link.from.node);
-      const toSelected = duplicateDrag.nodeIds.has(link.to.node);
-      if (!fromSelected && !toSelected) return [];
-      if (fromSelected !== toSelected && !duplicateDrag.linkExternal) return [];
-
-      const fromNode = idMap.get(link.from.node) ?? link.from.node;
-      const toNode = idMap.get(link.to.node) ?? link.to.node;
-      if (fromNode === link.from.node && toNode === link.to.node) return [];
-
-      return [{
-        ...edgeFromLink({
-          from: { ...link.from, node: fromNode },
-          to: { ...link.to, node: toNode },
-          weight: link.weight,
-          mode: link.mode,
-          enabled: link.enabled,
-          weightModulations: link.weightModulations,
-        }, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder),
-        selectable: false,
-        deletable: false,
-        className: 'shader-edge shader-edge-preview',
-      }];
-    });
-
-    return { nodes: previewNodes, edges: previewEdges };
-  }, [duplicateDrag, renderedEdges, renderedNodes]);
-
-  const areaDuplicatePreview = useMemo(() => {
-    if (!areaDuplicateDrag?.duplicating) return null;
-
-    const sourceAreaIds = new Set(Object.keys(areaDuplicateDrag.areaPositions));
-    const sourceNodeIds = new Set(Object.keys(areaDuplicateDrag.nodePositions));
-    const nodeIdMap = new Map([...sourceNodeIds].map((nodeId) => [nodeId, duplicatePreviewNodeId(nodeId)]));
-    const nodes = collapsedRenderedNodes
-      .filter((node) => sourceNodeIds.has(node.id))
-      .map((node): ShaderFlowNode => {
-        const id = nodeIdMap.get(node.id) ?? duplicatePreviewNodeId(node.id);
-        const position = areaDuplicateDrag.currentNodePositions[node.id] ?? node.position;
-        return {
-          ...node,
-          id,
-          position,
-          draggable: false,
-          selectable: false,
-          connectable: false,
-          deletable: false,
-          className: ['shader-node-preview', node.className ?? ''].filter(Boolean).join(' '),
-          data: {
-            ...node.data,
-            patchNode: { ...node.data.patchNode, position },
-            ...nodeCallbacksPlaceholder(),
-            isTypePickerOpen: false,
-          },
-        };
-      });
-    const edges = renderedEdges.flatMap((edge) => {
-      const link = linkFromEdge(edge);
-      if (!link) return [];
-      const fromSelected = sourceNodeIds.has(link.from.node);
-      const toSelected = sourceNodeIds.has(link.to.node);
-      if (!fromSelected && !toSelected) return [];
-      if (fromSelected !== toSelected && !areaDuplicateDrag.linkExternal) return [];
-      const fromNode = nodeIdMap.get(link.from.node) ?? link.from.node;
-      const toNode = nodeIdMap.get(link.to.node) ?? link.to.node;
-      if (fromNode === link.from.node && toNode === link.to.node) return [];
-      return [{
-        ...edgeFromLink({
-          from: { ...link.from, node: fromNode },
-          to: { ...link.to, node: toNode },
-          weight: link.weight,
-          mode: link.mode,
-          enabled: link.enabled,
-          weightModulations: link.weightModulations,
-        }, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder),
-        selectable: false,
-        deletable: false,
-        className: 'shader-edge shader-edge-preview',
-      }];
-    });
-    const previewAreas = areas
-      .filter((area) => sourceAreaIds.has(area.id))
-      .map((area): EditorArea => ({
-        ...area,
-        id: `${DUPLICATE_AREA_PREVIEW_PREFIX}${area.id}`,
-        position: areaDuplicateDrag.currentAreaPositions[area.id] ?? area.position,
-        ...(area.spreadNodeId ? { spreadNodeId: nodeIdMap.get(area.spreadNodeId) ?? area.spreadNodeId } : {}),
-      }));
-    return { areas: previewAreas, nodes, edges };
-  }, [areaDuplicateDrag, areas, collapsedRenderedNodes, renderedEdges]);
-
-  const draftNodePreview = useMemo(() => {
-    if (!draftNodeConnection?.modifierActive || !reactFlow) return null;
-
-    const position = draftNodePosition(draftNodeConnection, reactFlow);
-    const link = linkForDraftNodeConnection(draftNodeConnection, DRAFT_NODE_PREVIEW_ID);
-    if (!link) return null;
-
-    const node: ShaderFlowNode = {
-      id: DRAFT_NODE_PREVIEW_ID,
-      type: 'shaderNode',
-      position,
-      draggable: false,
-      selectable: false,
-      connectable: false,
-      deletable: false,
-      className: 'shader-node-preview',
-      data: {
-        patchNode: {
-          id: 'new',
-          type: null,
-          params: {},
-          position,
-        },
-        ...nodeCallbacksPlaceholder(),
-        isTypePickerOpen: false,
-      },
-    };
-
-    return {
-      node,
-      edge: {
-        ...edgeFromLink(link, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder),
-        id: `preview:${edgeId(link)}`,
-        selectable: false,
-        deletable: false,
-        className: 'shader-edge shader-edge-preview',
-      },
-    };
-  }, [draftNodeConnection, reactFlow]);
-
-  const displayNodes = useMemo(() => [
-    ...collapsedRenderedNodes,
-    ...(duplicateDragPreview?.nodes ?? []),
-    ...(areaDuplicatePreview?.nodes ?? []),
-    ...(draftNodePreview ? [draftNodePreview.node] : []),
-  ], [areaDuplicatePreview, collapsedRenderedNodes, draftNodePreview, duplicateDragPreview]);
-
-  const displayEdges = useMemo(() => canvasLocked ? [] : [
-    ...collapsedRenderedEdges,
-    ...(duplicateDragPreview?.edges ?? []),
-    ...(areaDuplicatePreview?.edges ?? []),
-    ...(reconnectPreviewEdge ? [reconnectPreviewEdge] : []),
-    ...(draftNodePreview ? [draftNodePreview.edge] : []),
-  ], [areaDuplicatePreview, canvasLocked, collapsedRenderedEdges, draftNodePreview, duplicateDragPreview, reconnectPreviewEdge]);
-
-  const panTranslateExtent = useMemo(
-    () => translateExtentForVisibleContent(renderedNodes, settledViewport, editorSize),
-    [editorSize, renderedNodes, settledViewport.zoom],
-  );
+  const canvasKinds = useMemo(() => NODE_TYPE_LIST.filter(type => (graphPath.length > 0 ? type !== 'Params' : type !== 'Ins' && type !== 'Outs') && (!hosted?.capabilities.nodeTypes || hosted.capabilities.nodeTypes.includes(type)) && (!fm1Mode || isFm1NodeImplemented(type))).map(graphKind), [graphPath.length, hosted, fm1Mode]);
+  const canvasVirtualLinks = useMemo(() => routingSelection.pairs.map(([source, target]) => ({ id: `route:${source}:${target}`, source: { nodeId: source, portId: 'teia.virtual' }, target: { type: 'port' as const, nodeId: target, portId: 'teia.virtual' }, mode: 'set', weight: 1 })), [routingSelection.pairs]);
+  const canvasDiagnostics = useMemo(() => [
+    ...nodes.flatMap(node => (dspDiagnostics.nodeErrors.get(scopedDspNodeId(node.id, shared.snapshot.path)) ?? []).map(message => ({ path: [...shared.snapshot.path], nodeId: node.id, code: 'teia-dsp', severity: 'error' as const, message }))),
+    ...[...teiaLinkIds(shared.editor.graph)].flatMap(([linkId, legacyId]) => (dspDiagnostics.edgeErrors.get(legacyId) ?? []).map(message => ({ path: [...shared.snapshot.path], linkId, code: 'teia-dsp', severity: 'error' as const, message }))),
+  ], [nodes, dspDiagnostics, shared.snapshot.path, shared.editor.graph]);
+  const changeNodeKindRef = useRef(updateNodeType); changeNodeKindRef.current = updateNodeType;
+  const changeCanvasNodeKind = useCallback(async (id: string, kind: string) => { try { await changeNodeKindRef.current(id, patchType(kind)); } catch (error) { setImportError(error instanceof Error ? error.message : String(error)); } }, []);
 
   useEffect(() => {
     if (!hosted) audio.syncGraph(audioGraph);
@@ -3835,19 +2099,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     return () => document.removeEventListener('visibilitychange', checkpointWhenHidden);
   }, [checkpointPreservedBuffers, preservedBufferNodeIds]);
 
-  useEffect(() => {
-    if (!reactFlow || !isFiniteCoordinateExtent(panTranslateExtent)) return;
 
-    const clampedViewport = clampViewportToTranslateExtent(settledViewport, panTranslateExtent, editorSize);
-    if (clampedViewport.x === settledViewport.x && clampedViewport.y === settledViewport.y && clampedViewport.zoom === settledViewport.zoom) {
-      return;
-    }
-
-    viewportRef.current = clampedViewport;
-    setSettledViewport(clampedViewport);
-    if (!hosted) storeViewport(clampedViewport);
-    void reactFlow.setViewport(clampedViewport);
-  }, [editorSize, panTranslateExtent, reactFlow, settledViewport]);
 
   useEffect(() => {
     const scopeRequests: ScopeCaptureRequest[] = nodesWithCallbacks.flatMap((node): ScopeCaptureRequest[] => {
@@ -3885,551 +2137,11 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     return () => window.removeEventListener('pagehide', persistLatestEditorState);
   }, []);
 
-  const applyNodeChangesNow = useCallback((changes: NodeChange<ShaderFlowNode>[]) => {
-    if (changes.length === 0) return;
-    if (canvasLocked) return;
-    const movedIds = new Set(changes.filter((change) => change.type === 'position').map((change) => change.id));
-    const appendixChanges: NodeChange<ShaderFlowNode>[] = [];
-    for (const appendix of routingAppendicesRef.current) {
-      if (movedIds.has(appendix.id)) continue;
-      const ownerChange = changes.find((change) => change.type === 'position' && change.id === appendix.ownerId);
-      if (ownerChange?.type !== 'position' || !ownerChange.position) continue;
-      appendixChanges.push({
-        id: appendix.id,
-        type: 'position',
-        position: {
-          x: ownerChange.position.x + appendix.offset.x,
-          y: ownerChange.position.y + appendix.offset.y,
-        },
-        dragging: ownerChange.dragging,
-      });
-    }
-    changes = [...changes, ...appendixChanges];
-    const duplicateState = duplicateDragRef.current;
-    if (duplicateState?.duplicating) {
-      updateDuplicateDrag(syncDuplicateDragPositionsFromChanges(duplicateState, changes));
-      setNodes((current) => applyNodeChanges(
-        anchorDuplicatedNodePositionChanges(changes, duplicateState.originalPositions),
-        current,
-      ));
-      return;
-    }
-
-    if (changes.some((change) => change.type === 'position' && change.dragging === false)) {
-      commitHistory('node-position');
-    }
-    const removedNodeIds = new Set(changes.filter((change) => change.type === 'remove').map((change) => change.id));
-    if (removedNodeIds.size > 0) {
-      commitHistory();
-      setEdges((current) => current.map((edge) => {
-        const modulations = edge.data?.weightModulations;
-        if (!modulations?.some((modulation) => removedNodeIds.has(modulation.from.node))) return edge;
-        return {
-          ...edge,
-          data: {
-            ...edge.data!,
-            weightModulations: modulations.filter((modulation) => !removedNodeIds.has(modulation.from.node)),
-          },
-        };
-      }));
-    }
-    setNodes((current) => restoreNodeSelectionAfterDeselectedDrag(
-      applyNodeChanges(changes, current),
-      activeNodeDragSelectionRef.current,
-    ));
-  }, [canvasLocked, commitHistory, updateDuplicateDrag]);
-
-  const flushQueuedNodeDragChanges = useCallback(() => {
-    if (nodeDragAnimationFrameRef.current !== null) {
-      cancelAnimationFrame(nodeDragAnimationFrameRef.current);
-      nodeDragAnimationFrameRef.current = null;
-    }
-    const changes = [...pendingNodeDragChangesRef.current.values()];
-    pendingNodeDragChangesRef.current.clear();
-    applyNodeChangesNow(changes);
-  }, [applyNodeChangesNow]);
-
   useEffect(() => () => {
     if (nodeDragAnimationFrameRef.current !== null) {
       cancelAnimationFrame(nodeDragAnimationFrameRef.current);
     }
   }, []);
-
-  const onNodesChange = useCallback((changes: NodeChange<ShaderFlowNode>[]) => {
-    const dragPositionChanges = changes.filter((change) => change.type === 'position' && change.dragging === true);
-    const immediateChanges = changes.filter((change) => change.type !== 'position' || change.dragging !== true);
-
-    if (dragPositionChanges.length > 0) {
-      for (const change of dragPositionChanges) {
-        if (change.type === 'position') pendingNodeDragChangesRef.current.set(change.id, change);
-      }
-      if (nodeDragAnimationFrameRef.current === null) {
-        nodeDragAnimationFrameRef.current = requestAnimationFrame(() => {
-          nodeDragAnimationFrameRef.current = null;
-          flushQueuedNodeDragChanges();
-        });
-      }
-    }
-    if (immediateChanges.length > 0) {
-      flushQueuedNodeDragChanges();
-      applyNodeChangesNow(immediateChanges);
-    }
-  }, [applyNodeChangesNow, flushQueuedNodeDragChanges]);
-
-  const onEdgesChange = useCallback((changes: EdgeChange<ShaderFlowEdge>[]) => {
-    if (canvasLocked) return;
-    const removedIds = new Set(changes.filter((change) => change.type === 'remove').map((change) => change.id));
-    if (removedIds.size > 0) {
-      commitHistory();
-    }
-    setEdges((current) => {
-      const next = applyEdgeChanges(changes, current);
-      if (removedIds.size === 0) return next;
-      let size = -1;
-      while (size !== removedIds.size) {
-        size = removedIds.size;
-        for (const edge of next) {
-          if (edge.data?.modulatesEdgeId && removedIds.has(edge.data.modulatesEdgeId)) removedIds.add(edge.id);
-        }
-      }
-      return next.filter((edge) => !removedIds.has(edge.id));
-    });
-  }, [canvasLocked, commitHistory]);
-
-  const onNodeDragStart = useCallback((
-    event: globalThis.MouseEvent | TouchEvent,
-    node: ShaderFlowNode,
-    dragNodes: ShaderFlowNode[],
-  ) => {
-    const selectionSnapshot = pendingNodeDragSelectionRef.current;
-    const duplicating = isDuplicateModifierPressed(event);
-    activeNodeDragSelectionRef.current = !duplicating && selectionSnapshot?.nodeId === node.id && selectionSnapshot.preserveSelection
-      ? selectionSnapshot
-      : null;
-    const relatedNodes = dragNodes.length > 0 ? dragNodes : [node];
-    const draggedIds = new Set(relatedNodes.map((entry) => entry.id));
-    routingAppendicesRef.current = nodesRef.current.flatMap((candidate) => {
-      if (duplicating || draggedIds.has(candidate.id)) return [];
-      if (candidate.data.patchNode.type !== 'Send' && candidate.data.patchNode.type !== 'Receive') return [];
-      const neighbors = new Set(edgesRef.current.flatMap((edge) => {
-        if (edge.type === 'virtualRoute') return [];
-        if (edge.source === candidate.id) return [edge.target];
-        if (edge.target === candidate.id) return [edge.source];
-        return [];
-      }));
-      if (neighbors.size !== 1) return [];
-      const ownerId = [...neighbors][0];
-      const owner = relatedNodes.find((entry) => entry.id === ownerId);
-      if (!owner) return [];
-      return [{
-        id: candidate.id,
-        ownerId,
-        offset: { x: candidate.position.x - owner.position.x, y: candidate.position.y - owner.position.y },
-      }];
-    });
-    const positions = Object.fromEntries(relatedNodes.map((entry) => [
-      entry.id,
-      { ...entry.position },
-    ]));
-    updateDuplicateDrag({
-      nodeIds: new Set(relatedNodes.map((entry) => entry.id)),
-      originalPositions: positions,
-      currentPositions: positions,
-      duplicating,
-      linkExternal: isCommandModifierPressed(event),
-    });
-    if (!activeNodeDragSelectionRef.current) return;
-
-    setNodes((current) => restoreNodeSelectionAfterDeselectedDrag(current, activeNodeDragSelectionRef.current));
-    setEdges((current) => restoreEdgeSelectionAfterDeselectedDrag(current, activeNodeDragSelectionRef.current));
-  }, [updateDuplicateDrag]);
-
-  const onNodeDrag = useCallback((
-    _event: globalThis.MouseEvent | TouchEvent,
-    _node: ShaderFlowNode,
-    dragNodes: ShaderFlowNode[],
-  ) => {
-    updateDuplicateDrag((current) => syncDuplicateDragPositions(current, dragNodes));
-  }, [updateDuplicateDrag]);
-
-  const onNodeDragStop = useCallback((
-    _event: globalThis.MouseEvent | TouchEvent,
-    _node: ShaderFlowNode,
-    dragNodes: ShaderFlowNode[],
-  ) => {
-    flushQueuedNodeDragChanges();
-    const dragState = duplicateDragRef.current;
-    routingAppendicesRef.current = [];
-    activeNodeDragSelectionRef.current = null;
-    pendingNodeDragSelectionRef.current = null;
-    updateDuplicateDrag(null);
-    if (!dragState?.duplicating) return;
-
-    const restoredNodes = restoreGraphNodePositions(nodesRef.current, dragState.originalPositions);
-    nodesRef.current = restoredNodes;
-
-    const duplicatedGraph = duplicateDraggedGraph(
-      restoredNodes,
-      edgesRef.current,
-      dragState,
-      dragState.currentPositions,
-      updateEdgeWeight,
-      updateEdgeMode,
-      insertNodeOnEdgePlaceholder,
-    );
-    if (duplicatedGraph.nodes.length === 0) return;
-
-    const sourceNodes = restoredNodes.filter((node) => dragState.nodeIds.has(node.id));
-    const bufferCopies = duplicatedBufferCopies(
-      sourceNodes,
-      duplicatedGraph.nodes,
-      restoredNodes,
-      [...restoredNodes, ...duplicatedGraph.nodes],
-      activeDspGroupIds,
-    );
-
-    commitHistory();
-    setNodes((current) => [
-      ...restoreGraphNodePositions(current, dragState.originalPositions)
-        .map((node) => ({ ...node, selected: false })),
-      ...duplicatedGraph.nodes,
-    ]);
-    setEdges((current) => dedupeEdges([
-      ...current.map((edge) => ({ ...edge, selected: false })),
-      ...duplicatedGraph.edges,
-    ]));
-    copyBufferAssets(bufferCopies, bufferAssetsRef.current, replaceBufferAssets);
-    audio.copyBuffers(bufferCopies);
-    setEditingTypeNodeId(null);
-  }, [activeDspGroupIds, audio.copyBuffers, commitHistory, flushQueuedNodeDragChanges, replaceBufferAssets, updateDuplicateDrag, updateEdgeMode, updateEdgeWeight]);
-
-  useEffect(() => {
-    const updateModifier = (event: KeyboardEvent) => {
-      const dragState = duplicateDragRef.current;
-      if (dragState && event.key === 'Alt') {
-        if (event.altKey && !dragState.duplicating) {
-          setNodes((current) => restoreGraphNodePositions(current, dragState.originalPositions));
-          updateDuplicateDrag({ ...dragState, duplicating: true });
-          return;
-        }
-
-        if (!event.altKey && dragState.duplicating) {
-          commitHistory('node-position');
-          setNodes((current) => applyGraphNodePositions(current, dragState.currentPositions));
-          updateDuplicateDrag({ ...dragState, duplicating: false });
-          return;
-        }
-      }
-      if (dragState && (event.key === 'Meta' || event.key === 'Control' || event.key === 'Shift')) {
-        updateDuplicateDrag({ ...dragState, linkExternal: isCommandModifierPressed(event) });
-      }
-
-      const areaDrag = areaDragRef.current;
-      if (!areaDrag) return;
-      if (event.key === 'Alt') {
-        if (event.altKey && !areaDrag.duplicating) {
-          setAreas((current) => current.map((area) => {
-            const position = areaDrag.areaPositions[area.id];
-            return position ? { ...area, position: { ...position } } : area;
-          }));
-          setNodes((current) => applyGraphNodePositions(current, areaDrag.nodePositions));
-          areaDrag.duplicating = true;
-          setAreaDuplicateDrag({ ...areaDrag });
-          return;
-        }
-        if (!event.altKey && areaDrag.duplicating) {
-          if (!areaDrag.historyCommitted) {
-            commitHistory();
-            areaDrag.historyCommitted = true;
-          }
-          setAreas((current) => current.map((area) => {
-            const position = areaDrag.currentAreaPositions[area.id];
-            return position ? { ...area, position: { ...position } } : area;
-          }));
-          setNodes((current) => applyGraphNodePositions(current, areaDrag.currentNodePositions));
-          areaDrag.duplicating = false;
-          setAreaDuplicateDrag(null);
-          return;
-        }
-      }
-      if (event.key === 'Meta' || event.key === 'Control' || event.key === 'Shift') {
-        areaDrag.linkExternal = isCommandModifierPressed(event);
-        if (areaDrag.duplicating) setAreaDuplicateDrag({ ...areaDrag });
-      }
-    };
-
-    window.addEventListener('keydown', updateModifier);
-    window.addEventListener('keyup', updateModifier);
-    return () => {
-      window.removeEventListener('keydown', updateModifier);
-      window.removeEventListener('keyup', updateModifier);
-    };
-  }, [commitHistory, updateDuplicateDrag]);
-
-  const onConnect = useCallback((connection: Connection) => {
-    if (canvasLocked) return;
-    if (connection.source === DRAFT_NODE_PREVIEW_ID || connection.target === DRAFT_NODE_PREVIEW_ID) {
-      setPendingBoundaryPort(null);
-      return;
-    }
-
-    const pending = pendingBoundaryPortRef.current;
-    if (pending) {
-      const isPendingSource = pending.side === 'output'
-        && connection.source === pending.nodeId
-        && connection.sourceHandle === `out:${pending.port}`;
-      const isPendingTarget = pending.side === 'input'
-        && connection.target === pending.nodeId
-        && connection.targetHandle === `in:${pending.port}`;
-      if (isPendingSource || isPendingTarget) {
-        materializePendingBoundaryPort(pending);
-      }
-    }
-
-    const link = linkFromConnection(connection, draftNodeConnectionRef.current?.mode);
-    if (!link) {
-      setPendingBoundaryPort(null);
-      return;
-    }
-    const internalRuntimeSource = nodesRef.current.find((node) => (
-      node.id === link.from.node
-      && (
-        (node.data.patchNode.type === 'Spread' && link.from.port === 'item index')
-        || (node.data.patchNode.type === 'Spawn' && link.from.port === 'instance gate')
-      )
-    ));
-    const targetNode = nodesRef.current.find((node) => node.id === link.to.node);
-    if (internalRuntimeSource && (!targetNode || !flowNodeIsInsideSpread(internalRuntimeSource, targetNode))) {
-      setPendingBoundaryPort(null);
-      return;
-    }
-    const spawnTarget = nodesRef.current.find((node) => (
-      node.id === link.to.node
-      && node.data.patchNode.type === 'Spawn'
-      && link.to.port === 'kill trigger'
-    ));
-    const sourceNode = nodesRef.current.find((node) => node.id === link.from.node);
-    if (spawnTarget && (!sourceNode || !flowNodeIsInsideSpread(spawnTarget, sourceNode))) {
-      setPendingBoundaryPort(null);
-      return;
-    }
-    const runtimeControlTarget = nodesRef.current.find((node) => (
-      node.id === link.to.node
-      && (
-        (node.data.patchNode.type === 'Spread' && link.to.port === 'count')
-        || (node.data.patchNode.type === 'ConditionalExecution' && link.to.port === 'gate')
-        || (
-          node.data.patchNode.type === 'Spawn'
-          && (link.to.port === 'trigger' || link.to.port === 'release trigger')
-        )
-      )
-    ));
-    if (runtimeControlTarget && sourceNode && flowNodeIsInsideSpread(runtimeControlTarget, sourceNode)) {
-      setPendingBoundaryPort(null);
-      return;
-    }
-
-    commitHistory();
-    const edge = edgeFromLink(link, updateEdgeWeight, updateEdgeMode, insertNodeOnEdge);
-    nodeConnectionCompletedRef.current = true;
-    setNodes((current) => current.map((node) => ({ ...node, selected: false })));
-    setEdges((current) => dedupeEdges([
-      ...current.map((candidate) => ({ ...candidate, selected: false })),
-      { ...edge, selected: true },
-    ]));
-    setPendingBoundaryPort(null);
-  }, [canvasLocked, commitHistory, insertNodeOnEdge, materializePendingBoundaryPort, updateEdgeMode, updateEdgeWeight]);
-
-  const onConnectStart = useCallback((event: globalThis.MouseEvent | TouchEvent, params: OnConnectStartParams) => {
-    if (canvasLocked) return;
-    nodeConnectionCompletedRef.current = false;
-    weightTargetEdgeIdRef.current = null;
-    setWeightTargetEdgeId(null);
-    if (reconnectingEdgeRef.current) {
-      updateDraftNodeConnection(null);
-      return;
-    }
-
-    const pointer = clientPointFromEvent(event);
-    if (!pointer || !params.nodeId || !params.handleId || !params.handleType) {
-      updateDraftNodeConnection(null);
-      setPendingBoundaryPort(null);
-      return;
-    }
-
-    if (editingStack.length > 0 || nodesRef.current.some((node) => node.data.patchNode.type === 'Params')) {
-      const insNode = nodesRef.current.find((node) => node.data.patchNode.type === (editingStack.length > 0 ? 'Ins' : 'Params'));
-      const outsNode = editingStack.length > 0 ? nodesRef.current.find((node) => node.data.patchNode.type === 'Outs') : undefined;
-      let nextPending: BoundaryPortSelection | null = null;
-
-      if (params.handleType === 'target' && insNode && params.nodeId !== insNode.id) {
-        const usedNames = new Set((insNode.data.patchNode.outputs ?? []).map((port) => port.name));
-        nextPending = {
-          nodeId: insNode.id,
-          side: 'output',
-          port: uniquePortName(editingStack.length > 0 ? 'new input' : 'new parameter', usedNames),
-        };
-      }
-
-      if (params.handleType === 'source' && outsNode && params.nodeId !== outsNode.id) {
-        const usedNames = new Set((outsNode.data.patchNode.inputs ?? []).map((port) => port.name));
-        nextPending = {
-          nodeId: outsNode.id,
-          side: 'input',
-          port: uniquePortName('new output', usedNames),
-        };
-      }
-
-      setPendingBoundaryPort(nextPending);
-    } else {
-      setPendingBoundaryPort(null);
-    }
-
-    updateDraftNodeConnection({
-      originNodeId: params.nodeId,
-      originHandleId: params.handleId,
-      originHandleType: params.handleType,
-      pointer,
-      modifierActive: isCommandModifierPressed(event),
-      mode: 'set',
-    });
-  }, [canvasLocked, editingStack.length, updateDraftNodeConnection]);
-
-  const onConnectEnd = useCallback<OnConnectEnd>((event, connectionState) => {
-    if (reconnectingEdgeRef.current) {
-      updateDraftNodeConnection(null);
-      setPendingBoundaryPort(null);
-      return;
-    }
-
-    // A node handle always owns the drop, even when its existing cable is
-    // inside the cable hit area. onConnect already handles this connection.
-    if (nodeConnectionCompletedRef.current || (connectionState.toHandle && connectionState.toHandle.nodeId !== DRAFT_NODE_PREVIEW_ID)) {
-      nodeConnectionCompletedRef.current = false;
-      updateDraftNodeConnection(null);
-      setPendingBoundaryPort(null);
-      weightTargetEdgeIdRef.current = null;
-      setWeightTargetEdgeId(null);
-      return;
-    }
-
-    let draftConnection = draftNodeConnectionRef.current;
-    const pointer = clientPointFromEvent(event);
-    if (pointer && draftConnection) {
-      draftConnection = {
-        ...draftConnection,
-        pointer,
-        modifierActive: draftConnection.modifierActive || isCommandModifierPressed(event),
-      };
-    }
-
-    const targetEdgeId = pointer
-      ? linkAtScreenPoint(pointer, edgesRef.current)
-      : weightTargetEdgeIdRef.current;
-    if (targetEdgeId && draftConnection && draftConnection.originHandleType === 'source') {
-      const sourcePort = parseHandleId(draftConnection.originHandleId);
-      const targetEdge = edgesRef.current.find((candidate) => candidate.id === targetEdgeId);
-      if (sourcePort?.kind === 'out' && targetEdge) {
-        commitHistory();
-        const modulationEdge: ShaderFlowEdge = {
-          id: `weight-modulation:${crypto.randomUUID()}`,
-          type: 'shaderEdge',
-          source: draftConnection.originNodeId,
-          sourceHandle: draftConnection.originHandleId,
-          target: targetEdge.target,
-          targetHandle: targetEdge.targetHandle,
-          selected: true,
-          reconnectable: false,
-          className: 'shader-edge',
-          data: {
-            weight: 1,
-            mode: draftConnection.mode,
-            enabled: true,
-            modulatesEdgeId: targetEdgeId,
-            onWeightChange: updateEdgeWeight,
-            onModeChange: updateEdgeMode,
-            onInsertNode: insertNodeOnEdge,
-          },
-        };
-        setEdges((current) => dedupeEdges([...current.map((edge) => ({ ...edge, selected: false })), modulationEdge]));
-        setNodes((current) => current.map((node) => ({ ...node, selected: false })));
-      }
-      updateDraftNodeConnection(null);
-      setPendingBoundaryPort(null);
-      weightTargetEdgeIdRef.current = null;
-      setWeightTargetEdgeId(null);
-      return;
-    }
-    updateDraftNodeConnection(null);
-    if (!connectionState.toHandle || connectionState.toHandle.nodeId === DRAFT_NODE_PREVIEW_ID) {
-      createDraftNodeFromConnection(draftConnection);
-    }
-    setPendingBoundaryPort(null);
-    weightTargetEdgeIdRef.current = null;
-    setWeightTargetEdgeId(null);
-  }, [commitHistory, createDraftNodeFromConnection, insertNodeOnEdge, updateDraftNodeConnection, updateEdgeMode, updateEdgeWeight]);
-
-  useEffect(() => {
-    const updatePointer = (event: PointerEvent) => {
-      if (reconnectingEdgeRef.current) {
-        const edge = reconnectingEdgeSnapshotRef.current;
-        const targetId = edge && !reconnectCancelledRef.current && reconnectFixedHandleRef.current === 'source'
-          ? linkAtScreenPoint({ x: event.clientX, y: event.clientY }, edgesRef.current.filter(
-            (candidate) => strengthTargetIsAllowed(edge.id, candidate.id, edgesRef.current),
-          ))
-          : null;
-        weightTargetEdgeIdRef.current = targetId;
-        setWeightTargetEdgeId(targetId);
-        return;
-      }
-      const draft = draftNodeConnectionRef.current;
-      if (!draft) return;
-      const targetId = linkAtScreenPoint({ x: event.clientX, y: event.clientY }, edgesRef.current);
-      if (draft.originHandleType === 'source' && targetId !== weightTargetEdgeIdRef.current) {
-        weightTargetEdgeIdRef.current = targetId;
-        setWeightTargetEdgeId(targetId);
-      }
-      updateDraftNodeConnection({
-        ...draft,
-        pointer: { x: event.clientX, y: event.clientY },
-        modifierActive: isCommandModifierPressed(event),
-      });
-    };
-    const updateModifier = (event: KeyboardEvent) => {
-      const draft = draftNodeConnectionRef.current;
-      if (!draft) return;
-      updateDraftNodeConnection({
-        ...draft,
-        modifierActive: isCommandModifierPressed(event),
-      });
-    };
-
-    window.addEventListener('pointermove', updatePointer);
-    window.addEventListener('keydown', updateModifier);
-    window.addEventListener('keyup', updateModifier);
-    return () => {
-      window.removeEventListener('pointermove', updatePointer);
-      window.removeEventListener('keydown', updateModifier);
-      window.removeEventListener('keyup', updateModifier);
-    };
-  }, [edgesRef, updateDraftNodeConnection]);
-
-  const addNodeAt = useCallback((event: ReactMouseEvent) => {
-    if (canvasLocked) return;
-    if (!reactFlow) return;
-    addDraftNode(reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY }));
-  }, [addDraftNode, canvasLocked, reactFlow]);
-
-  const toggleCanvasLock = useCallback(() => {
-    setCanvasLocked((locked) => !locked);
-    setNodes((current) => current.map((node) => ({ ...node, selected: false })));
-    setEdges((current) => current.map((edge) => ({ ...edge, selected: false })));
-    setSelectedAreaId(null);
-    setEditingAreaId(null);
-    setEditingTypeNodeId(null);
-    setPendingBoundaryPort(null);
-    updateDraftNodeConnection(null);
-  }, [updateDraftNodeConnection]);
 
   const showSaveFeedback = useCallback(() => {
     setSaveFeedbackActive(true);
@@ -4451,13 +2163,8 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
       return;
     }
 
-    commitHistory();
-    const callbacks = nodeCallbacksPlaceholder();
-    setEditingStack([]);
+    shared.replace(loadedPatch);
     setPendingBoundaryPort(null);
-    setNodes(toFlowNodes(loadedPatch, callbacks, null));
-    setEdges(toFlowEdges(loadedPatch, updateEdgeWeight, updateEdgeMode, insertNodeOnEdgePlaceholder));
-    setAreas(structuredClone(loadedPatch.areas ?? []));
     setSelectedAreaId(null);
     setSurfacedAreaId(null);
     setEditingAreaId(null);
@@ -4466,7 +2173,6 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     setSelectedMidiOutputDeviceIds(normalizeSelectedMidiDeviceIds(loadedPatch.midiInput?.selectedOutputDeviceIds));
     setMidiClockOutputEnabled(loadedPatch.midiInput?.sendClock === true);
     setMidiControlVisuals({});
-    setEditingTypeNodeId(null);
     setImportError(null);
     void restoreBufferAssets(loadedPatch.buffers ?? {}).catch((error) => {
       setImportError(error instanceof Error ? error.message : String(error));
@@ -4799,59 +2505,22 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     }
   }, []);
 
-  const undo = useCallback(() => {
-    setHistory((current) => {
-      const previous = current.past[current.past.length - 1];
-      if (!previous) return current;
-      const now = graphSnapshot(nodesRef.current, edgesRef.current, areasRef.current);
-      restoreGraphSnapshot(previous, setNodes, setEdges, setAreas);
-      setSelectedAreaId(null);
-      setSurfacedAreaId(null);
-      setEditingAreaId(null);
-      return {
-        past: current.past.slice(0, -1),
-        future: [now, ...current.future].slice(0, HISTORY_LIMIT),
-      };
-    });
-  }, []);
-
-  const redo = useCallback(() => {
-    setHistory((current) => {
-      const next = current.future[0];
-      if (!next) return current;
-      const now = graphSnapshot(nodesRef.current, edgesRef.current, areasRef.current);
-      restoreGraphSnapshot(next, setNodes, setEdges, setAreas);
-      setSelectedAreaId(null);
-      setSurfacedAreaId(null);
-      setEditingAreaId(null);
-      return {
-        past: [...current.past, now].slice(-HISTORY_LIMIT),
-        future: current.future.slice(1),
-      };
-    });
-  }, []);
-
   const newPatch = useCallback(() => {
     if (hosted) { setImportError('This operation is owned by the host and has no supplied adapter.'); return; }
     setNewPatchConfirmationOpen(true);
   }, []);
 
   const confirmNewPatch = useCallback(() => {
-    setEditingStack([]);
     setPendingBoundaryPort(null);
     setSelectedBoundaryPort(null);
     setPatchName(localPatchStorageEnabled ? '' : 'untitled-patch');
     setSelectedMidiInputDeviceIds([]);
     setMidiClockOutputEnabled(false);
     setMidiControlVisuals({});
-    setNodes([]);
-    setEdges([]);
-    setAreas([]);
+    shared.replace({ nodes: [], links: [] });
     setSelectedAreaId(null);
     setSurfacedAreaId(null);
     setEditingAreaId(null);
-    setEditingTypeNodeId(null);
-    setHistory({ past: [], future: [] });
     setNewPatchConfirmationOpen(false);
     void restoreBufferAssets({}).catch(() => undefined);
   }, [localPatchStorageEnabled, restoreBufferAssets]);
@@ -4868,27 +2537,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     return () => window.removeEventListener('keydown', handleEscape, { capture: true });
   }, [newPatchConfirmationOpen]);
 
-  useEffect(() => {
-    const handleHistoryKeyDown = (event: KeyboardEvent) => {
-      if (isEditableEventTarget(event.target)) return;
-      const hasModifier = event.metaKey || event.ctrlKey;
-      if (!hasModifier) return;
 
-      const key = event.key.toLowerCase();
-      if (key === 'z' && !event.shiftKey) {
-        event.preventDefault();
-        undo();
-        return;
-      }
-      if ((key === 'z' && event.shiftKey) || key === 'y') {
-        event.preventDefault();
-        redo();
-      }
-    };
-
-    window.addEventListener('keydown', handleHistoryKeyDown);
-    return () => window.removeEventListener('keydown', handleHistoryKeyDown);
-  }, [redo, undo]);
 
   useEffect(() => {
     if (!selectedBoundaryPort) return;
@@ -4907,114 +2556,17 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     }
   }, [nodes, selectedBoundaryPort]);
 
-  useEffect(() => {
-    if (!selectedBoundaryPort) return;
 
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      if (target.closest('.port-name-label')) return;
-      setSelectedBoundaryPort(null);
-    };
 
-    window.addEventListener('pointerdown', handlePointerDown, { capture: true });
-    return () => window.removeEventListener('pointerdown', handlePointerDown, { capture: true });
-  }, [selectedBoundaryPort]);
 
-  useEffect(() => {
-    const handleSelectedEdgeModeKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (isEditableEventTarget(event.target)) return;
 
-      const modeByKey: Record<string, LinkMode> = {
-        a: 'add',
-        s: 'set',
-        m: 'multiply',
-        b: 'bend',
-      };
-      const mode = modeByKey[event.key.toLowerCase()];
-      if (!mode) return;
 
-      if (draftNodeConnectionRef.current) {
-        updateDraftNodeConnection((current) => current ? { ...current, mode } : null);
-      } else if (!setSelectedEdgesMode(mode)) {
-        return;
-      }
 
-      event.preventDefault();
-      event.stopPropagation();
-    };
 
-    window.addEventListener('keydown', handleSelectedEdgeModeKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleSelectedEdgeModeKeyDown, { capture: true });
-  }, [setSelectedEdgesMode, updateDraftNodeConnection]);
 
-  useEffect(() => {
-    const handleToggleSelectedEdgesKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (isEditableEventTarget(event.target) || event.key.toLowerCase() !== 'x') return;
-      if (!toggleSelectedNodes() && !toggleSelectedEdges()) return;
 
-      event.preventDefault();
-      event.stopPropagation();
-    };
 
-    window.addEventListener('keydown', handleToggleSelectedEdgesKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleToggleSelectedEdgesKeyDown, { capture: true });
-  }, [toggleSelectedEdges, toggleSelectedNodes]);
 
-  useEffect(() => {
-    const handleBoundaryPortDeleteKeyDown = (event: KeyboardEvent) => {
-      if (isEditableEventTarget(event.target)) return;
-      if (event.key !== 'Backspace' && event.key !== 'Delete') return;
-      if (!deleteSelectedBoundaryPort()) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-    };
-
-    window.addEventListener('keydown', handleBoundaryPortDeleteKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleBoundaryPortDeleteKeyDown, { capture: true });
-  }, [deleteSelectedBoundaryPort]);
-
-  useEffect(() => {
-    const handleBridgeDeleteKeyDown = (event: KeyboardEvent) => {
-      if (isEditableEventTarget(event.target)) return;
-      if (event.key !== 'Backspace' && event.key !== 'Delete') return;
-      if (!event.metaKey && !event.ctrlKey) return;
-      if (!deleteSelectedNodesWithBridge()) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-    };
-
-    window.addEventListener('keydown', handleBridgeDeleteKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleBridgeDeleteKeyDown, { capture: true });
-  }, [deleteSelectedNodesWithBridge]);
-
-  useEffect(() => {
-    const handleClipboardKeyDown = (event: KeyboardEvent) => {
-      if (isEditableEventTarget(event.target)) return;
-      const hasModifier = event.metaKey || event.ctrlKey;
-      if (!hasModifier || event.shiftKey || event.altKey) return;
-
-      const key = event.key.toLowerCase();
-      if (key === 'c' && copySelectedNodes()) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
-      if (key === 'v') {
-        event.preventDefault();
-        event.stopPropagation();
-        void pasteCopiedNodes();
-      }
-    };
-
-    window.addEventListener('keydown', handleClipboardKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleClipboardKeyDown, { capture: true });
-  }, [copySelectedNodes, pasteCopiedNodes]);
 
   useEffect(() => {
     const handleSelectorIndexKeyDown = (event: KeyboardEvent) => {
@@ -5050,1122 +2602,33 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     }
   }, []);
 
-  const promoteNodeFromTarget = useCallback((eventTarget: EventTarget | null) => {
-    const target = eventTarget instanceof Element ? eventTarget : null;
-    const nodeElement = target?.closest<HTMLElement>('.react-flow__node[data-id]');
-    const nodeId = nodeElement?.dataset.id;
-    if (!nodeId) return;
-
-    const node = nodesRef.current.find((candidate) => candidate.id === nodeId);
-    const containingArea = node
-      ? innermostAreaContainingNode(areasRef.current, node)
-      : undefined;
-    setSurfacedAreaId(containingArea?.id ?? null);
-
-    setNodeStackOrder((current) => {
-      if (containingArea) {
-        const containedNodeIds = nodeIdsContainedByAreaHierarchy(
-          areasRef.current,
-          nodesRef.current,
-          containingArea.id,
-        );
-        const promotedAreaOrder = promoteNodeIdsInStackOrder(
-          current,
-          nodesRef.current.map((candidate) => candidate.id),
-          containedNodeIds,
-        );
-        return promoteNodeIdsInStackOrder(
-          promotedAreaOrder,
-          nodesRef.current.map((candidate) => candidate.id),
-          new Set([nodeId]),
-        );
-      }
-
-      const currentNodeIds = new Set(nodesRef.current.map((node) => node.id));
-      const activeOrder = current.filter((entry) => entry !== nodeId && currentNodeIds.has(entry));
-      if (activeOrder.length === current.length - 1 && current.at(-1) === nodeId) return current;
-      return [...activeOrder, nodeId];
-    });
-  }, []);
-
-  const promoteAreaFromTarget = useCallback((eventTarget: EventTarget | null) => {
-    const target = eventTarget instanceof Element ? eventTarget : null;
-    const areaId = target?.closest<HTMLElement>('.canvas-area[data-area-id]')?.dataset.areaId;
-    if (!areaId) return;
-
-    const containedNodeIds = nodeIdsContainedByAreaHierarchy(
-      areasRef.current,
-      nodesRef.current,
-      areaId,
-    );
-    setSelectedAreaId(areaId);
-    setSurfacedAreaId(areaId);
-    setNodeStackOrder((current) => promoteNodeIdsInStackOrder(
-      current,
-      nodesRef.current.map((node) => node.id),
-      containedNodeIds,
-    ));
-  }, []);
-
-  const handleEditorFocusCapture = useCallback((event: ReactFocusEvent<HTMLElement>) => {
-    if (canvasLocked) return;
-    if (isSurfacedControlTarget(event.target)) return;
-    promoteNodeFromTarget(event.target);
-    promoteAreaFromTarget(event.target);
-  }, [canvasLocked, promoteAreaFromTarget, promoteNodeFromTarget]);
-
-  const handleEditorPointerDownCapture = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (canvasLocked) return;
-    if (!event.nativeEvent.isTrusted && ignoreSyntheticSelectionPointerDownRef.current) {
-      ignoreSyntheticSelectionPointerDownRef.current = false;
-      return;
-    }
-    if (isSurfacedControlTarget(event.target)) {
-      pendingNodeDragSelectionRef.current = null;
-      selectionDragStartRef.current = null;
-      canvasDragActiveRef.current = false;
-      canvasDragPointerRef.current = null;
-      canvasDragPointerIdRef.current = null;
-      setResumedSelectionDraw(null);
-      return;
-    }
-    promoteNodeFromTarget(event.target);
-    promoteAreaFromTarget(event.target);
-    const target = event.target instanceof Element ? event.target : null;
-    const nodeElement = target?.closest<HTMLElement>('.react-flow__node[data-id]');
-    const nodeId = nodeElement?.dataset.id;
-    if (!nodeId && !target?.closest('.canvas-area')) setSurfacedAreaId(null);
-
-    if (event.button !== 0) {
-      pendingNodeDragSelectionRef.current = null;
-      selectionDragStartRef.current = null;
-      setResumedSelectionDraw(null);
-      return;
-    }
-
-    setResumedSelectionDraw(null);
-
-    if (!target?.closest('.canvas-area')) setSelectedAreaId(null);
-
-    const isCanvasPointerDown = target?.classList.contains('react-flow__pane') === true;
-    canvasDragActiveRef.current = isCanvasPointerDown;
-    canvasDragPointerRef.current = isCanvasPointerDown ? { x: event.clientX, y: event.clientY } : null;
-    canvasDragPointerIdRef.current = isCanvasPointerDown ? event.pointerId : null;
-
-    // Cmd/Ctrl-drag reserves the canvas gesture for a visual area rather than
-    // React Flow's normal selection rectangle.
-    if ((event.metaKey || event.ctrlKey) && isCanvasPointerDown) {
-      event.preventDefault();
-      event.stopPropagation();
-      const draw = { start: { x: event.clientX, y: event.clientY }, current: { x: event.clientX, y: event.clientY } };
-      areaDrawRef.current = draw;
-      setAreaDraw(draw);
-      setResumedSelectionDraw(null);
-      selectionDragStartRef.current = null;
-      return;
-    }
-
-    if (isCanvasPointerDown) {
-      selectionDragStartRef.current = { x: event.clientX, y: event.clientY };
-    } else {
-      selectionDragStartRef.current = null;
-    }
-    if (!nodeId) {
-      pendingNodeDragSelectionRef.current = null;
-      return;
-    }
-
-    const node = nodesRef.current.find((entry) => entry.id === nodeId);
-    if (!node) {
-      pendingNodeDragSelectionRef.current = null;
-      return;
-    }
-
-    pendingNodeDragSelectionRef.current = {
-      nodeId,
-      preserveSelection: node.selected !== true,
-      nodeSelection: selectionById(nodesRef.current),
-      edgeSelection: selectionById(edgesRef.current),
-    };
-  }, [promoteAreaFromTarget, promoteNodeFromTarget]);
-
-  const screenToFlow = useCallback((point: ScreenPoint) => {
-    const rect = editorShellRef.current?.getBoundingClientRect();
-    if (!rect) return { x: 0, y: 0 };
-    const viewport = viewportRef.current;
-    return { x: (point.x - rect.left - viewport.x) / viewport.zoom, y: (point.y - rect.top - viewport.y) / viewport.zoom };
-  }, []);
-
-  const endNativeSelection = useCallback(() => {
-    const pane = editorShellRef.current?.querySelector<HTMLElement>('.react-flow__pane');
-    const point = canvasDragPointerRef.current;
-    const pointerId = canvasDragPointerIdRef.current;
-    if (!pane || !point || pointerId === null) return;
-    ignoreSyntheticSelectionPointerUpRef.current = true;
-    pane.dispatchEvent(new PointerEvent('pointerup', {
-      bubbles: true,
-      cancelable: true,
-      button: 0,
-      clientX: point.x,
-      clientY: point.y,
-      pointerId,
-      isPrimary: true,
-    }));
-  }, [canvasLocked, promoteAreaFromTarget, promoteNodeFromTarget]);
-
-  const startNativeSelection = useCallback((start: ScreenPoint) => {
-    const pane = editorShellRef.current?.querySelector<HTMLElement>('.react-flow__pane');
-    const pointerId = canvasDragPointerIdRef.current;
-    if (!pane || pointerId === null) return;
-    ignoreSyntheticSelectionPointerDownRef.current = true;
-    pane.dispatchEvent(new PointerEvent('pointerdown', {
-      bubbles: true,
-      cancelable: true,
-      button: 0,
-      buttons: 1,
-      clientX: start.x,
-      clientY: start.y,
-      pointerId,
-      isPrimary: true,
-    }));
-  }, []);
-
-  const updateAreaDraw = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (canvasLocked) return false;
-    const current = areaDrawRef.current;
-    if (!current) return false;
-    // Releasing Cmd/Ctrl during the gesture returns to the ordinary selection
-    // rectangle, retaining the original pointer-down point.
-    if (!event.metaKey && !event.ctrlKey) {
-      areaDrawRef.current = null;
-      selectionDragStartRef.current = current.start;
-      setAreaDraw(null);
-      setResumedSelectionDraw({
-        start: current.start,
-        current: { x: event.clientX, y: event.clientY },
-      });
-      startNativeSelection(current.start);
-      return false;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    const next = { ...current, current: { x: event.clientX, y: event.clientY } };
-    areaDrawRef.current = next;
-    setAreaDraw(next);
-    return true;
-  }, [canvasLocked, startNativeSelection]);
-
-  const finishAreaDraw = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (canvasLocked) return false;
-    const draw = areaDrawRef.current;
-    if (!draw) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    const end = { x: event.clientX, y: event.clientY };
-    const start = screenToFlow(draw.start);
-    const finish = screenToFlow(end);
-    const width = Math.abs(finish.x - start.x);
-    const height = Math.abs(finish.y - start.y);
-    if (width >= 24 && height >= 24) {
-      commitHistory();
-      const id = `area-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-      const newArea: EditorArea = {
-        id,
-        title: 'Area',
-        position: { x: Math.min(start.x, finish.x), y: Math.min(start.y, finish.y) },
-        size: { width, height },
-      };
-      const nextAreas = [...areasRef.current, newArea];
-      const containedNodeIds = nodeIdsContainedByAreaHierarchy(nextAreas, nodesRef.current, id);
-      setAreas((current) => [...current, newArea]);
-      setSelectedAreaId(id);
-      setSurfacedAreaId(id);
-      setNodeStackOrder((current) => promoteNodeIdsInStackOrder(
-        current,
-        nodesRef.current.map((node) => node.id),
-        containedNodeIds,
-      ));
-    }
-    areaDrawRef.current = null;
-    setAreaDraw(null);
-    return true;
-  }, [canvasLocked, commitHistory, screenToFlow]);
-
-  const startAreaDrag = useCallback((
-    event: ReactPointerEvent<HTMLElement>,
-    area: EditorArea,
-    preserveClick = false,
-  ) => {
-    if (event.button !== 0) return;
-    if (!preserveClick) event.preventDefault();
-    event.stopPropagation();
-    setSelectedAreaId(area.id);
-    const movedAreaIds = connectedAreaIds(areas, area.id);
-    const movedAreas = areas.filter((candidate) => movedAreaIds.has(candidate.id));
-    const areaPositions = Object.fromEntries(movedAreas.map((candidate) => [candidate.id, { ...candidate.position }]));
-    const nodePositions = Object.fromEntries(nodesRef.current
-      .filter((node) => movedAreas.some((candidate) => (
-        areaContainsNode(candidate, node) || candidate.spreadNodeId === node.id
-      )))
-      .map((node) => [node.id, { ...node.position }]));
-    const dragState: AreaDragState = {
-      areaId: area.id,
-      start: { x: event.clientX, y: event.clientY },
-      captureTarget: event.currentTarget,
-      areaPositions,
-      nodePositions,
-      currentAreaPositions: structuredClone(areaPositions),
-      currentNodePositions: structuredClone(nodePositions),
-      duplicating: event.altKey,
-      linkExternal: isCommandModifierPressed(event),
-      historyCommitted: false,
-    };
-    areaDragRef.current = dragState;
-    setAreaDuplicateDrag(dragState.duplicating ? { ...dragState } : null);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, [areas]);
-
-  const dragArea = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const drag = areaDragRef.current;
-    if (!drag) return;
-    event.preventDefault();
-    const zoom = viewportRef.current.zoom;
-    const delta = { x: (event.clientX - drag.start.x) / zoom, y: (event.clientY - drag.start.y) / zoom };
-    drag.currentAreaPositions = Object.fromEntries(Object.entries(drag.areaPositions).map(([id, position]) => [id, {
-      x: position.x + delta.x,
-      y: position.y + delta.y,
-    }]));
-    drag.currentNodePositions = Object.fromEntries(Object.entries(drag.nodePositions).map(([id, position]) => [id, {
-      x: position.x + delta.x,
-      y: position.y + delta.y,
-    }]));
-    drag.linkExternal = isCommandModifierPressed(event);
-    if (drag.duplicating) {
-      setAreaDuplicateDrag({ ...drag });
-      return;
-    }
-    if (!drag.historyCommitted && (delta.x !== 0 || delta.y !== 0)) {
-      commitHistory();
-      drag.historyCommitted = true;
-    }
-    setAreas((current) => current.map((area) => {
-      const position = drag.currentAreaPositions[area.id];
-      return position ? { ...area, position } : area;
-    }));
-    setNodes((current) => current.map((node) => {
-      const position = drag.currentNodePositions[node.id];
-      return position ? { ...node, position } : node;
-    }));
-  }, [commitHistory]);
-
-  const stopAreaDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const drag = areaDragRef.current;
-    if (!drag) return;
-    if (drag.captureTarget.hasPointerCapture(event.pointerId)) {
-      drag.captureTarget.releasePointerCapture(event.pointerId);
-    }
-    areaDragRef.current = null;
-    setAreaDuplicateDrag(null);
-    if (!drag.duplicating) return;
-
-    const duplicated = duplicateAreaHierarchy(
-      areasRef.current,
-      nodesRef.current,
-      edgesRef.current,
-      drag,
-      updateEdgeWeight,
-      updateEdgeMode,
-      insertNodeOnEdgePlaceholder,
-    );
-    if (duplicated.nodes.length === 0 && duplicated.areas.length === 0) return;
-    const sourceNodes = nodesRef.current.filter((node) => Object.hasOwn(drag.nodePositions, node.id));
-    const bufferCopies = duplicatedBufferCopies(
-      sourceNodes,
-      duplicated.nodes,
-      nodesRef.current,
-      [...nodesRef.current, ...duplicated.nodes],
-      activeDspGroupIds,
-    );
-    commitHistory();
-    setNodes((current) => [
-      ...current.map((node) => ({ ...node, selected: false })),
-      ...duplicated.nodes.map((node) => ({ ...node, selected: false })),
-    ]);
-    setEdges((current) => dedupeEdges([
-      ...current.map((edge) => ({ ...edge, selected: false })),
-      ...duplicated.edges,
-    ]));
-    setAreas((current) => [...current, ...duplicated.areas]);
-    setSelectedAreaId(duplicated.rootAreaId);
-    setSurfacedAreaId(duplicated.rootAreaId);
-    setNodeStackOrder((current) => [...current, ...duplicated.nodes.map((node) => node.id)]);
-    copyBufferAssets(bufferCopies, bufferAssetsRef.current, replaceBufferAssets);
-    audio.copyBuffers(bufferCopies);
-  }, [activeDspGroupIds, audio.copyBuffers, commitHistory, replaceBufferAssets, updateEdgeMode, updateEdgeWeight]);
-
-  const startAreaResize = useCallback((
-    event: ReactPointerEvent<HTMLDivElement>,
-    area: EditorArea,
-    corner: AreaResizeState['corner'],
-  ) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setSelectedAreaId(area.id);
-    areaResizeRef.current = {
-      areaId: area.id,
-      start: { x: event.clientX, y: event.clientY },
-      corner,
-      originalPosition: area.position,
-      originalSize: area.size,
-      historyCommitted: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, []);
-
-  const resizeArea = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const resize = areaResizeRef.current;
-    if (!resize) return;
-    event.preventDefault();
-    const zoom = viewportRef.current.zoom;
-    const delta = { x: (event.clientX - resize.start.x) / zoom, y: (event.clientY - resize.start.y) / zoom };
-    if (!resize.historyCommitted && (delta.x !== 0 || delta.y !== 0)) {
-      commitHistory();
-      resize.historyCommitted = true;
-    }
-    const resizedArea = areasRef.current.find((area) => area.id === resize.areaId);
-    const containedBounds = resizedArea?.locked
-      ? lockedAreaNodeBounds(resizedArea, nodesRef.current)
-      : null;
-    const runtimeContainerNode = resizedArea?.spreadNodeId
-      ? nodesRef.current.find((node) => node.id === resizedArea.spreadNodeId)
-      : undefined;
-    const minimumWidth = Math.max(
-      runtimeContainerNode?.data.patchNode.type === 'Spawn'
-        ? MIN_SPAWN_WIDTH
-        : resizedArea?.kind === 'spread' ? MIN_RUNTIME_CONTAINER_WIDTH : 48,
-      containedBounds?.width ?? 0,
-    );
-    const minimumHeight = Math.max(
-      resizedArea?.kind === 'spread'
-        ? NODE_HEADER_HEIGHT + (runtimeContainerNode?.data.patchNode.type === 'Spawn' ? SPAWN_PORTS_HEIGHT : SPREAD_PORTS_HEIGHT) + 48
-        : 48,
-      containedBounds?.height ?? 0,
-    );
-    const originalRight = resize.originalPosition.x + resize.originalSize.width;
-    const originalBottom = resize.originalPosition.y + resize.originalSize.height;
-    const resizingLeft = resize.corner.includes('left');
-    const resizingTop = resize.corner.includes('top');
-    const left = resizingLeft
-      ? Math.min(
-        resize.originalPosition.x + delta.x,
-        originalRight - minimumWidth,
-        containedBounds?.x ?? Number.POSITIVE_INFINITY,
-      )
-      : resize.originalPosition.x;
-    const right = resizingLeft
-      ? originalRight
-      : Math.max(
-        originalRight + delta.x,
-        resize.originalPosition.x + minimumWidth,
-        containedBounds ? containedBounds.x + containedBounds.width : Number.NEGATIVE_INFINITY,
-      );
-    const top = resizingTop
-      ? Math.min(
-        resize.originalPosition.y + delta.y,
-        originalBottom - minimumHeight,
-        containedBounds?.y ?? Number.POSITIVE_INFINITY,
-      )
-      : resize.originalPosition.y;
-    const bottom = resizingTop
-      ? originalBottom
-      : Math.max(
-        originalBottom + delta.y,
-        resize.originalPosition.y + minimumHeight,
-        containedBounds ? containedBounds.y + containedBounds.height : Number.NEGATIVE_INFINITY,
-      );
-    const width = right - left;
-    const height = bottom - top;
-    const position = {
-      x: left,
-      y: top,
-    };
-    setAreas((current) => current.map((area) => area.id === resize.areaId ? {
-      ...area,
-      position,
-      size: { width, height },
-      ...(area.uiHeight === undefined ? {} : { uiHeight: Math.min(area.uiHeight, Math.max(0, height - NODE_HEADER_HEIGHT)) }),
-    } : area));
-    if (resizedArea?.spreadNodeId) {
-      setNodes((current) => current.map((node) => node.id === resizedArea.spreadNodeId ? {
-        ...node,
-        position,
-        data: {
-          ...node.data,
-          patchNode: {
-            ...node.data.patchNode,
-            position,
-            scopeSize: {
-              width,
-              height: Math.max(
-                node.data.patchNode.type === 'Spawn' ? SPAWN_PORTS_HEIGHT : SPREAD_PORTS_HEIGHT,
-                height - NODE_HEADER_HEIGHT,
-              ),
-            },
-          },
-        },
-      } : node));
-    }
-  }, [commitHistory]);
-
-  const stopAreaResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!areaResizeRef.current) return;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    areaResizeRef.current = null;
-  }, []);
-
-  const startAreaUiResize = useCallback((event: ReactPointerEvent<HTMLDivElement>, area: EditorArea) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setSelectedAreaId(area.id);
-    areaUiResizeRef.current = {
-      areaId: area.id,
-      start: { x: event.clientX, y: event.clientY },
-      originalUiHeight: area.uiHeight ?? 0,
-      historyCommitted: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, []);
-
-  const resizeAreaUi = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const resize = areaUiResizeRef.current;
-    if (!resize) return;
-    event.preventDefault();
-    const delta = (event.clientY - resize.start.y) / viewportRef.current.zoom;
-    const nextUiHeight = Math.max(0, resize.originalUiHeight + delta);
-    if (!resize.historyCommitted && nextUiHeight !== resize.originalUiHeight) {
-      commitHistory();
-      resize.historyCommitted = true;
-    }
-    setAreas((current) => current.map((area) => area.id === resize.areaId ? {
-      ...area,
-      uiHeight: Math.min(Math.max(0, area.size.height - NODE_HEADER_HEIGHT), nextUiHeight),
-    } : area));
-  }, [commitHistory]);
-
-  const stopAreaUiResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!areaUiResizeRef.current) return;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    areaUiResizeRef.current = null;
-  }, []);
-
-  const renameArea = useCallback((areaId: string, title: string) => {
-    commitHistory(`area-title:${areaId}`);
-    setAreas((current) => current.map((area) => area.id === areaId ? { ...area, title } : area));
-  }, [commitHistory]);
-
-  const finishAreaRename = useCallback((areaId: string) => {
-    setAreas((current) => current.map((area) => (
-      area.id === areaId && !area.title
-        ? {
-            ...area,
-            title: area.kind === 'spread'
-              ? getNodeTypeLabel(nodesRef.current.find((node) => node.id === area.spreadNodeId)?.data.patchNode.type ?? 'Spread')
-              : 'Area',
-          }
-        : area
-    )));
-    setEditingAreaId(null);
-  }, []);
-
-  const toggleAreaCollapsed = useCallback((areaId: string) => {
-    const area = areasRef.current.find((candidate) => candidate.id === areaId);
-    if (!area) return;
-
-    commitHistory(`area-collapse:${areaId}`);
-    setEditingAreaId(null);
-    setEditingTypeNodeId(null);
-    if (area.collapsed) {
-      const containedNodeIds = nodeIdsContainedByAreaHierarchy(
-        areasRef.current,
-        nodesRef.current,
-        areaId,
-      );
-      setSurfacedAreaId(areaId);
-      setSelectedAreaId(areaId);
-      setNodeStackOrder((current) => promoteNodeIdsInStackOrder(
-        current,
-        nodesRef.current.map((node) => node.id),
-        containedNodeIds,
-      ));
-    }
-    setAreas((current) => current.map((area) => {
-      if (area.id !== areaId) return area;
-      if (area.collapsed || area.locked) return { ...area, collapsed: !area.collapsed };
-      return {
-        ...area,
-        collapsed: true,
-        locked: true,
-        nodeIds: nodesRef.current
-          .filter((node) => areaContainsPoint(area, node.position))
-          .map((node) => node.id),
-        areaIds: areaIdsWithinBounds(current, area),
-      };
-    }));
-  }, [commitHistory]);
-
-  const toggleAreaLocked = useCallback((areaId: string) => {
-    const area = areasRef.current.find((candidate) => candidate.id === areaId);
-    if (!area) return;
-
-    commitHistory(`area-lock:${areaId}`);
-    setAreas((current) => current.map((candidate) => {
-      if (candidate.id !== areaId) return candidate;
-      if (candidate.locked) return {
-        ...candidate,
-        locked: false,
-        nodeIds: undefined,
-        areaIds: undefined,
-      };
-      return {
-        ...candidate,
-        locked: true,
-        nodeIds: nodesRef.current
-          .filter((node) => areaContainsPoint(candidate, node.position))
-          .map((node) => node.id),
-        areaIds: areaIdsWithinBounds(current, candidate),
-      };
-    }));
-  }, [commitHistory]);
-
-  const areaDrawBounds = useMemo(() => {
-    if (!areaDraw) return null;
-    const start = screenToFlow(areaDraw.start);
-    const end = screenToFlow(areaDraw.current);
-    return {
-      x: Math.min(start.x, end.x),
-      y: Math.min(start.y, end.y),
-      width: Math.abs(end.x - start.x),
-      height: Math.abs(end.y - start.y),
-    };
-  }, [areaDraw, screenToFlow]);
-
-  const clearPendingNodeDragSelection = useCallback(() => {
-    if (!activeNodeDragSelectionRef.current) {
-      pendingNodeDragSelectionRef.current = null;
-    }
-  }, []);
-
-  const syncRectangleSelection = useCallback((end: ScreenPoint) => {
-    const start = selectionDragStartRef.current;
-    const editorShell = editorShellRef.current;
-    if (!start || !editorShell) return;
-
-    const selectedNodeIds = selectedNodeIdsInScreenRect(
-      editorShell,
-      start,
-      end,
-      new Set(nodesRef.current.map((node) => node.id)),
-    );
-    setNodes((current) => updateSelection(current, selectedNodeIds));
-    setEdges((current) => updateSelection(current, new Set()));
-  }, []);
-
-  const handleRectangleSelectionMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (event.buttons !== 1 || !selectionDragStartRef.current) return;
-    if (event.metaKey || event.ctrlKey) {
-      const draw = { start: selectionDragStartRef.current, current: { x: event.clientX, y: event.clientY } };
-      event.preventDefault();
-      event.stopPropagation();
-      areaDrawRef.current = draw;
-      selectionDragStartRef.current = null;
-      setAreaDraw(draw);
-      setResumedSelectionDraw(null);
-      endNativeSelection();
-      setNodes((current) => updateSelection(current, new Set()));
-      setEdges((current) => updateSelection(current, new Set()));
-      return;
-    }
-    setResumedSelectionDraw((current) => current
-      ? { ...current, current: { x: event.clientX, y: event.clientY } }
-      : null);
-    syncRectangleSelection({ x: event.clientX, y: event.clientY });
-  }, [endNativeSelection, syncRectangleSelection]);
-
-  const validateRectangleSelection = useCallback((event: ReactMouseEvent) => {
-    syncRectangleSelection({ x: event.clientX, y: event.clientY });
-    selectionDragStartRef.current = null;
-    setResumedSelectionDraw(null);
-  }, [syncRectangleSelection]);
-
-  useEffect(() => {
-    const updateModeForModifier = (modifierActive: boolean) => {
-      if (!canvasDragActiveRef.current || !canvasDragPointerRef.current) return;
-
-      if (modifierActive && !areaDrawRef.current && selectionDragStartRef.current) {
-        const draw = { start: selectionDragStartRef.current, current: canvasDragPointerRef.current };
-        areaDrawRef.current = draw;
-        selectionDragStartRef.current = null;
-        setAreaDraw(draw);
-        setResumedSelectionDraw(null);
-        endNativeSelection();
-        setNodes((current) => updateSelection(current, new Set()));
-        setEdges((current) => updateSelection(current, new Set()));
-        return;
-      }
-
-      if (!modifierActive && areaDrawRef.current) {
-        const draw = areaDrawRef.current;
-        areaDrawRef.current = null;
-        selectionDragStartRef.current = draw.start;
-        setAreaDraw(null);
-        setResumedSelectionDraw({ start: draw.start, current: canvasDragPointerRef.current });
-        startNativeSelection(draw.start);
-        syncRectangleSelection(canvasDragPointerRef.current);
-      }
-    };
-
-    const handleModifierKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Meta' || event.key === 'Control') updateModeForModifier(true);
-    };
-    const handleModifierKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Meta' || event.key === 'Control') updateModeForModifier(false);
-    };
-
-    window.addEventListener('keydown', handleModifierKeyDown, { capture: true });
-    window.addEventListener('keyup', handleModifierKeyUp, { capture: true });
-    return () => {
-      window.removeEventListener('keydown', handleModifierKeyDown, { capture: true });
-      window.removeEventListener('keyup', handleModifierKeyUp, { capture: true });
-    };
-  }, [endNativeSelection, startNativeSelection, syncRectangleSelection]);
-
-  const resumedSelectionBounds = useMemo(() => {
-    if (!resumedSelectionDraw || !editorShellRef.current) return null;
-    const shellBounds = editorShellRef.current.getBoundingClientRect();
-    return {
-      left: Math.min(resumedSelectionDraw.start.x, resumedSelectionDraw.current.x) - shellBounds.left,
-      top: Math.min(resumedSelectionDraw.start.y, resumedSelectionDraw.current.y) - shellBounds.top,
-      width: Math.abs(resumedSelectionDraw.current.x - resumedSelectionDraw.start.x),
-      height: Math.abs(resumedSelectionDraw.current.y - resumedSelectionDraw.start.y),
-    };
-  }, [resumedSelectionDraw]);
-
-  const handleMove = useCallback((event: globalThis.MouseEvent | TouchEvent | null, nextViewport: Viewport) => {
-    if (event !== null && Math.abs(nextViewport.zoom - zoomInteractionRef.current.lastZoom) > ZOOM_CHANGE_EPSILON) {
-      zoomInteractionRef.current.zoomChanged = true;
-    }
-    zoomInteractionRef.current.lastZoom = nextViewport.zoom;
-    viewportRef.current = nextViewport;
-  }, []);
-
-  const handleMoveEnd = useCallback((event: globalThis.MouseEvent | TouchEvent | null, nextViewport: Viewport) => {
-    const zoomChanged = zoomInteractionRef.current.zoomChanged
-      || (event !== null && Math.abs(nextViewport.zoom - zoomInteractionRef.current.lastZoom) > ZOOM_CHANGE_EPSILON);
-    zoomInteractionRef.current = { zoomChanged: false, lastZoom: nextViewport.zoom };
-    viewportRef.current = nextViewport;
-    setSettledViewport(nextViewport);
-    if (!hosted) storeViewport(nextViewport);
-
-    // React Flow reports programmatic viewport changes with a null event. Only
-    // settle direct pinch/zoom gestures; otherwise a reset animation can start
-    // another zoom transition and interrupt its own absolute 100% target.
-    if (event !== null && zoomChanged && shouldSettleZoomToBaseline(nextViewport.zoom)) {
-      void reactFlow?.zoomTo(ZOOM_RESET_TARGET, { duration: 120 });
-    }
-  }, [reactFlow]);
-
-  const resetZoom = useCallback(() => {
-    void reactFlow?.zoomTo(ZOOM_RESET_TARGET);
-  }, [reactFlow]);
-
-  useEffect(() => {
-    const handleResetZoomKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.altKey || event.shiftKey) return;
-      if (isEditableEventTarget(event.target)) return;
-      if (!event.metaKey && !event.ctrlKey) return;
-      if (event.key !== '0' && event.code !== 'Digit0' && event.code !== 'Numpad0') return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      resetZoom();
-    };
-
-    window.addEventListener('keydown', handleResetZoomKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleResetZoomKeyDown, { capture: true });
-  }, [resetZoom]);
-
-  useEffect(() => {
-    const deleteSelectedArea = (event: KeyboardEvent) => {
-      if (canvasLocked) return;
-      if ((event.key !== 'Backspace' && event.key !== 'Delete') || isEditableEventTarget(event.target)) return;
-      if (!selectedAreaId) return;
-      event.preventDefault();
-      event.stopPropagation();
-      commitHistory();
-      const selectedArea = areasRef.current.find((area) => area.id === selectedAreaId);
-      if (selectedArea?.spreadNodeId) {
-        setNodes((current) => current.filter((node) => node.id !== selectedArea.spreadNodeId));
-        setEdges((current) => current.filter((edge) => (
-          edge.source !== selectedArea.spreadNodeId && edge.target !== selectedArea.spreadNodeId
-        )));
-      }
-      setAreas((current) => current.filter((area) => area.id !== selectedAreaId));
-      setSelectedAreaId(null);
-      setSurfacedAreaId((current) => current === selectedAreaId ? null : current);
-    };
-
-    window.addEventListener('keydown', deleteSelectedArea, { capture: true });
-    return () => window.removeEventListener('keydown', deleteSelectedArea, { capture: true });
-  }, [canvasLocked, commitHistory, selectedAreaId]);
-
-  const handleFlowNodeDoubleClick = useCallback((event: ReactMouseEvent, node: ShaderFlowNode) => {
-    if (!enterGroupNode(node)) return;
-    event.preventDefault();
-    event.stopPropagation();
-  }, [enterGroupNode]);
-  const handleFlowEdgeDoubleClick = useCallback((event: ReactMouseEvent, edge: ShaderFlowEdge) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (edge.data?.isAreaCollapsedPresentation) return;
-    insertNodeOnEdge(edge.id);
-  }, [insertNodeOnEdge]);
-  const connectionLineStyle = useMemo(() => ({
-    '--connection-line-color': draftNodePreview
-      ? 'transparent'
-      : CONNECTION_LINE_COLORS[draftNodeConnection?.mode ?? 'set'],
-  }) as CSSProperties, [draftNodeConnection?.mode, draftNodePreview]);
-
   return (
     <div className="app-shell app-shell-panel-closed">
-      <EdgeOverlayProvider target={edgeOverlayElement}>
-        <main
-          ref={editorShellRef}
-          className={`editor-shell${areaDraw ? ' editor-shell-area-drawing' : ''}${resumedSelectionDraw ? ' editor-shell-resumed-selection' : ''}`}
-          onFocusCapture={handleEditorFocusCapture}
-          onPointerDownCapture={handleEditorPointerDownCapture}
-          onPointerMove={(event) => {
-            if (canvasLocked) return;
-            if (canvasDragActiveRef.current && event.buttons === 1) {
-              canvasDragPointerRef.current = { x: event.clientX, y: event.clientY };
-            }
-            if (!updateAreaDraw(event)) handleRectangleSelectionMove(event);
-          }}
-          onPointerUpCapture={(event) => {
-            if (canvasLocked) return;
-            if (!event.nativeEvent.isTrusted && ignoreSyntheticSelectionPointerUpRef.current) {
-              ignoreSyntheticSelectionPointerUpRef.current = false;
-              return;
-            }
-            if (!finishAreaDraw(event)) clearPendingNodeDragSelection();
-            canvasDragActiveRef.current = false;
-            canvasDragPointerRef.current = null;
-            canvasDragPointerIdRef.current = null;
-            setResumedSelectionDraw(null);
-          }}
-          onPointerCancelCapture={() => {
-            clearPendingNodeDragSelection();
-            canvasDragActiveRef.current = false;
-            canvasDragPointerRef.current = null;
-            canvasDragPointerIdRef.current = null;
-            setResumedSelectionDraw(null);
-          }}
-          onDoubleClick={(event) => {
-            const target = event.target as HTMLElement;
-            if (!target.classList.contains('react-flow__pane')) return;
-
-            event.preventDefault();
-            event.stopPropagation();
-            addNodeAt(event);
-          }}
-        >
-          <Fm1ModeContext.Provider value={fm1Mode}>
-          <ReactFlow
-            nodes={displayNodes}
-            edges={displayEdges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            onInit={setReactFlow}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeDragStart={onNodeDragStart}
-            onNodeDrag={onNodeDrag}
-            onNodeDragStop={onNodeDragStop}
-            onSelectionEnd={validateRectangleSelection}
-            onNodeDoubleClick={handleFlowNodeDoubleClick}
-            onConnect={onConnect}
-            onConnectStart={onConnectStart}
-            onConnectEnd={onConnectEnd}
-            onReconnect={onReconnect}
-            onReconnectStart={onReconnectStart}
-            onReconnectEnd={onReconnectEnd}
-            reconnectRadius={12}
-            nodesDraggable={!canvasLocked}
-            nodesConnectable={!canvasLocked}
-            // Keep node pointer events available for playable controls while LK
-            // rejects selection changes in onNodesChange/onEdgesChange.
-            elementsSelectable
-            connectionLineStyle={connectionLineStyle}
-            onEdgeDoubleClick={handleFlowEdgeDoubleClick}
-            onMove={handleMove}
-            onMoveEnd={handleMoveEnd}
-            connectionMode={ConnectionMode.Loose}
-            panOnScroll
-            panOnDrag={false}
-            zoomOnScroll={false}
-            zoomOnPinch
-            zoomOnDoubleClick={false}
-            selectionOnDrag={!canvasLocked && !areaDraw}
-            selectionMode={SelectionMode.Partial}
-            selectionKeyCode={null}
-            panActivationKeyCode={null}
-            defaultViewport={initialViewport}
-            minZoom={MIN_CANVAS_ZOOM}
-            fitView={!initialState?.ui?.viewport && !storedViewport}
-            fitViewOptions={FIT_VIEW_OPTIONS}
-            translateExtent={panTranslateExtent}
-            nodeExtent={FLOW_INFINITE_EXTENT}
-            onlyRenderVisibleElements
-            deleteKeyCode={canvasLocked ? null : DELETE_KEY_CODES}
-            multiSelectionKeyCode={MULTI_SELECTION_KEY_CODES}
-            snapToGrid={false}
-            proOptions={REACT_FLOW_PRO_OPTIONS}
-          >
-            <ViewportPortal>
-              <div
-                className="area-layer"
-                style={{
-                  '--canvas-header-title-scale': String(canvasHeaderTitleScale(settledGraphZoom)),
-                } as CSSProperties}
-              >
-                {areaDrawBounds && (
-                  <div
-                    className="canvas-area canvas-area-drawing"
-                    style={{ left: areaDrawBounds.x, top: areaDrawBounds.y, width: areaDrawBounds.width, height: areaDrawBounds.height }}
-                  />
-                )}
-                {areaDuplicatePreview?.areas.map((area) => (
-                  <div
-                    key={area.id}
-                    className={`canvas-area canvas-area-preview${area.kind === 'spread' ? ' canvas-area-spread' : ''}${area.collapsed ? ' canvas-area-collapsed' : ''}`}
-                    style={{ left: area.position.x, top: area.position.y, width: area.size.width, height: area.collapsed ? NODE_HEADER_HEIGHT + (area.uiHeight ?? 0) : area.size.height }}
-                    aria-hidden="true"
-                  >
-                    <div className="canvas-area-header">
-                      <span className="canvas-area-title">{area.title}</span>
-                    </div>
-                  </div>
-                ))}
-                {areas.map((area) => (
-                  <div
-                    key={area.id}
-                    data-area-id={area.id}
-                    className={`canvas-area${area.kind === 'spread' ? ' canvas-area-spread' : ''}${area.collapsed ? ' canvas-area-collapsed' : ''}${selectedAreaId === area.id ? ' canvas-area-selected' : ''}`}
-                    style={{
-                      left: area.position.x,
-                      top: area.position.y,
-                      width: area.size.width,
-                      height: area.collapsed ? NODE_HEADER_HEIGHT + (area.uiHeight ?? 0) : area.size.height,
-                      zIndex: surfacedAreaRanks.has(area.id)
-                        ? surfacedAreaLayerBase + (surfacedAreaRanks.get(area.id) ?? 0)
-                        : -1,
-                    }}
-                  >
-                    <div
-                      className="canvas-area-header nodrag nopan"
-                      onPointerDown={(event) => { if (!canvasLocked) startAreaDrag(event, area); }}
-                      onPointerMove={canvasLocked ? undefined : dragArea}
-                      onPointerUp={canvasLocked ? undefined : stopAreaDrag}
-                      onPointerCancel={canvasLocked ? undefined : stopAreaDrag}
-                      onDoubleClick={(event) => {
-                        if (canvasLocked) return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        toggleAreaCollapsed(area.id);
-                      }}
-                    >
-                      {editingAreaId === area.id ? (
-                        <input
-                          ref={areaTitleInputRef}
-                          className="canvas-area-title-input"
-                          value={area.title}
-                          aria-label={area.kind === 'spread'
-                            ? `${getNodeTypeLabel(nodesRef.current.find((node) => node.id === area.spreadNodeId)?.data.patchNode.type ?? 'Spread')} name`
-                            : 'Area name'}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onDoubleClick={(event) => {
-                            event.stopPropagation();
-                            event.currentTarget.select();
-                          }}
-                          onBlur={() => finishAreaRename(area.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === 'Escape') {
-                              event.preventDefault();
-                              event.currentTarget.blur();
-                            }
-                          }}
-                          onChange={(event) => renameArea(area.id, event.target.value)}
-                        />
-                      ) : (
-                        <button
-                          className="canvas-area-title nodrag nopan"
-                          type="button"
-                          onPointerDown={(event) => {
-                            if (canvasLocked) return;
-                            areaTitlePointerStartRef.current = { x: event.clientX, y: event.clientY };
-                            startAreaDrag(event, area, true);
-                          }}
-                          onPointerCancel={() => {
-                            areaTitlePointerStartRef.current = null;
-                          }}
-                          onDoubleClick={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            if (canvasLocked) return;
-                            const pointerStart = areaTitlePointerStartRef.current;
-                            areaTitlePointerStartRef.current = null;
-                            const moved = pointerStart
-                              ? Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 4
-                              : false;
-                            if (moved) {
-                              event.preventDefault();
-                              return;
-                            }
-
-                            event.stopPropagation();
-                            setSelectedAreaId(area.id);
-                            setEditingAreaId(area.id);
-                          }}
-                        >
-                          {area.title}
-                          {area.kind === 'spread'
-                            && nodesRef.current.find((node) => node.id === area.spreadNodeId)?.data.patchNode.type === 'Spawn'
-                            ? ` (${Math.max(0, Math.floor(
-                                audio.linkMeters[
-                                  `${scopedDspNodeId(area.spreadNodeId ?? '', activeDspGroupIds)}:spawn-count`
-                                ]?.output ?? 0,
-                              ))})`
-                            : ''}
-                        </button>
-                      )}
-                      {!canvasLocked && !area.collapsed ? (
-                        <button
-                          className={`area-lock-toggle nodrag nopan${area.locked ? ' area-lock-toggle-locked' : ''}`}
-                          type="button"
-                          aria-label={area.locked ? 'Unlock area membership' : 'Lock area membership'}
-                          title={area.locked ? 'Unlock area membership' : 'Lock area membership'}
-                          aria-pressed={area.locked === true}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onDoubleClick={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            toggleAreaLocked(area.id);
-                          }}
-                        >
-                          <span className="area-lock-icon" aria-hidden="true" />
-                        </button>
-                      ) : null}
-                      {!canvasLocked ? <button
-                        className="area-compact-toggle nodrag nopan"
-                        type="button"
-                        aria-label={area.collapsed ? 'Expand area' : 'Collapse area'}
-                        title={area.collapsed ? 'Expand area' : 'Collapse area'}
-                        aria-pressed={area.collapsed === true}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          toggleAreaCollapsed(area.id);
-                        }}
-                      >
-                        <span
-                          className={`node-compact-icon ${area.collapsed ? 'node-compact-icon-compact' : 'node-compact-icon-expanded'}`}
-                          aria-hidden="true"
-                        />
-                      </button> : null}
-                    </div>
-                    {!canvasLocked && !area.collapsed && area.kind !== 'spread' && (
-                      <div
-                        className="canvas-area-ui-resize-handle nodrag nopan"
-                        aria-label="Resize area UI section"
-                        title="Drag to create or resize the user-facing section"
-                        style={{ top: area.uiHeight && area.uiHeight > 0 ? NODE_HEADER_HEIGHT + area.uiHeight - 4 : 28 }}
-                        onPointerDown={(event) => startAreaUiResize(event, area)}
-                        onPointerMove={resizeAreaUi}
-                        onPointerUp={stopAreaUiResize}
-                        onPointerCancel={stopAreaUiResize}
-                      />
-                    )}
-                    {area.uiHeight !== undefined && area.uiHeight > 0 && (
-                      <div className="canvas-area-ui-divider" style={{ top: NODE_HEADER_HEIGHT + area.uiHeight }} />
-                    )}
-                    {!canvasLocked && !area.collapsed && (['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const).map((corner) => (
-                      <div
-                        key={corner}
-                        className={`canvas-area-resize-handle canvas-area-resize-${corner} nodrag nopan`}
-                        aria-label={`Resize area from ${corner}`}
-                        onPointerDown={(event) => startAreaResize(event, area, corner)}
-                        onPointerMove={resizeArea}
-                        onPointerUp={stopAreaResize}
-                        onPointerCancel={stopAreaResize}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </ViewportPortal>
-            <Background color="var(--color-foreground-08)" gap={28} size={1} />
-            <Controls showInteractive={false}>
-              <ControlButton
-                className="react-flow__controls-zoom-percentage"
-                type="button"
-                onClick={resetZoom}
-                aria-label={`Reset zoom to 100% (currently ${formatZoomPercentage(settledViewport.zoom)})`}
-                title={`Reset zoom to 100% (currently ${formatZoomPercentage(settledViewport.zoom)})`}
-              >
-                {formatZoomPercentage(settledViewport.zoom)}
-              </ControlButton>
-              <div
-                hidden={Boolean(hosted)}
-                className={`react-flow__controls-cpu-meter${audio.status === 'running' ? ' is-running' : ''}`}
-                style={{ '--cpu-load': cpuLoad, display: hosted ? 'none' : undefined } as CSSProperties}
-                role="meter"
-                aria-label={audio.status === 'running' ? `CPU usage ${cpuPercentage}%` : 'CPU usage, audio stopped'}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={audio.status === 'running' ? Math.min(100, cpuPercentage) : 0}
-                title={cpuDetails}
-              >
-                <span className="cpu-meter-label">CPU</span>
-                <span className="cpu-meter-percentage" aria-hidden="true">{cpuPercentage}%</span>
-              </div>
-            </Controls>
-          </ReactFlow>
-          </Fm1ModeContext.Provider>
-          {resumedSelectionBounds ? (
-            <div
-              className="editor-selection-marquee"
-              style={resumedSelectionBounds}
-              aria-hidden="true"
-            />
-          ) : null}
-          <div ref={setEdgeOverlayElement} className="edge-overlay-layer" />
-          <div className="viewport-buttons">
+      <main ref={editorShellRef} className="editor-shell">
+        <Fm1ModeContext.Provider value={fm1Mode}>
+          <TeiaGraphBindings nodes={renderedNodes} gesture={(node, path, values) => sendHostedGesture(scopedDspNodeId(node.id, path), node.kind, values)}>
+            <SpagbolCanvas editor={shared.editor} views={teiaNodeViews}
+              nodeKinds={canvasKinds}
+              virtualLinks={canvasVirtualLinks}
+              diagnostics={canvasDiagnostics}
+              onChangeNodeKind={changeCanvasNodeKind}
+              className="teia-graph-canvas"
+              defaultViewport={initialViewport}
+              onInit={instance => setReactFlow(instance as unknown as ReactFlowInstance<ShaderFlowNode, ShaderFlowEdge>)}
+              onViewportChange={viewport => { viewportRef.current = viewport; setSettledViewport(viewport); if (!hosted) storeViewport(viewport); }}
+              controls={{
+                leading: <>
             {fm1Mode && fm1LiveState.message && <span className="fm1-live-status" role="status">{fm1LiveState.message}</span>}
             <input
               className="patch-name-input"
-              value={patchName}
-              onChange={(event) => setPatchName(event.target.value)}
+              value={shared.snapshot.path.length ? shared.currentName ?? shared.snapshot.path.at(-1) : patchName}
+              onChange={(event) => { if (shared.snapshot.path.length) { const id = shared.snapshot.path.at(-1)!; shared.editor.navigate(shared.snapshot.path.slice(0, -1)); shared.editor.updateNode(id, { label: event.target.value }, "metadata"); shared.editor.enter(id); } else setPatchName(event.target.value); }}
               aria-label={isEditingSubpatch ? 'Subpatch name' : 'Patch name'}
               title={isEditingSubpatch ? 'Subpatch name' : 'Patch name'}
               placeholder={isEditingSubpatch ? 'subpatch name' : 'patch name'}
               spellCheck={false}
             />
-            {isEditingSubpatch ? (
-              <button className="viewport-button viewport-button-history" type="button" onClick={exitSubpatch} aria-label="Exit subpatch" title="Exit subpatch">EXIT</button>
-            ) : null}
+
             {hosted ? <>
               <span title="Audio and document paths are owned by the host">HOSTED · {hostedState?.dirty ? 'unsaved' : 'saved'}</span>
               {hosted.capabilities.transport && <button className="viewport-button" type="button" onClick={toggleAudioPlayback}>TRANSPORT</button>}
@@ -6215,42 +2678,35 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
             </button>
             {!hosted && <button className="viewport-button" type="button" onClick={requestPatchLoad} aria-label="Load patch" title="Load patch">LOAD</button>}
             {hosted?.capabilities.saveAs && <button className="viewport-button" type="button" onClick={() => void savePatchJson(true)}>SAVE AS</button>}
-            <button className="viewport-button viewport-button-history" type="button" onClick={undo} disabled={history.past.length === 0} aria-label="Undo" title="Undo">UNDO</button>
-            <button className="viewport-button viewport-button-history" type="button" onClick={redo} disabled={history.future.length === 0} aria-label="Redo" title="Redo">REDO</button>
-            <div className="viewport-more" data-open={moreMenuOpen}
-              onMouseEnter={() => setMoreMenuOpen(true)} onMouseLeave={() => setMoreMenuOpen(false)}
-              onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setMoreMenuOpen(false); }}
-              onKeyDown={event => {
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  moreMenuTriggerRef.current?.focus();
-                  setMoreMenuOpen(false);
-                }
-              }}>
-              <button ref={moreMenuTriggerRef} className="viewport-button viewport-more-trigger" type="button"
-                aria-haspopup="menu" aria-expanded={moreMenuOpen} aria-label="More actions" title="More actions"
-                onFocus={() => setMoreMenuOpen(true)} onClick={() => setMoreMenuOpen(true)}>MORE ˆ</button>
-              <div className="viewport-more-menu" role="menu" aria-label="More actions"
-                onClick={event => {
-                  if (!(event.target instanceof Element) || !event.target.closest('button')) return;
-                  if (event.currentTarget.contains(document.activeElement)) moreMenuTriggerRef.current?.focus();
-                  setMoreMenuOpen(false);
-                }}>
-                {!hosted && <>
-                <button className="viewport-button" type="button" onClick={() => setMidiSettingsOpen(true)} aria-label="MIDI settings" title="MIDI settings" role="menuitem">MIDI SETTINGS</button>
-                <button className="viewport-button" type="button" onClick={() => void exportPatchPackage()} aria-label="Export patch package" title="Export patch package" role="menuitem">EXPORT PATCH</button>
-                <button className="viewport-button" type="button" role="menuitemcheckbox" aria-checked={fm1Mode}
-                  disabled={fm1LiveState.busy} onClick={() => { audio.stopRecording(); audio.stop(); setFm1Live(false); setFm1Mode(value => !value); }}>FM1 MODE</button>
-                {!fm1Mode && <button className="viewport-button" type="button" disabled={fm1Live || fm1LiveState.busy} onClick={() => setFm1Patch(patch)} aria-label="Send patch to FM-1" title="FM-1 limits and upload" role="menuitem">SEND TO FM1</button>}
-                </>}
-                <button className="viewport-button" type="button" onClick={() => scaleSelectedNodes(2)} disabled={!canScaleSelection} aria-label="Increase selected node scale" title="Increase selected node scale" role="menuitem">SCALE UP SELECTION</button>
-                <button className="viewport-button" type="button" onClick={() => scaleSelectedNodes(0.5)} disabled={!canScaleSelection} aria-label="Decrease selected node scale" title="Decrease selected node scale" role="menuitem">SCALE DOWN SELECTION</button>
-                <button className="viewport-button" type="button" onClick={groupSelectedNodes} disabled={!canGroupSelection || isEditingSubpatch} aria-label="Group to subpatch" title="Group to subpatch" role="menuitem">GROUP TO SUBPATCH</button>
-                <button className="viewport-button" type="button" onClick={() => void requestSubpatchImport()} aria-label="Import subpatch" title="Import subpatch" role="menuitem">IMPORT SUBPATCH</button>
-                <button className="viewport-button" type="button" role="menuitemcheckbox" aria-checked={canvasLocked} aria-label={canvasLocked ? 'Unlock UI' : 'Lock UI'} title={canvasLocked ? 'Unlock UI' : 'Lock UI'} onClick={toggleCanvasLock}>LOCK UI</button>
+</>,
+                zoomExtra: <>              <div
+                hidden={Boolean(hosted)}
+                className={`react-flow__controls-cpu-meter${audio.status === 'running' ? ' is-running' : ''}`}
+                style={{ '--cpu-load': cpuLoad, display: hosted ? 'none' : undefined } as CSSProperties}
+                role="meter"
+                aria-label={audio.status === 'running' ? `CPU usage ${cpuPercentage}%` : 'CPU usage, audio stopped'}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={audio.status === 'running' ? Math.min(100, cpuPercentage) : 0}
+                title={cpuDetails}
+              >
+                <span className="cpu-meter-label">CPU</span>
+                <span className="cpu-meter-percentage" aria-hidden="true">{cpuPercentage}%</span>
               </div>
-            </div>
-          </div>
+</>,
+                menuItems: [
+                  ...(!hosted ? [
+                    { id: 'midi', label: 'MIDI SETTINGS', onSelect: () => setMidiSettingsOpen(true) },
+                    { id: 'export', label: 'EXPORT PATCH', onSelect: () => exportPatchPackage() },
+                    { id: 'fm1', label: 'FM1 MODE', checked: fm1Mode, disabled: fm1LiveState.busy, onSelect: () => { audio.stopRecording(); audio.stop(); setFm1Live(false); setFm1Mode(value => !value); } },
+                    ...(!fm1Mode ? [{ id: 'upload', label: 'SEND TO FM1', disabled: fm1Live || fm1LiveState.busy, onSelect: () => setFm1Patch(patch) }] : []),
+                  ] : []),
+                  { id: 'import-group', label: 'IMPORT SUBPATCH', onSelect: () => requestSubpatchImport() },
+                ],
+              }}
+            />
+          </TeiaGraphBindings>
+        </Fm1ModeContext.Provider>
           <input ref={fileInputRef} className="file-input" type="file" accept="application/json,.json" onChange={loadPatchFile} />
           <input ref={importFileInputRef} className="file-input" type="file" accept="application/json,.json" onChange={loadSubpatchImportFile} />
           <input ref={sampleFileInputRef} className="file-input" type="file" accept="audio/*,video/mp4,.wav,.mp3,.aiff,.aif,.flac,.ogg,.m4a,.mp4" onChange={uploadSampleFile} />
@@ -6687,7 +3143,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
             </div>
           ) : null}
         </main>
-      </EdgeOverlayProvider>
+
     </div>
   );
 }
@@ -6938,10 +3394,6 @@ async function uploadLocalSample(file: File): Promise<SampleAsset> {
   };
 }
 
-function bufferContainsAudio(samples: Float32Array): boolean {
-  return samples.some((sample) => Number.isFinite(sample) && sample !== 0);
-}
-
 function preservedBufferIds(program: DspProgram): Set<string> {
   const repeatedStateRanges = program.repeatBindings.map((binding) => ({
     start: binding.stateStart,
@@ -6967,40 +3419,6 @@ function filterBufferAssets(
   nodeIds: ReadonlySet<string>,
 ): Record<string, BufferAsset> {
   return Object.fromEntries(Object.entries(assets).filter(([nodeId]) => nodeIds.has(nodeId)));
-}
-
-function bufferVisualizationContainsAudio(buffer: { bins: Array<{ min: number; max: number }> } | undefined): boolean {
-  return buffer?.bins.some((bin) => bin.min !== 0 || bin.max !== 0) === true;
-}
-
-function encodeMonoSamplesAsWav(samples: Float32Array, sampleRate: number): Blob {
-  const safeSampleRate = Math.max(1, Math.round(sampleRate));
-  const bytesPerSample = 2;
-  const dataSize = samples.length * bytesPerSample;
-  const wav = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(wav);
-
-  writeWavText(view, 0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeWavText(view, 8, 'WAVE');
-  writeWavText(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, safeSampleRate, true);
-  view.setUint32(28, safeSampleRate * bytesPerSample, true);
-  view.setUint16(32, bytesPerSample, true);
-  view.setUint16(34, bytesPerSample * 8, true);
-  writeWavText(view, 36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  let offset = 44;
-  for (const value of samples) {
-    const sample = Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));
-    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-    offset += bytesPerSample;
-  }
-  return new Blob([view], { type: 'audio/wav' });
 }
 
 async function convertRecordedAudioToWav(recording: Blob): Promise<Blob> {
@@ -7848,10 +4266,6 @@ function clearMidiControlVisual(
   return { ...current, [nodeId]: nextVisual };
 }
 
-function isEdgeConnectedToSelectedNode(edge: ShaderFlowEdge, selectedNodeIds: Set<string>): boolean {
-  return selectedNodeIds.has(edge.source) || (!edge.data?.modulatesEdgeId && selectedNodeIds.has(edge.target));
-}
-
 function routingSelectionHighlights(
   nodes: ShaderFlowNode[],
   edges: ShaderFlowEdge[],
@@ -7995,19 +4409,6 @@ function clampInteger(value: number, min: number, max: number): number {
   return Math.round(clampNumber(Number.isFinite(value) ? value : min, min, max));
 }
 
-function graphSnapshot(nodes: ShaderFlowNode[], edges: ShaderFlowEdge[], areas: EditorArea[] = []): GraphSnapshot {
-  const state = flowToEditorState(nodes, edges);
-  return {
-    nodes: state.nodes,
-    edges: state.edges,
-    areas: structuredClone(areas),
-  };
-}
-
-function graphSnapshotKey(snapshot: GraphSnapshot): string {
-  return JSON.stringify(snapshot);
-}
-
 
 
 function samePortDefinitions(left: PortDefinition[], right: PortDefinition[]): boolean {
@@ -8021,287 +4422,6 @@ function samePortDefinitions(left: PortDefinition[], right: PortDefinition[]): b
     port.max === right[index]?.max &&
     port.integer === right[index]?.integer
   ));
-}
-
-function restoreGraphSnapshot(
-  snapshot: GraphSnapshot,
-  setNodes: (value: ShaderFlowNode[]) => void,
-  setEdges: (value: ShaderFlowEdge[]) => void,
-  setAreas: (value: EditorArea[]) => void,
-): void {
-  const state: PersistedEditorState = { version: 1, nodes: snapshot.nodes, edges: snapshot.edges, areas: snapshot.areas };
-  const callbacks = nodeCallbacksPlaceholder();
-  setNodes(editorStateToFlowNodes(state, callbacks, null));
-  setEdges(editorStateToFlowEdges(state, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder));
-  setAreas(snapshot.areas ? structuredClone(snapshot.areas) : []);
-}
-
-function linkFromConnection(connection: Connection, mode: LinkMode = 'set'): PatchLink | null {
-  if (!connection.source || !connection.target || !connection.sourceHandle || !connection.targetHandle) return null;
-  const edge = {
-    id: '',
-    source: connection.source,
-    sourceHandle: connection.sourceHandle,
-    target: connection.target,
-    targetHandle: connection.targetHandle,
-    data: { mode },
-  };
-  return linkFromEdge(edge);
-}
-
-function linkForDraftNodeConnection(connection: DraftNodeConnection, nodeId: string): PatchLink | null {
-  const originPort = parseHandleId(connection.originHandleId);
-  if (!originPort) return null;
-
-  if (connection.originHandleType === 'source') {
-    return {
-      from: { node: connection.originNodeId, port: originPort.port },
-      to: { node: nodeId, port: 'value' },
-      weight: 1,
-      mode: connection.mode,
-    };
-  }
-
-  return {
-    from: { node: nodeId, port: 'value' },
-    to: { node: connection.originNodeId, port: originPort.port },
-    weight: 1,
-    mode: connection.mode,
-  };
-}
-
-function parseHandleId(handleId: string): { kind: 'in' | 'out'; port: string } | null {
-  const [kind, port] = handleId.split(':');
-  if ((kind !== 'in' && kind !== 'out') || !port) return null;
-  return { kind, port };
-}
-
-function clientPointFromEvent(event: globalThis.MouseEvent | TouchEvent): { x: number; y: number } | null {
-  if ('touches' in event) {
-    const touch = event.touches[0] ?? event.changedTouches[0];
-    return touch ? { x: touch.clientX, y: touch.clientY } : null;
-  }
-
-  return { x: event.clientX, y: event.clientY };
-}
-
-function nodeHandleAtScreenPoint(point: { x: number; y: number }): { nodeId: string; handleId: string } | null {
-  for (const handle of document.querySelectorAll<HTMLElement>('.react-flow__handle')) {
-    const bounds = handle.getBoundingClientRect();
-    if (!bounds.width || !bounds.height) continue;
-    if (point.x < bounds.left - 8 || point.x > bounds.right + 8 || point.y < bounds.top - 8 || point.y > bounds.bottom + 8) continue;
-    const nodeId = handle.getAttribute('data-nodeid');
-    const handleId = handle.getAttribute('data-handleid');
-    if (nodeId && handleId) return { nodeId, handleId };
-  }
-  return null;
-}
-
-function strengthTargetIsAllowed(edgeId: string, targetId: string, edges: ShaderFlowEdge[]): boolean {
-  const visited = new Set([edgeId]);
-  let target: ShaderFlowEdge | undefined = edges.find((edge) => edge.id === targetId);
-  while (target) {
-    if (visited.has(target.id)) return false;
-    visited.add(target.id);
-    target = target.data?.modulatesEdgeId ? edges.find((edge) => edge.id === target!.data?.modulatesEdgeId) : undefined;
-  }
-  return true;
-}
-
-function linkAtScreenPoint(point: { x: number; y: number }, edges: ShaderFlowEdge[]): string | null {
-  if (nodeHandleAtScreenPoint(point)) return null;
-  const edgeIds = new Set(edges.map((edge) => edge.id));
-  for (const element of document.elementsFromPoint(point.x, point.y)) {
-    const edgeElement = element.closest('.react-flow__edge[data-id]');
-    const id = edgeElement?.getAttribute('data-id');
-    if (id && edgeIds.has(id)) return id;
-  }
-
-  let nearestId: string | null = null;
-  let nearestDistanceSquared = 14 * 14;
-  for (const path of document.querySelectorAll<SVGPathElement>('.react-flow__edge[data-id] path.shader-edge-path-foreground')) {
-    const id = path.closest('.react-flow__edge[data-id]')?.getAttribute('data-id');
-    if (!id || !edgeIds.has(id)) continue;
-    const bounds = path.getBoundingClientRect();
-    if (point.x < bounds.left - 14 || point.x > bounds.right + 14 || point.y < bounds.top - 14 || point.y > bounds.bottom + 14) continue;
-    const transform = path.getScreenCTM();
-    if (!transform) continue;
-    const length = path.getTotalLength();
-    const screenScale = Math.hypot(transform.a, transform.b);
-    const steps = Math.min(512, Math.max(12, Math.ceil(length * screenScale / 10)));
-    for (let step = 0; step <= steps; step += 1) {
-      const sample = path.getPointAtLength((length * step) / steps).matrixTransform(transform);
-      const distanceSquared = (sample.x - point.x) ** 2 + (sample.y - point.y) ** 2;
-      if (distanceSquared < nearestDistanceSquared) {
-        nearestDistanceSquared = distanceSquared;
-        nearestId = id;
-      }
-    }
-  }
-  return nearestId;
-}
-
-function isCommandModifierPressed(event: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }): boolean {
-  return event.metaKey || event.ctrlKey || event.shiftKey;
-}
-
-function isReconnectDuplicateModifierPressed(event: { metaKey: boolean; ctrlKey: boolean; altKey: boolean }): boolean {
-  return event.metaKey || event.ctrlKey || event.altKey;
-}
-
-function isDuplicateModifierPressed(event: globalThis.MouseEvent | TouchEvent): boolean {
-  return event instanceof MouseEvent ? event.altKey : false;
-}
-
-function samePatchLink(a: PatchLink, b: PatchLink): boolean {
-  return (
-    a.from.node === b.from.node &&
-    a.from.port === b.from.port &&
-    a.to.node === b.to.node &&
-    a.to.port === b.to.port
-  );
-}
-
-function materializeRootGraph(
-  activeNodes: ShaderFlowNode[],
-  activeEdges: ShaderFlowEdge[],
-  activeAreas: EditorArea[],
-  editingStack: SubpatchEditFrame[],
-  activePatchName: string,
-): { nodes: ShaderFlowNode[]; edges: ShaderFlowEdge[] } {
-  if (editingStack.length === 0) {
-    return { nodes: activeNodes, edges: activeEdges };
-  }
-
-  let subpatch = patchFromFlow(activeNodes, activeEdges, activeAreas);
-  let requestedGroupName = activePatchName;
-  let materialized: { nodes: ShaderFlowNode[]; edges: ShaderFlowEdge[] } | null = null;
-
-  for (let index = editingStack.length - 1; index >= 0; index -= 1) {
-    const frame = editingStack[index];
-    materialized = applySubpatchToParent(frame, subpatch, requestedGroupName);
-    subpatch = patchFromFlow(materialized.nodes, materialized.edges, frame.parentAreas);
-    requestedGroupName = frame.parentPatchName;
-  }
-
-  return materialized ?? { nodes: activeNodes, edges: activeEdges };
-}
-
-function applySubpatchToParent(
-  frame: SubpatchEditFrame,
-  subpatch: ReturnType<typeof patchFromFlow>,
-  requestedGroupName: string,
-): { nodes: ShaderFlowNode[]; edges: ShaderFlowEdge[] } {
-  const inputDefinitions = boundaryPortDefinitions(subpatch, 'Ins', 'outputs');
-  const outputDefinitions = boundaryPortDefinitions(subpatch, 'Outs', 'inputs').map((port) => ({
-    name: port.name,
-    ...(port.connectable === undefined ? {} : { connectable: port.connectable }),
-    ...(port.min === undefined ? {} : { min: port.min }),
-    ...(port.max === undefined ? {} : { max: port.max }),
-    ...(port.integer === undefined ? {} : { integer: port.integer }),
-  }));
-  const groupNode = frame.parentNodes.find((node) => node.id === frame.groupId);
-  if (!groupNode) {
-    return { nodes: frame.parentNodes, edges: frame.parentEdges };
-  }
-
-  const cloneId = groupNode.data.patchNode.subpatchCloneId;
-  const linkedGroupIds = new Set(
-    frame.parentNodes
-      .filter((node) => (
-        node.data.patchNode.type === 'Group' &&
-        cloneId !== undefined &&
-        node.data.patchNode.subpatchCloneId === cloneId
-      ))
-      .map((node) => node.id),
-  );
-  linkedGroupIds.add(frame.groupId);
-
-  const nextSubpatchName = normalizeSubpatchName(requestedGroupName, groupNode.data.patchNode.subpatchName ?? frame.groupId);
-  const inputNames = new Set(inputDefinitions.map((port) => port.name));
-  const outputNames = new Set(outputDefinitions.map((port) => port.name));
-  const nodes: ShaderFlowNode[] = frame.parentNodes.map((node) => {
-    if (!linkedGroupIds.has(node.id)) return { ...node, selected: false };
-
-    const previousPatchNode = node.data.patchNode;
-    const previousParams = previousPatchNode.params;
-    const previousInputs = new Map((previousPatchNode.inputs ?? []).map((port) => [port.name, port]));
-    const params = Object.fromEntries(inputDefinitions.map((port) => [
-      port.name,
-      nextGroupInputParam(previousParams, previousInputs.get(port.name), port),
-    ]));
-    const subpatchUiOverrides = pruneSubpatchUiOverrides(previousPatchNode.subpatchUiOverrides, subpatch);
-    const { subpatchUiOverrides: _previousOverrides, ...sharedPatchNode } = previousPatchNode;
-
-    return {
-      ...node,
-      selected: node.id === frame.groupId,
-      data: {
-        ...node.data,
-        patchNode: {
-          ...sharedPatchNode,
-          id: node.id,
-          type: 'Group',
-          subpatchName: nextSubpatchName,
-          subpatchCloneId: node.data.patchNode.subpatchCloneId ?? cloneId ?? makeSubpatchCloneId(node.id),
-          params,
-          inputs: inputDefinitions,
-          outputs: outputDefinitions,
-          subpatch: clonePatch(subpatch),
-          ...(subpatchUiOverrides ? { subpatchUiOverrides } : {}),
-        },
-      },
-    };
-  });
-
-  const edges = dedupeEdges(frame.parentEdges.flatMap((edge) => {
-    const link = linkFromEdge(edge);
-    if (!link) return [];
-    if (linkedGroupIds.has(link.to.node) && !inputNames.has(link.to.port)) return [];
-    if (linkedGroupIds.has(link.from.node) && !outputNames.has(link.from.port)) return [];
-    return [{ ...edge, selected: false }];
-  }));
-
-  return { nodes, edges };
-}
-
-function pruneSubpatchUiOverrides(
-  overrides: PatchNode['subpatchUiOverrides'],
-  subpatch: Patch,
-): PatchNode['subpatchUiOverrides'] | undefined {
-  if (!overrides) return undefined;
-  const nodeIds = new Set(subpatch.nodes.map((node) => node.id));
-  const retained = Object.fromEntries(Object.entries(overrides)
-    .filter(([nodeId]) => nodeIds.has(nodeId)));
-  return Object.keys(retained).length > 0 ? retained : undefined;
-}
-
-function emptySubpatchForGroup(groupNode: PatchNode, position: { x: number; y: number }): ReturnType<typeof patchFromFlow> {
-  return {
-    nodes: [
-      {
-        id: 'ins_1',
-        type: 'Ins',
-        params: Object.fromEntries((groupNode.inputs ?? []).map((port) => [
-          port.name,
-          groupNode.params[port.name] ?? port.defaultValue ?? 0,
-        ])),
-        outputs: groupNode.inputs?.map((port) => ({
-          ...port,
-          defaultValue: groupNode.params[port.name] ?? port.defaultValue ?? 0,
-        })) ?? [],
-        position: { x: position.x - 220, y: position.y },
-      },
-      {
-        id: 'outs_1',
-        type: 'Outs',
-        params: {},
-        inputs: groupNode.outputs?.map((port) => ({ ...port, defaultValue: undefined })) ?? [],
-        position: { x: position.x + 220, y: position.y },
-      },
-    ],
-    links: [],
-  };
 }
 
 function boundaryPortDefinitions(
@@ -8328,117 +4448,6 @@ function boundaryPortDefinitions(
   }
 
   return definitions;
-}
-
-function nextGroupInputParam(
-  previousParams: Record<string, number>,
-  previousInput: PortDefinition | undefined,
-  nextInput: PortDefinition,
-): number {
-  const nextDefault = nextInput.defaultValue ?? 0;
-  const previousValue = previousParams[nextInput.name];
-  if (previousValue === undefined) return nextDefault;
-  if (previousValue === (previousInput?.defaultValue ?? 0)) return nextDefault;
-  return previousValue;
-}
-
-function groupSelectedGraph(
-  nodes: ShaderFlowNode[],
-  edges: ShaderFlowEdge[],
-  onWeightChange: (edgeId: string, weight: number) => void,
-  onModeChange: (edgeId: string, mode: LinkMode) => void,
-  onInsertNode: (edgeId: string) => void,
-): { nodes: ShaderFlowNode[]; edges: ShaderFlowEdge[] } | null {
-  const selectedNodes = nodes.filter((node) => node.selected);
-  if (!selectedNodes.length || selectedNodes.some((node) => node.data.patchNode.type === null)) return null;
-  const selected = new Set(selectedNodes.map((node) => node.id));
-  const groupId = makeNodeId('Group', new Set(nodes.map((node) => node.id)));
-  const bounds = nodeBounds(selectedNodes);
-  const position = { x: bounds.x, y: bounds.y };
-  const boundaryIds = new Set(selected);
-  const insId = makeNodeId('Ins', boundaryIds);
-  boundaryIds.add(insId);
-  const outsId = makeNodeId('Outs', boundaryIds);
-  const inputs: PortDefinition[] = [];
-  const outputs: PortDefinition[] = [];
-  const inputBySource = new Map<string, string>();
-  const outputBySource = new Map<string, string>();
-  const inside: ShaderFlowEdge[] = [];
-  const outside: ShaderFlowEdge[] = [];
-  const replacements = new Map<string, ShaderFlowEdge>();
-  const makeEdge = (link: PatchLink) => edgeFromLink(link, onWeightChange, onModeChange, onInsertNode);
-  const portName = (base: string, ports: PortDefinition[]) => {
-    const readable = base.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').toLowerCase();
-    let name = readable || 'signal';
-    let suffix = 2;
-    while (ports.some((port) => port.name === name)) name = `${readable} ${suffix++}`;
-    return name;
-  };
-  for (const edge of edges) {
-    const link = edgeEndpoints(edge);
-    if (!link) continue;
-    // A strength input belongs to the same side of a group boundary as its
-    // target cable's destination. Boundary links carry the unweighted source;
-    // the original mode and strength are applied once at the real destination.
-    const sourceInside = selected.has(edge.source);
-    const targetInside = selected.has(edge.target);
-    let from = link.from;
-    if (sourceInside !== targetInside) {
-      const key = endpointKey(link.from);
-      if (targetInside) {
-        let port = inputBySource.get(key);
-        if (!port) {
-          port = portName(edge.data?.modulatesEdgeId ? 'strength' : link.to.port, inputs);
-          inputs.push({ name: port, defaultValue: 0 });
-          inputBySource.set(key, port);
-          outside.push(makeEdge({ from: link.from, to: { node: groupId, port }, weight: 1, mode: 'set' }));
-        }
-        from = { node: insId, port };
-      } else {
-        let port = outputBySource.get(key);
-        if (!port) {
-          port = portName(link.from.port, outputs);
-          outputs.push({ name: port });
-          outputBySource.set(key, port);
-          inside.push(makeEdge({ from: link.from, to: { node: outsId, port }, weight: 1, mode: 'set' }));
-        }
-        from = { node: groupId, port };
-      }
-    }
-    const replacement = edge.data?.modulatesEdgeId
-      ? { ...edge, source: from.node, sourceHandle: `out:${from.port}`, selected: false }
-      : { ...makeEdge({ ...link, from }), selected: false };
-    replacements.set(edge.id, replacement);
-    (targetInside ? inside : outside).push(replacement);
-  }
-  const retarget = (edge: ShaderFlowEdge): ShaderFlowEdge => {
-    if (!edge.data?.modulatesEdgeId) return edge;
-    const parent = replacements.get(edge.data.modulatesEdgeId);
-    if (!parent) return edge;
-    return { ...edge, target: parent.target, targetHandle: parent.targetHandle,
-      data: { ...edge.data, modulatesEdgeId: parent.id } };
-  };
-  const boundaryNode = (patchNode: PatchNode): ShaderFlowNode => ({
-    id: patchNode.id, type: 'shaderNode', position: patchNode.position!,
-    data: { patchNode, ...nodeCallbacksPlaceholder(), isTypePickerOpen: false },
-  });
-  const subpatchNodes = [
-    boundaryNode({ id: insId, type: 'Ins', params: Object.fromEntries(inputs.map((port) => [port.name, 0])),
-      outputs: inputs, position: { x: bounds.x - 220, y: bounds.y } }),
-    ...selectedNodes,
-    boundaryNode({ id: outsId, type: 'Outs', params: {}, inputs: outputs,
-      position: { x: bounds.x + bounds.width + 220, y: bounds.y } }),
-  ];
-  const groupNode = boundaryNode({ id: groupId, type: 'Group', subpatchName: groupId,
-    subpatchCloneId: makeSubpatchCloneId(groupId), position,
-    params: Object.fromEntries(inputs.map((port) => [port.name, 0])), inputs, outputs,
-    subpatch: patchFromFlow(subpatchNodes, inside.map(retarget)),
-  });
-  return {
-    nodes: [...nodes.filter((node) => !selected.has(node.id)).map((node) => ({ ...node, selected: false })),
-      { ...groupNode, selected: true }],
-    edges: dedupeEdges(outside.map(retarget)),
-  };
 }
 
 function edgeEndpoints(edge: ShaderFlowEdge): PatchLink | null {
@@ -8479,83 +4488,6 @@ function clonePatch(patch: ReturnType<typeof patchFromFlow>): ReturnType<typeof 
       enabled: link.enabled,
       weightModulations: link.weightModulations ? structuredClone(link.weightModulations) : undefined,
     })),
-  };
-}
-
-function translateExtentForVisibleContent(
-  nodes: ShaderFlowNode[],
-  viewport: Viewport,
-  editorSize: { width: number; height: number },
-): CoordinateExtent {
-  if (editorSize.width <= 0 || editorSize.height <= 0) {
-    return FLOW_INFINITE_EXTENT;
-  }
-
-  const bounds = viewportContentBounds(nodes);
-  const zoom = normalizedViewportZoom(viewport.zoom);
-  const emptyWidth = (editorSize.width / zoom) * MAX_EMPTY_SCREEN_RATIO;
-  const emptyHeight = (editorSize.height / zoom) * MAX_EMPTY_SCREEN_RATIO;
-
-  return [
-    [bounds.x - emptyWidth, bounds.y - emptyHeight],
-    [bounds.x + bounds.width + emptyWidth, bounds.y + bounds.height + emptyHeight],
-  ];
-}
-
-function clampViewportToTranslateExtent(
-  viewport: Viewport,
-  translateExtent: CoordinateExtent,
-  editorSize: { width: number; height: number },
-): Viewport {
-  if (editorSize.width <= 0 || editorSize.height <= 0) return viewport;
-
-  const zoom = normalizedViewportZoom(viewport.zoom);
-  const visibleWidth = editorSize.width / zoom;
-  const visibleHeight = editorSize.height / zoom;
-  const left = -viewport.x / zoom;
-  const top = -viewport.y / zoom;
-  const minLeft = translateExtent[0][0];
-  const minTop = translateExtent[0][1];
-  const maxLeft = translateExtent[1][0] - visibleWidth;
-  const maxTop = translateExtent[1][1] - visibleHeight;
-  const clampedLeft = clampNumber(left, Math.min(minLeft, maxLeft), Math.max(minLeft, maxLeft));
-  const clampedTop = clampNumber(top, Math.min(minTop, maxTop), Math.max(minTop, maxTop));
-
-  return {
-    x: -clampedLeft * zoom,
-    y: -clampedTop * zoom,
-    zoom,
-  };
-}
-
-function viewportContentBounds(nodes: ShaderFlowNode[]): { x: number; y: number; width: number; height: number } {
-  const visibleNodes = nodes.filter((node) => node.hidden !== true);
-  if (visibleNodes.length === 0) {
-    return { x: 0, y: 0, width: 1, height: 1 };
-  }
-
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (const node of visibleNodes) {
-    const size = viewportNodeSize(node);
-    minX = Math.min(minX, node.position.x);
-    minY = Math.min(minY, node.position.y);
-    maxX = Math.max(maxX, node.position.x + size.width);
-    maxY = Math.max(maxY, node.position.y + size.height);
-  }
-
-  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
-    return { x: 0, y: 0, width: 1, height: 1 };
-  }
-
-  return {
-    x: minX,
-    y: minY,
-    width: Math.max(1, maxX - minX),
-    height: Math.max(1, maxY - minY),
   };
 }
 
@@ -8677,38 +4609,6 @@ function isNodeVisibleInViewport(
     && node.position.y <= bottom;
 }
 
-function lockedAreaNodeBounds(
-  area: EditorArea,
-  nodes: ShaderFlowNode[],
-): { x: number; y: number; width: number; height: number } | null {
-  const containedNodeIds = new Set(area.nodeIds ?? []);
-  const containedNodes = nodes.filter((node) => (
-    node.id !== area.spreadNodeId
-    && containedNodeIds.has(node.id)
-  ));
-  if (containedNodes.length === 0) return null;
-
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (const node of containedNodes) {
-    const size = viewportNodeSize(node);
-    minX = Math.min(minX, node.position.x);
-    minY = Math.min(minY, node.position.y);
-    maxX = Math.max(maxX, node.position.x + size.width);
-    maxY = Math.max(maxY, node.position.y + size.height);
-  }
-
-  return {
-    x: minX,
-    y: minY,
-    width: maxX - minX,
-    height: maxY - minY,
-  };
-}
-
 function flowNodeIsInsideSpread(spread: ShaderFlowNode, node: ShaderFlowNode): boolean {
   if (
     (spread.data.patchNode.type !== 'Spread' && spread.data.patchNode.type !== 'Spawn' && spread.data.patchNode.type !== 'ConditionalExecution')
@@ -8737,64 +4637,12 @@ function runtimeDspNodeIdForFlowNode(
   return scopedDspNodeId(nodeId, groupIds);
 }
 
-function runtimeContainerLinkIsAllowed(link: PatchLink, nodes: ShaderFlowNode[]): boolean {
-  const sourceNode = nodes.find((node) => node.id === link.from.node);
-  const targetNode = nodes.find((node) => node.id === link.to.node);
-
-  if (
-    (
-      (sourceNode?.data.patchNode.type === 'Spread' && link.from.port === 'item index')
-      || (sourceNode?.data.patchNode.type === 'Spawn' && link.from.port === 'instance gate')
-    )
-    && (!targetNode || !flowNodeIsInsideSpread(sourceNode, targetNode))
-  ) {
-    return false;
-  }
-  if (
-    targetNode?.data.patchNode.type === 'Spawn'
-    && link.to.port === 'kill trigger'
-    && (!sourceNode || !flowNodeIsInsideSpread(targetNode, sourceNode))
-  ) {
-    return false;
-  }
-  if (
-    targetNode
-    && sourceNode
-    && (
-      (targetNode.data.patchNode.type === 'Spread' && link.to.port === 'count')
-      || (targetNode.data.patchNode.type === 'ConditionalExecution' && link.to.port === 'gate')
-      || (
-        targetNode.data.patchNode.type === 'Spawn'
-        && (link.to.port === 'trigger' || link.to.port === 'release trigger')
-      )
-    )
-    && flowNodeIsInsideSpread(targetNode, sourceNode)
-  ) {
-    return false;
-  }
-  return true;
-}
-
 function normalizedViewportZoom(zoom: number): number {
   return finitePositiveNumber(zoom) ?? USER_ZOOM_BASELINE;
 }
 
-function shouldSettleZoomToBaseline(zoom: number): boolean {
-  const normalizedZoom = normalizedViewportZoom(zoom);
-  const distance = Math.abs(normalizedZoom - ZOOM_RESET_TARGET);
-  return distance > ZOOM_CHANGE_EPSILON && distance <= ZOOM_SETTLE_THRESHOLD;
-}
-
-function formatZoomPercentage(zoom: number): string {
-  return `${Math.round((zoom / USER_ZOOM_BASELINE) * 100)}%`;
-}
-
 function finitePositiveNumber(value: number | undefined): number | null {
   return value !== undefined && Number.isFinite(value) && value > 0 ? value : null;
-}
-
-function isFiniteCoordinateExtent(extent: CoordinateExtent): boolean {
-  return extent.every((point) => point.every(Number.isFinite));
 }
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -8851,90 +4699,6 @@ function nodeIdsContainedByAreaHierarchy(
   )));
 }
 
-function promoteNodeIdsInStackOrder(
-  stackOrder: string[],
-  activeNodeIds: string[],
-  promotedNodeIds: Set<string>,
-): string[] {
-  const activeNodeIdSet = new Set(activeNodeIds);
-  const orderedActiveIds = stackOrder.filter((nodeId) => activeNodeIdSet.has(nodeId));
-  const orderedActiveIdSet = new Set(orderedActiveIds);
-  const completeOrder = [
-    ...orderedActiveIds,
-    ...activeNodeIds.filter((nodeId) => !orderedActiveIdSet.has(nodeId)),
-  ];
-  const nextOrder = [
-    ...completeOrder.filter((nodeId) => !promotedNodeIds.has(nodeId)),
-    ...completeOrder.filter((nodeId) => promotedNodeIds.has(nodeId)),
-  ];
-
-  return nextOrder.length === stackOrder.length
-    && nextOrder.every((nodeId, index) => nodeId === stackOrder[index])
-    ? stackOrder
-    : nextOrder;
-}
-
-function spreadAreaForNode(node: ShaderFlowNode): EditorArea {
-  const size = runtimeContainerSize(node.data.patchNode);
-  const portsHeight = runtimeContainerPortsHeight(node.data.patchNode);
-  const title = getNodeTypeLabel(node.data.patchNode.type!);
-  return {
-    id: `spread-area:${node.id}`,
-    kind: 'spread',
-    spreadNodeId: node.id,
-    title,
-    position: { ...node.position },
-    size: {
-      width: size.width,
-      height: Math.max(NODE_HEADER_HEIGHT + portsHeight + 48, NODE_HEADER_HEIGHT + size.height),
-    },
-    uiHeight: portsHeight,
-    ...(node.data.patchNode.spreadNodeIds ? {
-      locked: true,
-      nodeIds: [...node.data.patchNode.spreadNodeIds],
-    } : {}),
-  };
-}
-
-function reconcileSpreadAreas(areas: EditorArea[], nodes: ShaderFlowNode[]): EditorArea[] {
-  const spreadNodes = nodes.filter((node) => (
-    node.data.patchNode.type === 'Spread' || node.data.patchNode.type === 'Spawn' || node.data.patchNode.type === 'ConditionalExecution'
-  ));
-  const spreadNodeIds = new Set(spreadNodes.map((node) => node.id));
-  let resizedExistingSpawn = false;
-  const retained = areas.flatMap((area) => {
-    if (area.kind !== 'spread') return [area];
-    if (area.spreadNodeId === undefined || !spreadNodeIds.has(area.spreadNodeId)) return [];
-    const spawnNode = spreadNodes.find((node) => (
-      node.id === area.spreadNodeId && node.data.patchNode.type === 'Spawn'
-    ));
-    if (
-      !spawnNode
-      || (area.size.width >= MIN_SPAWN_WIDTH && (area.uiHeight ?? 0) >= SPAWN_PORTS_HEIGHT)
-    ) return [area];
-    resizedExistingSpawn = true;
-    return [{
-      ...area,
-      size: { ...area.size, width: Math.max(area.size.width, MIN_SPAWN_WIDTH) },
-      uiHeight: Math.max(area.uiHeight ?? 0, SPAWN_PORTS_HEIGHT),
-    }];
-  });
-  const existingSpreadNodeIds = new Set(retained.flatMap((area) => (
-    area.kind === 'spread' && area.spreadNodeId ? [area.spreadNodeId] : []
-  )));
-  const added = spreadNodes
-    .filter((node) => !existingSpreadNodeIds.has(node.id))
-    .map(spreadAreaForNode);
-  return retained.length === areas.length && added.length === 0 && !resizedExistingSpawn
-    ? areas
-    : [...retained, ...added];
-}
-
-function optionalStringArraysEqual(left: string[] | undefined, right: string[] | undefined): boolean {
-  if (left === undefined || right === undefined) return left === right;
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
 function areaContainsPoint(area: EditorArea, point: { x: number; y: number }): boolean {
   return point.x >= area.position.x
     && point.x < area.position.x + area.size.width
@@ -8951,24 +4715,6 @@ function areaContainsArea(area: EditorArea, candidate: EditorArea): boolean {
     : areaContainsPoint(area, candidate.position);
 }
 
-function areaIdsWithinBounds(areas: EditorArea[], area: EditorArea): string[] {
-  return areas
-    .filter((candidate) => candidate.id !== area.id && areaContainsPoint(area, candidate.position))
-    .map((candidate) => candidate.id);
-}
-
-function isSurfacedControlTarget(eventTarget: EventTarget | null): boolean {
-  const target = eventTarget instanceof Element ? eventTarget : null;
-  return target !== null
-    && target.closest('.shader-node-area-ui-collapsed, .group-ui-preview') !== null;
-}
-
-function innermostAreaContainingNode(areas: EditorArea[], node: ShaderFlowNode): EditorArea | undefined {
-  return areas
-    .filter((area) => area.spreadNodeId === node.id || areaContainsNode(area, node))
-    .sort((left, right) => (left.size.width * left.size.height) - (right.size.width * right.size.height))[0];
-}
-
 function areaContainsNode(area: EditorArea, node: ShaderFlowNode): boolean {
   // Locked membership is an explicit snapshot, including an explicitly empty
   // one. Never fall back to overlap for a locked Area, Spread, or Spawn.
@@ -8977,70 +4723,9 @@ function areaContainsNode(area: EditorArea, node: ShaderFlowNode): boolean {
     : areaContainsPoint(area, node.position);
 }
 
-function nodeIsInAreaUiSection(area: EditorArea, node: ShaderFlowNode): boolean {
-  return area.uiHeight !== undefined
-    && node.position.x >= area.position.x
-    && node.position.x < area.position.x + area.size.width
-    && node.position.y >= area.position.y + NODE_HEADER_HEIGHT
-    && node.position.y < area.position.y + NODE_HEADER_HEIGHT + area.uiHeight;
-}
-
-function groupUiPreviewLayout(patch: Patch): {
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  nodes: PatchNode[];
-} | null {
-  const controlAreas = (patch.areas ?? []).filter((area) => {
-    const title = area.title.trim().toLocaleLowerCase();
-    return area.kind !== 'spread' && (title === 'ui' || title === 'controls');
-  });
-  if (controlAreas.length === 0) return null;
-
-  const left = Math.min(...controlAreas.map((area) => area.position.x));
-  const contentTop = Math.min(...controlAreas.map((area) => area.position.y + NODE_HEADER_HEIGHT));
-  const right = Math.max(...controlAreas.map((area) => area.position.x + area.size.width));
-  const bottom = Math.max(...controlAreas.map((area) => area.position.y + area.size.height));
-  const nodeIds = new Set<string>();
-  for (const area of controlAreas) {
-    if (area.locked) {
-      for (const nodeId of area.nodeIds ?? []) nodeIds.add(nodeId);
-      continue;
-    }
-    for (const node of patch.nodes) {
-      const position = node.position ?? { x: 0, y: 0 };
-      if (
-        position.x >= area.position.x
-        && position.x < area.position.x + area.size.width
-        && position.y >= area.position.y
-        && position.y < area.position.y + area.size.height
-      ) nodeIds.add(node.id);
-    }
-  }
-  const nodes = patch.nodes.filter((node) => nodeIds.has(node.id));
-  // A UI-area member can overlap its source area's header. The projected panel
-  // normally begins below that header, so account for that overlap instead of
-  // clipping the projected node's own header with the panel's overflow.
-  const top = Math.min(
-    contentTop,
-    ...nodes.map((node) => node.position?.y ?? contentTop),
-  );
-  return {
-    position: { x: left, y: top },
-    size: { width: right - left, height: bottom - top },
-    nodes,
-  };
-}
-
-function collapsedAreaInputPin(area: EditorArea): { x: number; y: number } {
-  return { x: area.position.x, y: area.position.y + NODE_HEADER_HEIGHT / 2 };
-}
-
-function collapsedAreaOutputPin(area: EditorArea): { x: number; y: number } {
-  return { x: area.position.x + area.size.width, y: area.position.y + NODE_HEADER_HEIGHT / 2 };
-}
-
-function endpointKey(endpoint: PatchLink['from']): string {
-  return `${endpoint.node}.${endpoint.port}`;
+function groupUiPreviewLayout(patch: Patch) {
+  const layout = groupPanelLayout({ id: 'preview', kind: 'spagbol.group', position: { x: 0, y: 0 }, values: {}, data: {}, graph: patchToGraph(patch) });
+  return layout ? { position: layout.position, size: layout.size, nodes: layout.nodes.map(nodeToPatch) } : null;
 }
 
 function canRenameBoundaryPort(node: PatchNode, side: 'input' | 'output'): boolean {
@@ -9264,572 +4949,10 @@ function selectorIndexFromKeyboardEvent(event: KeyboardEvent): number | null {
   return Number(event.key);
 }
 
-function normalizeSubpatchName(requestedName: string, fallback: string): string {
-  const trimmed = requestedName.trim();
-  return trimmed.length > 0 ? trimmed : fallback;
-}
-
 function makeSubpatchCloneId(seed: string): string {
   subpatchCloneSequence += 1;
   const normalizedSeed = seed.replace(/[^A-Za-z0-9_-]/g, '_') || 'group';
   return `subpatch_clone_${normalizedSeed}_${subpatchCloneSequence}`;
-}
-
-function dedupePatchLinks(links: PatchLink[]): PatchLink[] {
-  const seen = new Set<string>();
-  const deduped: PatchLink[] = [];
-  for (const link of links) {
-    const key = `${link.from.node}:${link.from.port}->${link.to.node}:${link.to.port}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(link);
-  }
-  return deduped;
-}
-
-function cloneFlowNodeSnapshot(node: ShaderFlowNode): ShaderFlowNode {
-  const position = { ...node.position };
-
-  return {
-    ...node,
-    position,
-    data: {
-      ...node.data,
-      patchNode: {
-        ...node.data.patchNode,
-        params: { ...node.data.patchNode.params },
-        position,
-        ...(node.data.patchNode.inputs ? { inputs: node.data.patchNode.inputs.map((port) => ({ ...port })) } : {}),
-        ...(node.data.patchNode.outputs ? { outputs: node.data.patchNode.outputs.map((port) => ({ ...port })) } : {}),
-        ...(node.data.patchNode.subpatchUiOverrides
-          ? { subpatchUiOverrides: structuredClone(node.data.patchNode.subpatchUiOverrides) }
-          : {}),
-        ...(node.data.patchNode.subpatch ? { subpatch: clonePatch(node.data.patchNode.subpatch) } : {}),
-      },
-    },
-  };
-}
-
-function cloneFlowEdgeSnapshot(edge: ShaderFlowEdge): ShaderFlowEdge {
-  return {
-    ...edge,
-    data: {
-      ...edge.data,
-      weight: edge.data?.weight ?? 1,
-      mode: edge.data?.mode ?? 'set',
-      enabled: edge.data?.enabled !== false,
-      onWeightChange: updateEdgeWeightPlaceholder,
-      onModeChange: updateEdgeModePlaceholder,
-      onInsertNode: insertNodeOnEdgePlaceholder,
-    },
-  };
-}
-
-function reconnectPreviewEdgeFromEdge(edge: ShaderFlowEdge): ShaderFlowEdge {
-  const snapshot = cloneFlowEdgeSnapshot(edge);
-  return {
-    ...snapshot,
-    id: `reconnect-preview:${snapshot.id}`,
-    selected: false,
-    selectable: false,
-    deletable: false,
-    reconnectable: false,
-    zIndex: SELECTED_EDGE_Z_INDEX - 1,
-    data: {
-      ...snapshot.data,
-      weight: snapshot.data?.weight ?? 1,
-      mode: snapshot.data?.mode ?? 'set',
-      enabled: snapshot.data?.enabled !== false,
-      onWeightChange: snapshot.data?.onWeightChange ?? updateEdgeWeightPlaceholder,
-      onModeChange: snapshot.data?.onModeChange ?? updateEdgeModePlaceholder,
-      onInsertNode: snapshot.data?.onInsertNode ?? insertNodeOnEdgePlaceholder,
-      showLinkControls: false,
-    },
-  };
-}
-
-function syncDuplicateDragPositions(
-  state: DuplicateDragState | null,
-  dragNodes: ShaderFlowNode[],
-): DuplicateDragState | null {
-  if (!state || dragNodes.length === 0) return state;
-
-  const sourceIds = state.nodeIds;
-  let changed = false;
-  const currentPositions = { ...state.currentPositions };
-
-  for (const node of dragNodes) {
-    if (!sourceIds.has(node.id)) continue;
-    const previous = currentPositions[node.id];
-    if (previous && previous.x === node.position.x && previous.y === node.position.y) continue;
-
-    currentPositions[node.id] = { ...node.position };
-    changed = true;
-  }
-
-  return changed ? { ...state, currentPositions } : state;
-}
-
-function syncDuplicateDragPositionsFromChanges(
-  state: DuplicateDragState,
-  changes: NodeChange<ShaderFlowNode>[],
-): DuplicateDragState {
-  let changed = false;
-  const currentPositions = { ...state.currentPositions };
-
-  for (const change of changes) {
-    if (change.type !== 'position' || !change.position || !state.nodeIds.has(change.id)) continue;
-
-    const previous = currentPositions[change.id];
-    if (previous && previous.x === change.position.x && previous.y === change.position.y) continue;
-
-    currentPositions[change.id] = { ...change.position };
-    changed = true;
-  }
-
-  return changed ? { ...state, currentPositions } : state;
-}
-
-function anchorDuplicatedNodePositionChanges(
-  changes: NodeChange<ShaderFlowNode>[],
-  originalPositions: Record<string, { x: number; y: number }>,
-): NodeChange<ShaderFlowNode>[] {
-  return changes.map((change) => {
-    if (change.type !== 'position') return change;
-    const position = originalPositions[change.id];
-    if (!position) return change;
-
-    return {
-      ...change,
-      position: { ...position },
-      positionAbsolute: { ...position },
-    };
-  });
-}
-
-function restoreGraphNodePositions(
-  nodes: ShaderFlowNode[],
-  positions: Record<string, { x: number; y: number }>,
-): ShaderFlowNode[] {
-  return applyGraphNodePositions(nodes, positions);
-}
-
-function applyGraphNodePositions(
-  nodes: ShaderFlowNode[],
-  positions: Record<string, { x: number; y: number }>,
-): ShaderFlowNode[] {
-  return nodes.map((node) => {
-    const position = positions[node.id];
-    if (!position) return node;
-
-    return {
-      ...node,
-      position: { ...position },
-      data: {
-        ...node.data,
-        patchNode: {
-          ...node.data.patchNode,
-          position: { ...position },
-        },
-      },
-    };
-  });
-}
-
-function duplicatePreviewNodeId(nodeId: string): string {
-  return `${DUPLICATE_NODE_PREVIEW_PREFIX}${nodeId}`;
-}
-
-function draftNodePosition(
-  connection: DraftNodeConnection,
-  reactFlow: ReactFlowInstance<ShaderFlowNode, ShaderFlowEdge>,
-): { x: number; y: number } {
-  const pointer = reactFlow.screenToFlowPosition(connection.pointer);
-  const x = connection.originHandleType === 'source'
-    ? pointer.x + DRAFT_NODE_HANDLE_X_OFFSET
-    : pointer.x - DRAFT_NODE_WIDTH - DRAFT_NODE_HANDLE_X_OFFSET;
-
-  return {
-    x,
-    y: pointer.y - DRAFT_NODE_FIRST_PORT_Y,
-  };
-}
-
-function duplicateAreaHierarchy(
-  areas: EditorArea[],
-  nodes: ShaderFlowNode[],
-  edges: ShaderFlowEdge[],
-  dragState: AreaDragState,
-  onWeightChange: (edgeId: string, weight: number) => void,
-  onModeChange: (edgeId: string, mode: LinkMode) => void,
-  onInsertNode: (edgeId: string) => void,
-): { rootAreaId: string; areas: EditorArea[]; nodes: ShaderFlowNode[]; edges: ShaderFlowEdge[] } {
-  const sourceAreaIds = new Set(Object.keys(dragState.areaPositions));
-  const sourceNodeIds = new Set(Object.keys(dragState.nodePositions));
-  const existingNodeIds = new Set(nodes.map((node) => node.id));
-  const existingAreaIds = new Set(areas.map((area) => area.id));
-  const nodeIdMap = new Map<string, string>();
-  const areaIdMap = new Map<string, string>();
-
-  for (const node of nodes) {
-    if (!sourceNodeIds.has(node.id)) continue;
-    const nextId = makeNodeId(node.data.patchNode.type ?? 'node', existingNodeIds);
-    existingNodeIds.add(nextId);
-    nodeIdMap.set(node.id, nextId);
-  }
-  for (const area of areas) {
-    if (!sourceAreaIds.has(area.id)) continue;
-    let nextId = `area-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-    while (existingAreaIds.has(nextId)) {
-      nextId = `area-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-    }
-    existingAreaIds.add(nextId);
-    areaIdMap.set(area.id, nextId);
-  }
-
-  const duplicatedNodes = nodes.flatMap((node): ShaderFlowNode[] => {
-    const nextId = nodeIdMap.get(node.id);
-    if (!nextId) return [];
-    const position = dragState.currentNodePositions[node.id] ?? node.position;
-    const patchNode = cloneParameterIds(node.data.patchNode, nextId);
-    return [{
-      ...node,
-      id: nextId,
-      position,
-      selected: false,
-      data: {
-        ...node.data,
-        patchNode: {
-          ...patchNode,
-          id: nextId,
-          position,
-          ...(patchNode.spreadNodeIds ? {
-            spreadNodeIds: patchNode.spreadNodeIds.flatMap((nodeId) => {
-              const mapped = nodeIdMap.get(nodeId);
-              return mapped ? [mapped] : [];
-            }),
-          } : {}),
-        },
-        isTypePickerOpen: false,
-      },
-    }];
-  });
-
-  const duplicatedAreas = areas.flatMap((area): EditorArea[] => {
-    const nextId = areaIdMap.get(area.id);
-    if (!nextId) return [];
-    const spreadNodeId = area.spreadNodeId ? nodeIdMap.get(area.spreadNodeId) : undefined;
-    return [{
-      ...structuredClone(area),
-      id: nextId,
-      position: dragState.currentAreaPositions[area.id] ?? area.position,
-      ...(spreadNodeId ? { spreadNodeId } : {}),
-      ...(area.nodeIds ? {
-        nodeIds: area.nodeIds.flatMap((nodeId) => {
-          const mapped = nodeIdMap.get(nodeId);
-          return mapped ? [mapped] : [];
-        }),
-      } : {}),
-      ...(area.areaIds ? {
-        areaIds: area.areaIds.flatMap((areaId) => {
-          const mapped = areaIdMap.get(areaId);
-          return mapped ? [mapped] : [];
-        }),
-      } : {}),
-    }];
-  });
-
-  const duplicatedEdges = duplicateEdgesForNodes(edges, nodeIdMap, dragState.linkExternal, onWeightChange, onModeChange, onInsertNode);
-
-  return {
-    rootAreaId: areaIdMap.get(dragState.areaId) ?? dragState.areaId,
-    areas: duplicatedAreas,
-    nodes: duplicatedNodes,
-    edges: duplicatedEdges,
-  };
-}
-
-function duplicateDraggedGraph(
-  nodes: ShaderFlowNode[],
-  edges: ShaderFlowEdge[],
-  dragState: DuplicateDragState,
-  draggedPositions: Record<string, { x: number; y: number }>,
-  onWeightChange: (edgeId: string, weight: number) => void,
-  onModeChange: (edgeId: string, mode: LinkMode) => void,
-  onInsertNode: (edgeId: string) => void,
-): { nodes: ShaderFlowNode[]; edges: ShaderFlowEdge[] } {
-  const existingIds = new Set(nodes.map((node) => node.id));
-  const idMap = new Map<string, string>();
-  const selectedNodes = nodes.filter((node) => dragState.nodeIds.has(node.id));
-
-  const duplicatedNodes = selectedNodes.map((node) => {
-    const nextId = makeNodeId(node.data.patchNode.type ?? 'node', existingIds);
-    existingIds.add(nextId);
-    idMap.set(node.id, nextId);
-    const position = draggedPositions[node.id] ?? node.position;
-
-    return {
-      ...node,
-      id: nextId,
-      selected: true,
-      position,
-      data: {
-        ...node.data,
-        patchNode: {
-          ...cloneParameterIds(node.data.patchNode, nextId),
-          id: nextId,
-          params: { ...node.data.patchNode.params },
-          position,
-        },
-        isTypePickerOpen: false,
-      },
-    };
-  });
-
-  const duplicatedEdges = duplicateEdgesForNodes(edges, idMap, dragState.linkExternal, onWeightChange, onModeChange, onInsertNode);
-
-  return {
-    nodes: duplicatedNodes,
-    edges: duplicatedEdges,
-  };
-}
-
-function buildBridgeEdges(
-  nodes: ShaderFlowNode[],
-  edges: ShaderFlowEdge[],
-  selectedNodeIds: Set<string>,
-  onWeightChange: (edgeId: string, weight: number) => void,
-  onModeChange: (edgeId: string, mode: LinkMode) => void,
-  onInsertNode: (edgeId: string) => void,
-): ShaderFlowEdge[] {
-  return nodes.flatMap((node) => {
-    if (!selectedNodeIds.has(node.id)) return [];
-
-    const incoming = edges
-      .map(linkFromEdge)
-      .filter((link): link is PatchLink => {
-        if (!link) return false;
-        return link.to.node === node.id && !selectedNodeIds.has(link.from.node);
-      });
-    const outgoing = edges
-      .map(linkFromEdge)
-      .filter((link): link is PatchLink => {
-        if (!link) return false;
-        return link.from.node === node.id && !selectedNodeIds.has(link.to.node);
-      });
-
-    return incoming.flatMap((input) => outgoing.map((output) => edgeFromLink({
-      from: input.from,
-      to: output.to,
-      weight: output.weight,
-      mode: output.mode,
-      enabled: input.enabled !== false && output.enabled !== false,
-    }, onWeightChange, onModeChange, onInsertNode)));
-  });
-}
-
-function selectedGraphFromNodes(nodes: ShaderFlowNode[], edges: ShaderFlowEdge[]): CopiedGraph | null {
-  const selectedNodeIds = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
-  if (selectedNodeIds.size === 0) return null;
-
-  const includedEdgeIds = new Set(edges.flatMap((edge) => {
-    const link = linkFromEdge(edge);
-    return link && selectedNodeIds.has(link.from.node) && selectedNodeIds.has(link.to.node) ? [edge.id] : [];
-  }));
-  let previousSize = -1;
-  while (previousSize !== includedEdgeIds.size) {
-    previousSize = includedEdgeIds.size;
-    for (const edge of edges) {
-      if (edge.data?.modulatesEdgeId && selectedNodeIds.has(edge.source) && includedEdgeIds.has(edge.data.modulatesEdgeId)) {
-        includedEdgeIds.add(edge.id);
-      }
-    }
-  }
-
-  return {
-    nodes: nodes.filter((node) => selectedNodeIds.has(node.id)).map(cloneFlowNodeForClipboard),
-    edges: edges.filter((edge) => includedEdgeIds.has(edge.id)).map(cloneFlowEdgeForClipboard),
-  };
-}
-
-function duplicateCopiedGraph(
-  graph: CopiedGraph,
-  existingNodes: ShaderFlowNode[],
-  offset: { x: number; y: number },
-  onWeightChange: (edgeId: string, weight: number) => void,
-  onModeChange: (edgeId: string, mode: LinkMode) => void,
-  onInsertNode: (edgeId: string) => void,
-): CopiedGraph {
-  const existingIds = new Set(existingNodes.map((node) => node.id));
-  const idMap = new Map<string, string>();
-  const nodes = graph.nodes.map((node) => {
-    const nextId = makeNodeId(node.data.patchNode.type ?? 'node', existingIds);
-    existingIds.add(nextId);
-    idMap.set(node.id, nextId);
-    const position = {
-      x: node.position.x + offset.x,
-      y: node.position.y + offset.y,
-    };
-
-    return {
-      ...node,
-      id: nextId,
-      position,
-      selected: true,
-      data: {
-        ...node.data,
-        patchNode: {
-          ...cloneParameterIds(node.data.patchNode, nextId),
-          id: nextId,
-          params: { ...node.data.patchNode.params },
-          position,
-        },
-        isTypePickerOpen: false,
-      },
-    };
-  });
-
-  const edges = duplicateEdgesForNodes(graph.edges, idMap, false, onWeightChange, onModeChange, onInsertNode);
-  return { nodes, edges };
-}
-
-function duplicateEdgesForNodes(
-  edges: ShaderFlowEdge[],
-  nodeIds: Map<string, string>,
-  linkExternal: boolean,
-  onWeightChange: NonNullable<ShaderFlowEdge['data']>['onWeightChange'],
-  onModeChange: NonNullable<ShaderFlowEdge['data']>['onModeChange'],
-  onInsertNode: NonNullable<ShaderFlowEdge['data']>['onInsertNode'],
-): ShaderFlowEdge[] {
-  const copies = new Map<string, ShaderFlowEdge | null>();
-  const byId = new Map(edges.map((edge) => [edge.id, edge]));
-  const copy = (edge: ShaderFlowEdge, visited = new Set<string>()): ShaderFlowEdge | null => {
-    if (copies.has(edge.id)) return copies.get(edge.id) ?? null;
-    if (visited.has(edge.id)) return null;
-    const source = nodeIds.get(edge.source);
-    let result: ShaderFlowEdge | null = null;
-    if (edge.data?.modulatesEdgeId) {
-      const parent = byId.get(edge.data.modulatesEdgeId);
-      const parentCopy = parent ? copy(parent, new Set([...visited, edge.id])) : null;
-      const target = parentCopy ?? (linkExternal ? parent : undefined);
-      if (target && (source || (linkExternal && parentCopy))) {
-        result = { ...edge, id: `weight-modulation:${crypto.randomUUID()}`, source: source ?? edge.source,
-          target: target.target, targetHandle: target.targetHandle, selected: false,
-          data: { ...edge.data, modulatesEdgeId: target.id, onWeightChange, onModeChange, onInsertNode } };
-      }
-    } else {
-      const link = linkFromEdge(edge);
-      const target = nodeIds.get(edge.target);
-      if (link && (source || target) && (linkExternal || (source && target))) {
-        result = edgeFromLink({ ...link,
-          from: { ...link.from, node: source ?? link.from.node },
-          to: { ...link.to, node: target ?? link.to.node },
-        }, onWeightChange, onModeChange, onInsertNode);
-      }
-    }
-    copies.set(edge.id, result);
-    return result;
-  };
-  return edges.flatMap((edge) => { const result = copy(edge); return result ? [result] : []; });
-}
-
-function duplicatedBufferCopies(
-  sourceNodes: ShaderFlowNode[],
-  targetNodes: ShaderFlowNode[],
-  sourceGraphNodes: ShaderFlowNode[],
-  targetGraphNodes: ShaderFlowNode[],
-  groupIds: readonly string[],
-): BufferCopy[] {
-  return sourceNodes.flatMap((sourceNode, index) => {
-    const targetNode = targetNodes[index];
-    if (sourceNode.data.patchNode.type !== 'Buffer' || targetNode?.data.patchNode.type !== 'Buffer') return [];
-    return [{
-      sourceNodeId: runtimeDspNodeIdForFlowNode(sourceNode, sourceGraphNodes, groupIds),
-      targetNodeId: runtimeDspNodeIdForFlowNode(targetNode, targetGraphNodes, groupIds),
-    }];
-  });
-}
-
-function copyBufferAssets(
-  copies: BufferCopy[],
-  currentAssets: Record<string, BufferAsset>,
-  replaceAssets: (assets: Record<string, BufferAsset>) => void,
-): void {
-  const copiedAssets = copies.flatMap(({ sourceNodeId, targetNodeId }) => {
-    const asset = currentAssets[sourceNodeId];
-    return asset ? [[targetNodeId, asset] as const] : [];
-  });
-  if (copiedAssets.length === 0) return;
-  replaceAssets({ ...currentAssets, ...Object.fromEntries(copiedAssets) });
-}
-
-function cloneFlowNodeForClipboard(node: ShaderFlowNode): ShaderFlowNode {
-  return {
-    ...node,
-    selected: false,
-    data: {
-      ...node.data,
-      patchNode: {
-        ...node.data.patchNode,
-        params: { ...node.data.patchNode.params },
-        position: { ...node.position },
-      },
-      isTypePickerOpen: false,
-    },
-  };
-}
-
-function cloneFlowEdgeForClipboard(edge: ShaderFlowEdge): ShaderFlowEdge {
-  return {
-    ...edge,
-    selected: false,
-    data: {
-      weight: edge.data?.weight ?? 1,
-      mode: edge.data?.mode ?? 'set',
-      enabled: edge.data?.enabled !== false,
-      modulatesEdgeId: edge.data?.modulatesEdgeId,
-      onWeightChange: updateEdgeWeightPlaceholder,
-      onModeChange: updateEdgeModePlaceholder,
-      onInsertNode: insertNodeOnEdgePlaceholder,
-    },
-  };
-}
-
-async function writeCopiedGraphToClipboard(graph: CopiedGraph): Promise<void> {
-  const payload = JSON.stringify({
-    app: 'teia',
-    kind: 'copied-graph',
-    version: 1,
-    graph: flowToEditorState(graph.nodes, graph.edges),
-  });
-  try {
-    await navigator.clipboard?.writeText(payload);
-  } catch {
-    // Browser clipboard permissions are best-effort; the in-memory copy still works.
-  }
-}
-
-async function readCopiedGraphFromClipboard(): Promise<CopiedGraph | null> {
-  try {
-    const raw = await navigator.clipboard?.readText();
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      app?: string;
-      kind?: string;
-      version?: number;
-      graph?: PersistedEditorState;
-    };
-    if (parsed.app !== 'teia' || parsed.kind !== 'copied-graph' || parsed.version !== 1 || !parsed.graph) {
-      return null;
-    }
-    const callbacks = nodeCallbacksPlaceholder();
-    return {
-      nodes: editorStateToFlowNodes(parsed.graph, callbacks, null),
-      edges: editorStateToFlowEdges(parsed.graph, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder),
-    };
-  } catch {
-    return null;
-  }
 }
 
 function isEditableEventTarget(target: EventTarget | null): boolean {
@@ -9846,50 +4969,6 @@ function isPlaybackShortcutControlEventTarget(target: EventTarget | null): boole
   return target instanceof HTMLSelectElement;
 }
 
-function selectionById<T extends { id: string; selected?: boolean }>(items: T[]): Record<string, boolean> {
-  return Object.fromEntries(items.map((item) => [item.id, item.selected === true]));
-}
-
-function selectedNodeIdsInScreenRect(
-  editorShell: HTMLElement,
-  start: ScreenPoint,
-  end: ScreenPoint,
-  nodeIds: Set<string>,
-): Set<string> {
-  const left = Math.min(start.x, end.x);
-  const right = Math.max(start.x, end.x);
-  const top = Math.min(start.y, end.y);
-  const bottom = Math.max(start.y, end.y);
-  const selectedNodeIds = new Set<string>();
-
-  for (const element of editorShell.querySelectorAll<HTMLElement>('.react-flow__node[data-id]')) {
-    const nodeId = element.dataset.id;
-    if (!nodeId || !nodeIds.has(nodeId)) continue;
-
-    const bounds = element.getBoundingClientRect();
-    const overlapsSelection = bounds.left < right
-      && bounds.right > left
-      && bounds.top < bottom
-      && bounds.bottom > top;
-    if (overlapsSelection) selectedNodeIds.add(nodeId);
-  }
-
-  return selectedNodeIds;
-}
-
-function updateSelection<T extends { id: string; selected?: boolean }>(items: T[], selectedIds: Set<string>): T[] {
-  let changed = false;
-  const nextItems = items.map((item) => {
-    const selected = selectedIds.has(item.id);
-    if (item.selected === selected) return item;
-
-    changed = true;
-    return { ...item, selected };
-  });
-
-  return changed ? nextItems : items;
-}
-
 function nodeZIndex(
   selected: boolean,
   compactPorts: boolean,
@@ -9904,40 +4983,6 @@ function nodeZIndex(
   // Reserve one integer slot per node so recency can never cross a classification boundary.
   const classificationSize = Math.max(1, nodeCount);
   return classificationZIndex * classificationSize + Math.max(0, stackRank);
-}
-
-function restoreNodeSelectionAfterDeselectedDrag(
-  nodes: ShaderFlowNode[],
-  snapshot: NodeDragSelectionSnapshot | null,
-): ShaderFlowNode[] {
-  return restoreSelectionAfterDeselectedDrag(nodes, snapshot, snapshot?.nodeSelection);
-}
-
-function restoreEdgeSelectionAfterDeselectedDrag(
-  edges: ShaderFlowEdge[],
-  snapshot: NodeDragSelectionSnapshot | null,
-): ShaderFlowEdge[] {
-  return restoreSelectionAfterDeselectedDrag(edges, snapshot, snapshot?.edgeSelection);
-}
-
-function restoreSelectionAfterDeselectedDrag<T extends { id: string; selected?: boolean }>(
-  items: T[],
-  snapshot: NodeDragSelectionSnapshot | null,
-  selectedById: Record<string, boolean> | undefined,
-): T[] {
-  if (!snapshot?.preserveSelection || !selectedById) return items;
-
-  let changed = false;
-  const restoredItems = items.map((item) => {
-    if (!Object.prototype.hasOwnProperty.call(selectedById, item.id)) return item;
-    const selected = selectedById[item.id] === true;
-    if ((item.selected === true) === selected) return item;
-
-    changed = true;
-    return { ...item, selected };
-  });
-
-  return changed ? restoredItems : items;
 }
 
 
@@ -9991,102 +5036,9 @@ function samplePlayerVisualizationParams(
   return Object.keys(params).length > 0 ? params : undefined;
 }
 
-function renameEdgeNode(edge: ShaderFlowEdge, fromNodeId: string, toNodeId: string): ShaderFlowEdge {
-  if (edge.data?.modulatesEdgeId) {
-    return {
-      ...edge,
-      source: edge.source === fromNodeId ? toNodeId : edge.source,
-      target: edge.target === fromNodeId ? toNodeId : edge.target,
-    };
-  }
-  const link = linkFromEdge(edge);
-  if (!link) return edge;
-  const renamedLink: PatchLink = {
-    from: { ...link.from, node: link.from.node === fromNodeId ? toNodeId : link.from.node },
-    to: { ...link.to, node: link.to.node === fromNodeId ? toNodeId : link.to.node },
-    weight: link.weight,
-    mode: link.mode,
-    enabled: link.enabled,
-    weightModulations: link.weightModulations?.map((modulation) => modulation.from.node === fromNodeId
-      ? { ...modulation, from: { ...modulation.from, node: toNodeId } }
-      : modulation),
-  };
-  return edgeFromLink(renamedLink, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder);
-}
-
-function remapEdgeForNodeType(
-  edge: ShaderFlowEdge,
-  nodeId: string,
-  previousDefinition: ReturnType<typeof getDefinition> | null,
-  nextDefinition: ReturnType<typeof getDefinition>,
-): ShaderFlowEdge | null {
-  if (edge.data?.modulatesEdgeId) {
-    if (edge.source !== nodeId) return edge;
-    const sourcePort = edge.sourceHandle?.startsWith('out:') ? edge.sourceHandle.slice(4) : '';
-    const previousIndex = previousDefinition?.outputs.findIndex((port) => port.name === sourcePort) ?? 0;
-    const nextPort = nextDefinition.outputs[Math.max(0, previousIndex)]?.name;
-    return nextPort ? { ...edge, sourceHandle: `out:${nextPort}` } : null;
-  }
-  const link = linkFromEdge(edge);
-  if (!link) return null;
-
-  if (link.from.node === nodeId) {
-    const previousIndex = previousDefinition?.outputs.findIndex((port) => port.name === link.from.port) ?? 0;
-    const nextPort = nextDefinition.outputs[Math.max(0, previousIndex)]?.name;
-    if (!nextPort) return null;
-    return edgeFromLink({ ...link, from: { node: nodeId, port: nextPort } }, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder);
-  }
-
-  if (link.to.node === nodeId) {
-    const previousIndex = previousDefinition?.inputs.findIndex((port) => port.name === link.to.port) ?? 0;
-    const nextPort = nextDefinition.inputs[Math.max(0, previousIndex)]?.name;
-    if (!nextPort) return null;
-    return edgeFromLink({ ...link, to: { node: nodeId, port: nextPort } }, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder);
-  }
-
-  return edge;
-}
-
-function uniqueNodeId(requestedId: string, currentId: string, nodes: ShaderFlowNode[]): string {
-  const sanitized = requestedId.trim().replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
-  const fallback = currentId || 'node';
-  const base = sanitized || fallback;
-  const existingIds = new Set(nodes.map((node) => node.id).filter((id) => id !== currentId));
-  if (!existingIds.has(base)) return base;
-
-  let index = 2;
-  let candidate = `${base}_${index}`;
-  while (existingIds.has(candidate)) {
-    index += 1;
-    candidate = `${base}_${index}`;
-  }
-  return candidate;
-}
-
 function rowLabelColumnWidth(labels: string[]): number {
   const longestLabel = Math.max(3, ...labels.map((label) => label.length));
   return 20 + longestLabel * 8;
-}
-
-function shouldAutoRenameForTypeChange(nodeId: string, previousType: NodeType | null): boolean {
-  return previousType === null || /^node_\d+$/.test(nodeId);
-}
-
-function nextTypeNodeId(nodeId: string, type: NodeType, nodes: ShaderFlowNode[]): string {
-  return uniqueNodeId(makeNodeId(type, new Set(nodes.map((node) => node.id))), nodeId, nodes);
-}
-
-function midpointPosition(
-  source?: { x: number; y: number },
-  target?: { x: number; y: number },
-): { x: number; y: number } {
-  if (source && target) {
-    return {
-      x: (source.x + target.x) / 2,
-      y: (source.y + target.y) / 2,
-    };
-  }
-  return { x: 0, y: 0 };
 }
 
 function nodeCallbacksPlaceholder() {
@@ -10127,3 +5079,42 @@ function noopScopeResize() {}
 
 const emptySubscribe = () => () => undefined;
 const emptySnapshot = () => null;
+
+function bufferContainsAudio(samples: Float32Array): boolean {
+  return samples.some((sample) => Number.isFinite(sample) && sample !== 0);
+}
+
+
+function bufferVisualizationContainsAudio(buffer: { bins: Array<{ min: number; max: number }> } | undefined): boolean {
+  return buffer?.bins.some((bin) => bin.min !== 0 || bin.max !== 0) === true;
+}
+
+function encodeMonoSamplesAsWav(samples: Float32Array, sampleRate: number): Blob {
+  const safeSampleRate = Math.max(1, Math.round(sampleRate));
+  const bytesPerSample = 2;
+  const dataSize = samples.length * bytesPerSample;
+  const wav = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(wav);
+
+  writeWavText(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeWavText(view, 8, 'WAVE');
+  writeWavText(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, safeSampleRate, true);
+  view.setUint32(28, safeSampleRate * bytesPerSample, true);
+  view.setUint16(32, bytesPerSample, true);
+  view.setUint16(34, bytesPerSample * 8, true);
+  writeWavText(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (const value of samples) {
+    const sample = Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    offset += bytesPerSample;
+  }
+  return new Blob([view], { type: 'audio/wav' });
+}

@@ -569,7 +569,6 @@ button:hover {
   display: none;
 }
 
-
 .area-layer {
   position: absolute;
   inset: 0;
@@ -1187,7 +1186,7 @@ button:hover {
   white-space: nowrap;
 }
 
-.spread-port-input .numeric-scrubber {
+.spread-port-input .spagbol-control-number {
   width: 80px;
 }
 
@@ -1622,34 +1621,34 @@ button:hover {
   background: transparent;
 }
 
-.shader-node-content-graphic {
+.teia-node-content-graphic {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   width: 100%;
   min-width: 0;
 }
 
-.shader-node-content-graphic-empty {
+.teia-node-content-graphic-empty {
   display: contents;
 }
 
-.shader-node-content-graphic > .audio-node-meter-display,
-.shader-node-content-graphic > .audio-node-scope-display,
-.shader-node-content-graphic > .audio-node-spectrum-display,
-.shader-node-content-graphic > .audio-node-slider-display,
-.shader-node-content-graphic > .audio-node-joystick-display,
-.shader-node-content-graphic > .audio-node-button-display,
-.shader-node-content-graphic > .keys-node-keyboard {
+.teia-node-content-graphic > .audio-node-meter-display,
+.teia-node-content-graphic > .audio-node-scope-display,
+.teia-node-content-graphic > .audio-node-spectrum-display,
+.teia-node-content-graphic > .spagbol-control-slider,
+.teia-node-content-graphic > .audio-node-joystick-display,
+.teia-node-content-graphic > .spagbol-control-button,
+.teia-node-content-graphic > .keys-node-keyboard {
   min-width: 0;
 }
 
-.shader-node-content-graphic > .audio-node-meter-display,
-.shader-node-content-graphic > .audio-node-scope-display,
-.shader-node-content-graphic > .audio-node-spectrum-display {
+.teia-node-content-graphic > .audio-node-meter-display,
+.teia-node-content-graphic > .audio-node-scope-display,
+.teia-node-content-graphic > .audio-node-spectrum-display {
   border: 0;
 }
 
-.shader-node-content-graphic > .sample-upload-row {
+.teia-node-content-graphic > .sample-upload-row {
   width: 100%;
   min-width: 0;
   padding: var(--node-content-padding);
@@ -2786,48 +2785,8 @@ button:hover {
   background: var(--color-background);
 }
 
-.numeric-scrubber {
-  width: 68px;
-  min-width: 0;
-  max-width: 68px;
-  height: 22px;
-  padding: 0 4px;
-  border: 1px solid var(--color-foreground);
-  background: transparent;
-  color: var(--color-foreground);
-  cursor: ns-resize;
-  line-height: 20px;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: clip;
-  white-space: nowrap;
-  user-select: none;
-}
 
-.numeric-scrubber:focus {
-  outline: 1px solid var(--color-foreground);
-  outline-offset: 1px;
-}
 
-.numeric-scrubber-editing {
-  display: block;
-  appearance: textfield;
-  cursor: text;
-  font: inherit;
-  user-select: text;
-  -webkit-appearance: none;
-  -moz-appearance: textfield;
-}
-
-.numeric-scrubber-replaced {
-  border-color: color-mix(in srgb, var(--color-foreground) 42%, transparent);
-  color: color-mix(in srgb, var(--color-foreground) 48%, var(--color-background));
-}
-
-.numeric-scrubber-editing::selection {
-  background: var(--color-foreground);
-  color: var(--color-background);
-}
 
 .shader-port-output {
   gap: 6px;
@@ -2850,9 +2809,7 @@ button:hover {
 .audio-node-scope-display,
 .audio-node-spectrum-display,
 .kink-osc-display,
-.audio-node-slider-display,
 .audio-node-joystick-display,
-.audio-node-button-display,
 .keys-node-keyboard {
   grid-column: 1 / -1;
   width: 100%;
@@ -3234,14 +3191,6 @@ button:hover {
   background: var(--color-foreground);
 }
 
-.audio-node-slider-display {
-  position: relative;
-  height: var(--node-display-height, 48px);
-  background: transparent;
-  overflow: hidden;
-  touch-action: none;
-}
-
 .audio-node-joystick-display {
   --joystick-handle-size: 12px;
   position: relative;
@@ -3264,33 +3213,6 @@ button:hover {
   border: calc(1px * var(--graph-stroke-scale, 1)) solid var(--color-foreground);
   background: var(--color-accent);
   pointer-events: none;
-}
-
-.audio-node-button-display {
-  height: var(--node-display-height, 48px);
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  touch-action: none;
-}
-
-.audio-node-button-display:hover,
-.audio-node-button-display:focus-visible {
-  background: var(--color-foreground-08);
-  color: var(--color-foreground);
-  outline: 0;
-}
-
-.audio-node-button-display-active {
-  background: var(--color-accent);
-  color: var(--color-background);
-}
-
-.audio-node-button-display-active:hover,
-.audio-node-button-display-active:focus-visible {
-  background: var(--color-accent);
-  color: var(--color-background);
 }
 
 .keys-node-keyboard {
@@ -3377,35 +3299,6 @@ button:hover {
 .shader-node-compact .shader-node-content-ports .shader-inputs:empty {
   display: none;
   padding: 0;
-}
-
-.audio-node-slider-fill {
-  position: absolute;
-  inset: auto auto 0 0;
-  width: 0;
-  height: 100%;
-  background: var(--color-accent);
-  pointer-events: none;
-}
-
-.audio-node-slider-display-vertical .audio-node-slider-fill {
-  width: 100%;
-  height: 0;
-}
-
-.audio-node-slider-display input[type="range"] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.audio-node-slider-display-vertical input[type="range"] {
-  writing-mode: vertical-lr;
-  direction: rtl;
 }
 
 .shader-port-select {
@@ -3796,6 +3689,7 @@ button:hover {
   pointer-events: none;
 }
 
+
 .edge-weight-label {
   position: fixed;
   z-index: 0;
@@ -3918,6 +3812,7 @@ button:hover {
   outline: 1px solid var(--color-foreground);
   outline-offset: 1px;
 }
+
 
 /*
  * Class-specific control rules use the `background` shorthand, which otherwise
@@ -4515,11 +4410,10 @@ select:not([multiple]):focus-visible {
   }
 }
 
-.shader-params-outputs { --params-box-width: 68px; --params-box-gap: 6px; }
+.shader-params-outputs, .teia-node-params { --params-box-width: 68px; --params-box-gap: 6px; }
 .shader-params-columns, .shader-params-values { display: grid; grid-template-columns: repeat(3, var(--params-box-width)); gap: var(--params-box-gap); }
 .shader-params-columns { align-self: flex-end; margin-right: 4px; color: var(--color-foreground); font-size: 11px; text-align: center; }
-.shader-params-values .numeric-scrubber { width: var(--params-box-width); }
-
+.shader-params-values .spagbol-control-number { width: var(--params-box-width); }
 
 /* The FM-1 dialog uses the native modal layer for focus trapping and background inertness. */
 dialog.fm1-modal {
@@ -4550,7 +4444,6 @@ dialog.fm1-modal::backdrop { background: var(--color-background-54); }
 .fm1-preset { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .fm1-preset input { width: 80px; padding: 6px; border: 1px solid var(--color-foreground); color: var(--color-foreground); background: var(--color-menu); }
 .fm1-transfer-progress { width: 100%; accent-color: var(--color-foreground); }
-
 
 /* Public FM-1 compatibility reference: /fm1-support or /?view=fm1-support. */
 .fm1-support-page {
@@ -4624,3 +4517,20 @@ dialog.fm1-modal::backdrop { background: var(--color-background-54); }
 .hosted-parameter-heading output { font-variant-numeric: tabular-nums; }
 .hosted-parameter-control input[type='range'] { display: block; width: 100%; margin: 6px 0 0; accent-color: var(--color-foreground); }
 .hosted-parameter-error { display: block; font-size: 0.85em; }
+
+/* Teia supplies DSP widgets inside Spagbol's canonical frame and port rows. */
+.spagbol-canvas.teia-graph-canvas { --spagbol-bg: var(--color-background); --spagbol-foreground: var(--color-foreground); --spagbol-border: var(--color-foreground); --spagbol-surface: var(--color-background); --spagbol-selection: var(--color-selection); --spagbol-header: var(--color-node-title-background); --spagbol-header-text: var(--color-node-title-text); --spagbol-accent: var(--color-accent); --spagbol-font: var(--font-main); --spagbol-control: var(--color-control); }
+.teia-node-content { position: relative; }
+.teia-node-content:empty { display: none; }
+.teia-node-parameter { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; width: 100%; }
+.teia-node-parameter .port-name-label { flex: 1; }
+.teia-graph-canvas .spagbol-node-port-row:has(.teia-node-parameter) { min-width: max-content; }
+.teia-graph-canvas .spagbol-node-frame-body .teia-node-content-graphic-empty { display: none; }
+.teia-graph-canvas .spagbol-node-frame { min-width: 168px; }
+.teia-graph-canvas .spagbol-node-frame-auto-compact { min-width: 0; }
+.teia-node-unsupported { outline: 2px solid var(--color-error, #f66); }
+
+.teia-node-params .shader-params-columns { grid-column: 1 / -1; grid-row: 1; justify-self: end; margin-right: 0; }
+.teia-node-params .spagbol-node-port-row { grid-column: 1 !important; }
+.teia-node-params .teia-node-parameter { display: flex; align-items: center; gap: 8px; }
+.teia-node-params .shader-params-values { flex-shrink: 0; }

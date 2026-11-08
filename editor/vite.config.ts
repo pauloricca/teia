@@ -18,6 +18,7 @@ const AUDIO_ENGINE_ASSET_FILES = new Set([
 ]);
 
 export default defineConfig({
+  resolve: { dedupe: ['react', 'react-dom', '@xyflow/react'] },
   plugins: [
     react(),
     audioEngineAssetVersionPlugin(),
@@ -29,6 +30,7 @@ export default defineConfig({
     ...(patchStorageMode() === 'browser' ? [] : [localBufferStoragePlugin(), localPatchStoragePlugin()]),
   ],
   server: {
+    watch: process.env.CHOKIDAR_USEPOLLING === 'true' ? { usePolling: true, interval: 150 } : undefined,
     https: viteHttpsConfig(),
     headers: crossOriginIsolationHeaders(),
   },

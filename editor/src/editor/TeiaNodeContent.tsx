@@ -1,25 +1,13 @@
+import { SEQUENCER_INDEX_OUTPUT } from '../graph/nodeTypes';
+import { SpagbolNodeFrame, SpagbolNodePort, SpagbolControlNumber, portsFor, useSpagbol, type SpagbolNodeViewProps, type GraphNode } from "@pauloricca/spagbol";
+import { portName } from "../spagbol/patchCodec";
+import { SpagbolControlSlider, SpagbolControlButton, type SpagbolControlButtonMode } from '@pauloricca/spagbol';
+import '@pauloricca/spagbol/controls.css';
 import { HostedModeContext } from '../hosted/HostedModeContext';
 import { Fm1ModeContext } from './Fm1ModeContext';
 import { isFm1NodeImplemented } from '../audio/fm1Support';
-import { Handle, Position, useConnection, useReactFlow, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
-import {
-  memo,
-  useEffect,
-  useContext,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type DragEvent,
-  type KeyboardEvent,
-  type MouseEvent,
-  type PointerEvent,
-  type ReactNode,
-  type RefObject,
-  type SyntheticEvent,
-} from 'react';
+import { Handle as FlowHandle, useNodeId, Position, useConnection, useReactFlow, useUpdateNodeInternals } from '@xyflow/react';
+import { createContext, memo, useEffect, useContext, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject, type SyntheticEvent } from 'react';
 import {
   CUSTOM_WAVE_MODES,
   customWaveUsesSustainEnd,
@@ -29,31 +17,7 @@ import {
   normalizedCustomWaveValue,
   normalizeCustomWave,
 } from '../graph/customWave';
-import {
-  getNodeDefinition,
-  getNodeTypeLabel,
-  NODE_TYPE_LIST,
-  sequencerCellParamName,
-  sequencerGateParamName,
-  sequencerGatesForRow,
-  sequencerTriggerPositionParamName,
-  sequencerTriggersForRow,
-  sequencerUsesGateMode,
-  SEQUENCER_GATE_INITIALIZED_PARAM,
-  SEQUENCER_GATE_MODE_PARAM,
-  SEQUENCER_INDEX_OUTPUT,
-  ROLL_ROWS,
-  rollCellParamName,
-  rollGateParamName,
-  rollGateVelocityParamName,
-  rollGatesForRow,
-  rollShape,
-  sequencerOutputName,
-  sequencerShape,
-  sequencerStepVelocityParamName,
-  trimOverlappingSequencerGates,
-  SEQUENCER_MIN_VELOCITY,
-} from '../graph/nodeTypes';
+import { getNodeDefinition, sequencerCellParamName, sequencerGateParamName, sequencerGatesForRow, sequencerTriggerPositionParamName, sequencerTriggersForRow, sequencerUsesGateMode, SEQUENCER_GATE_INITIALIZED_PARAM, SEQUENCER_GATE_MODE_PARAM, rollCellParamName, rollGateParamName, rollGateVelocityParamName, rollGatesForRow, rollShape, sequencerOutputName, sequencerShape, sequencerStepVelocityParamName, trimOverlappingSequencerGates, SEQUENCER_MIN_VELOCITY } from '../graph/nodeTypes';
 import type { CustomWavePoint, CustomWaveSettings, NodeDefinition, NodeType, PatchNode } from '../graph/types';
 import { midiNoteLabel, normalisePitchClass, PITCH_CLASSES, QUANTISE_SCALES } from '../graph/musicScales';
 import {
@@ -63,7 +27,6 @@ import {
   runtimeContainerPortsHeight,
   runtimeContainerSize,
 } from '../graph/spread';
-import { formatNumericValue } from './numericDisplay';
 import {
   clampControlNodeSize,
   clampCustomWaveNodeSize,
@@ -97,7 +60,13 @@ const FFT_CAPTURE_SECONDS = 0.012;
 const FFT_ANALYSIS_MIN_FREQUENCY = 20;
 const FFT_ANALYSIS_MAX_FREQUENCY = 20000;
 
-export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selected, dragging }: NodeProps<ShaderFlowNode>) {
+const TeiaNodeModel = createContext<GraphNode | null>(null);
+export const TeiaNodeContent = memo(function TeiaNodeContent(props: { data: ShaderNodeData; shared: SpagbolNodeViewProps }) {
+  return <TeiaNodeModel.Provider value={props.shared.node}><TeiaNodeContentInner {...props} /></TeiaNodeModel.Provider>;
+});
+function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: SpagbolNodeViewProps }) {
+  const { selected } = shared;
+  const flowNodeId = useNodeId() ?? `node:${shared.node.id}`;
   const node = data.patchNode;
   const fm1Mode = useContext(Fm1ModeContext);
   const hostedMode = useContext(HostedModeContext);
@@ -192,24 +161,12 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
   const showTempoDisplay = node.type === 'Tempo';
   const showAudioOutputDisplay = node.type === 'AudioOut';
   const showAudioInputDisplay = node.type === 'AudioInput';
-  const showMidiNoteDisplay = node.type === 'MidiNote'
-    || node.type === 'MidiNoteOn'
-    || node.type === 'MidiNoteOff';
   const showCustomWaveEditor = node.type === 'CustomWave';
   const showKinkOscGraphic = node.type === 'KinkOsc';
   const showSampleUpload = node.type === 'SamplePlayer';
   const showSampleVideo = showSampleUpload && Boolean(node.sample?.url && isVideoSampleUrl(node.sample.url));
   const showBufferDisplay = node.type === 'Buffer';
   const showImageDisplay = node.type === 'Image';
-  const sliderUnitValue = showSliderDisplay
-    ? clamp(data.midiSliderValue ?? data.audioSliderValue ?? node.params.value ?? 0.5, 0, 1)
-    : 0;
-  const sliderMappedUnitValue = sliderUnitValue ** (2 ** -clamp(node.params.curve ?? 0, -8, 8));
-  const sliderAbsoluteValue = (node.params.min ?? 0)
-    + sliderMappedUnitValue * ((node.params.max ?? 1) - (node.params.min ?? 0));
-  const sliderTitleSuffix = showSliderDisplay && pointerOver
-    ? `: ${formatSliderReadoutValue(sliderAbsoluteValue)} (${formatUnitValue(sliderMappedUnitValue)})`
-    : undefined;
   const showTopGraphic = showMeterDisplay || showScopeDisplay || showFftDisplay || showSliderDisplay || showJoystickDisplay || showButtonDisplay || showKeysDisplay || showCustomWaveEditor || showKinkOscGraphic || showSampleUpload || showBufferDisplay || showImageDisplay || showRollDisplay || Boolean(groupUiPreview);
   const imageX = centeredCoordinateToUnit(data.audioImagePosition?.x ?? node.params.x ?? 0);
   const imageY = centeredCoordinateToUnit(data.audioImagePosition?.y ?? node.params.y ?? 0);
@@ -357,8 +314,6 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
         } : {}),
       } as CSSProperties)
     : undefined;
-  const dspErrors = data.dspErrors ?? [];
-  const hasDspErrors = dspErrors.length > 0;
   const previewAddsOutput = Boolean(
     previewOutputPort
     && definition
@@ -401,7 +356,6 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
   const outputLabelWidth = definition
     ? `${Math.max(0, ...definition.outputs.map((output) => output.name.length))}ch`
     : '0ch';
-  const inputStyle = { '--input-label-width': inputLabelWidth } as CSSProperties;
   const nodeStyle = {
     ...(nodeSizeStyle ?? {}),
     '--input-label-width': inputLabelWidth,
@@ -413,41 +367,6 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
     ...(groupUiPreview ? { '--group-ui-width': `${groupUiPreview.width}px` } : {}),
     ...(isRoutingNode ? { '--routing-color': routingNodeColor(node.params.number) } : {}),
   } as CSSProperties;
-  const className = [
-    'shader-node',
-    showMeterDisplay ? 'shader-node-meter' : '',
-    showScopeDisplay ? 'shader-node-scope' : '',
-    showFftDisplay ? 'shader-node-fft' : '',
-    showSliderDisplay ? 'shader-node-slider' : '',
-    showJoystickDisplay ? 'shader-node-joystick' : '',
-    showButtonDisplay ? 'shader-node-button' : '',
-    showKeysDisplay ? 'shader-node-keys' : '',
-    showAccumulatorDisplay ? 'shader-node-accumulator' : '',
-    showQuantiseDisplay ? 'shader-node-quantise' : '',
-    showSequencerDisplay ? 'shader-node-sequencer' : '',
-    showRollDisplay ? 'shader-node-roll' : '',
-    showAudioOutputDisplay ? 'shader-node-audio-out' : '',
-    showSampleUpload ? 'shader-node-sampleplayer' : '',
-    showBufferDisplay ? 'shader-node-buffer' : '',
-    showImageDisplay ? 'shader-node-image' : '',
-    showAudioInputDisplay ? 'shader-node-audio-input' : '',
-    showMidiNoteDisplay ? 'shader-node-midi-note' : '',
-    isRuntimeContainer ? 'shader-node-spread' : '',
-    showCustomWaveEditor ? 'shader-node-custom-wave' : '',
-    isExpression ? 'shader-node-expression' : '',
-    isGroup ? 'shader-node-group' : '',
-    hasDspErrors ? 'shader-node-dsp-error' : '',
-    fm1Unsupported ? 'shader-node-fm1-unsupported' : '',
-    selected ? 'shader-node-selected' : '',
-    dragging ? 'shader-node-dragging' : '',
-    compactPorts ? 'shader-node-compact' : '',
-    isAreaCollapsedPresentation ? 'shader-node-area-hidden' : '',
-    isAreaUiCollapsedPresentation ? 'shader-node-area-ui-collapsed' : '',
-    isCanvasLocked ? 'shader-node-canvas-locked' : '',
-    node.enabled === false ? 'shader-node-disabled' : '',
-    data.onHeaderDoubleClick ? 'shader-node-resettable-header' : '',
-    usesAutoInitialWidth ? 'shader-node-auto-width' : '',
-  ].filter(Boolean).join(' ');
 
   useLayoutEffect(() => {
     if (!usesAutoInitialWidth) {
@@ -473,7 +392,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
   }, [showSliderDisplay, usesAutoInitialWidth]);
 
   useLayoutEffect(() => {
-    const animationFrame = requestAnimationFrame(() => updateNodeInternals(node.id));
+    const animationFrame = requestAnimationFrame(() => updateNodeInternals(flowNodeId));
     return () => cancelAnimationFrame(animationFrame);
   }, [
     compactPorts,
@@ -752,11 +671,9 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    const sequencerBody = event.currentTarget.closest('.shader-node-sequencer')?.querySelector<HTMLElement>('.shader-node-body-sequencer');
-    const sequencerInputs = sequencerBody?.querySelector<HTMLElement>('.shader-inputs');
-    const sequencerOutputs = sequencerBody?.querySelector<HTMLElement>('.shader-outputs');
-    const hasVisibleSequencerInputs = sequencerInputs?.querySelector('.shader-port') !== null;
-    const hasVisibleSequencerOutputs = sequencerOutputs?.querySelector('.shader-port') !== null;
+    const sequencerBody = event.currentTarget.closest('.spagbol-node-frame');
+    const hasVisibleSequencerInputs = !!sequencerBody?.querySelector('.spagbol-node-port-row-input');
+    const hasVisibleSequencerOutputs = !!sequencerBody?.querySelector('.spagbol-node-port-row-output');
     const coordinateScale = Math.max(0.0001, (reactFlow.getZoom() || 1) * (node.scale ?? 1));
     const sequencerMinWidth = hasVisibleSequencerInputs && hasVisibleSequencerOutputs
       ? Math.max(240, sequencerLabelColumnWidth + (sequencer?.steps ?? 1) * SEQUENCER_MIN_CELL_SIZE)
@@ -1078,7 +995,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
       <div
         ref={nodeElementRef}
         className={[
-          'routing-node-marker',
+          'routing-node-marker spagbol-canvas-drag-handle',
           fm1Unsupported ? 'shader-node-fm1-unsupported' : '',
           `routing-node-marker-${isSend ? 'send' : 'receive'}`,
           connectionInProgress ? 'routing-node-drop-active' : '',
@@ -1101,207 +1018,609 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
     );
   }
 
-  return (
-    <div
-      ref={nodeElementRef}
-      className={className}
-      style={nodeStyle}
-      onPointerEnter={() => setPointerOver(true)}
-      onPointerLeave={() => setPointerOver(false)}
-      onDragOver={handleSampleDragOver}
-      onDrop={handleSampleDrop}
-    >
-      <div
-        className="shader-node-title"
-        title={data.onHeaderDoubleClick ? 'Double-click to reset this control to the subpatch defaults' : undefined}
-        onPointerDown={data.onHeaderDoubleClick ? (event) => event.stopPropagation() : undefined}
-        onMouseDown={data.onHeaderDoubleClick ? (event) => event.stopPropagation() : undefined}
-        onClick={data.onHeaderDoubleClick ? (event) => event.stopPropagation() : undefined}
-        onDoubleClickCapture={data.onHeaderDoubleClick ? (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          data.onHeaderDoubleClick?.(node.id);
-        } : undefined}
-      >
-        {isRoutingNode ? <Handle id={node.type === 'Send' ? 'virtual:send' : 'virtual:receive'} type={node.type === 'Send' ? 'source' : 'target'} position={node.type === 'Send' ? Position.Right : Position.Left} isConnectable={false} className="virtual-route-handle" /> : null}
-        {showHeaderInputPort && headerInputPort ? (
-          <Handle
-            id={`in:${headerInputPort}`}
-            type="target"
-            position={Position.Left}
-            className={[
-              'shader-handle shader-handle-input shader-handle-input-title',
-              selectedLinkInputs.includes(headerInputPort) ? 'shader-handle-selected-link' : '',
-            ].filter(Boolean).join(' ')}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              data.onPortDoubleClick(node.id, 'input', headerInputPort);
-            }}
-          />
-        ) : null}
-        <div className="node-title-control-shell">
-          {compactPorts && !revealCompactPorts ? (
-            <CollapsedNodeLabel
-              nodeType={node.type}
-              customLabel={node.customLabel}
-              displaySuffix={sliderTitleSuffix}
-              onChange={(label) => data.onCustomLabelChange?.(node.id, label)}
-              onSelect={(additive) => data.onTitleSelect?.(node.id, additive)}
-            />
-          ) : (
-            <NodeTypePicker
-              nodeType={node.type}
-              displayLabel={isGroup ? node.subpatchName ?? node.id : undefined}
-              closedSuffix={sliderTitleSuffix}
-              isEditingSubpatch={data.isEditingSubpatch === true}
-              open={data.isTypePickerOpen}
-              onOpen={() => data.onTypeEditStart(node.id)}
-              onClose={data.onTypeEditEnd}
-              onCancel={() => data.onTypeEditCancel(node.id)}
-              onChange={(type) => data.onTypeChange(node.id, type)}
-              onConvertToArea={() => data.onConvertToArea(node.id)}
-              onCustomLabelCommit={isGroup ? (label) => data.onSubpatchNameChange?.(node.id, label) : undefined}
-            />
-          )}
-        </div>
-        {!forceCompactPorts && !isAreaUiCollapsedPresentation ? (
-          <button
-            className="node-enabled-toggle nodrag nopan"
-            type="button"
-            aria-label={node.enabled === false ? 'Enable node' : 'Disable node'}
-            title={node.enabled === false ? 'Enable node' : 'Disable node'}
-            aria-pressed={node.enabled !== false}
-            onPointerDown={(event) => event.stopPropagation()}
-            onDoubleClick={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              data.onEnabledChange?.(node.id, node.enabled === false);
-            }}
-          >
-            <span className="node-enabled-icon" aria-hidden="true" />
-          </button>
-        ) : null}
-        {!forceCompactPorts && !isAreaUiCollapsedPresentation ? (
-          <button
-            className="node-compact-toggle nodrag nopan"
-            type="button"
-            aria-label={compactPorts ? 'Expand ports' : 'Compact ports'}
-            title={compactPorts ? 'Expand ports' : 'Compact ports'}
-            aria-pressed={compactPorts}
-            onPointerDown={(event) => event.stopPropagation()}
-            onDoubleClick={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              data.onCompactToggle(node.id, !compactPorts);
-            }}
-          >
-            <span
-              className={[
-                'node-compact-icon',
-                compactPorts ? 'node-compact-icon-compact' : 'node-compact-icon-expanded',
-              ].join(' ')}
-              aria-hidden="true"
-            />
-          </button>
-        ) : null}
-        {hostedUnsupported ? <span className="node-dsp-error-marker" title="This node is outside the host's advertised runtime capabilities; the document remains editable." aria-label="Unsupported by host">!</span> : null}
-        {fm1Unsupported ? <span className="node-dsp-error-marker" title="This node is not implemented or verified on FM1" aria-label="Not supported on FM1">!</span> : null}
-        {hasDspErrors ? (
-          <span
-            className="node-dsp-error-marker"
-            title={dspErrors.join('\n')}
-            aria-label={`${dspErrors.length} DSP error${dspErrors.length === 1 ? '' : 's'}`}
-          >
-            !
-          </span>
-        ) : null}
-        {showHeaderOutputPort && headerOutputPort ? (
-          <Handle
-            id={`out:${headerOutputPort}`}
-            type="source"
-            position={Position.Right}
-            className={[
-              'shader-handle shader-handle-output shader-handle-output-title',
-              selectedLinkOutputs.includes(headerOutputPort) ? 'shader-handle-selected-link' : '',
-            ].filter(Boolean).join(' ')}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              data.onPortDoubleClick(node.id, 'output', headerOutputPort);
-            }}
-          />
-        ) : null}
-      </div>
-      {definition ? (
-        (() => {
-          const inputPorts = [
-            ...definition.inputs
-              .filter((input) => input.name !== headerInputPort)
-              .map((input) => ({ ...input, preview: false })),
-            ...(previewInputPort && !definition.inputs.some((input) => input.name === previewInputPort)
-              ? [{ name: previewInputPort, preview: true }]
-              : []),
-          ];
-          const outputPorts = [
-            ...definition.outputs.map((output) => ({ ...output, preview: false })),
-            ...(previewOutputPort && !definition.outputs.some((output) => output.name === previewOutputPort)
-              ? [{ name: previewOutputPort, preview: true }]
-              : []),
-          ];
-          const visibleInputPorts = inputPorts.filter((input) => (
-            input.preview || showAllPorts || connectedInputPorts.has(input.name)
-          ));
-          const visibleOutputPorts = outputPorts.filter((output) => (
-            node.type === 'Params' || output.preview || showAllPorts || connectedOutputPorts.has(output.name)
-          ));
-          const normalOutputPorts = showSequencerDisplay
-            ? visibleOutputPorts.filter((output) => output.name === SEQUENCER_INDEX_OUTPUT)
-            : visibleOutputPorts.filter((output) => output.name !== headerOutputPort);
-          const newPortSide = node.type === 'Outs' ? 'input' : 'output';
-          const newPortLabel = node.type === 'Outs' ? 'new output' : node.type === 'Params' ? 'new param' : 'new input';
-          const hasNewPortPlaceholder = node.type === 'Ins' || node.type === 'Params' || node.type === 'Outs';
-          const showBody = !compactPorts
-            || isExpression
-            || showSampleUpload
-            || showBufferDisplay
-            || showImageDisplay
-            || showAudioInputDisplay
-            || showMidiNoteDisplay
-            || showTempoDisplay
-            || showSequencerDisplay
-            || showRollDisplay
-            || showCustomWaveEditor
-            || showSliderDisplay
-            || showJoystickDisplay
-            || showButtonDisplay
-            || showKeysDisplay
-            || showAccumulatorDisplay
-            || showAudioOutputDisplay
-            || visibleInputPorts.length > 0
-            || normalOutputPorts.length > 0
-            || hasNewPortPlaceholder
-            || showMeterDisplay
-            || showScopeDisplay
-            || showFftDisplay
-            || isRuntimeContainer;
-
-          if (!showBody) return null;
-
-          return (
-        <div className={[
-          'shader-node-body',
-          isExpression ? 'shader-node-body-expression' : '',
-          showAccumulatorDisplay ? 'shader-node-body-accumulator' : '',
-          showSequencerDisplay ? 'shader-node-body-sequencer' : '',
-          showRollDisplay ? 'shader-node-body-roll' : '',
-          showAudioOutputDisplay ? 'shader-node-body-audio-out' : '',
-          showAudioInputDisplay ? 'shader-node-body-audio-input' : '',
-          showMidiNoteDisplay ? 'shader-node-body-midi-note' : '',
-          isRuntimeContainer ? 'shader-node-body-spread' : '',
-          showTopGraphic ? 'shader-node-body-graphic' : '',
-          !showSequencerDisplay && normalOutputPorts.length === 0 ? 'shader-node-body-no-outputs' : '',
-        ].filter(Boolean).join(' ')}>
+  if (!definition) return null;
+  function portContent(port: import('@pauloricca/spagbol').PortDefinition) {
+    const name = portName(shared.node, port.id, port.direction);
+    if (port.direction === 'input') {
+      const input = { ...definition!.inputs.find(input => input.name === name)!, preview: false };
+      return <div className="teia-node-parameter">              {isSelector && isSelectorValuePort(input.name) && !input.preview ? (
+                <button
+                  className={[
+                    'selector-index-button nodrag nopan',
+                    selectorSelectedIndex === Number(input.name) ? 'selector-index-button-active' : '',
+                  ].filter(Boolean).join(' ')}
+                  type="button"
+                  title={`Select input ${input.name}`}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    data.onParamChange(node.id, 'select', Number(input.name));
+                  }}
+                >
+                  {input.name}
+                </button>
+              ) : node.type === 'Reverb' && input.name === 'mode' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="Reverb mode"
+                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, 'mode', Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">original</option>
+                    <option value="1">dattorro plate</option>
+                    <option value="2">feedback delay network</option>
+                  </select>
+                </>
+              ) : showKeysDisplay && input.name === 'mode' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="Keys mode"
+                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, 'mode', Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">gate</option>
+                    <option value="1">hold</option>
+                  </select>
+                </>
+              ) : showCustomWaveEditor && input.name === 'mode' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="Custom Wave mode"
+                    value={customWave?.mode ?? CUSTOM_WAVE_MODES[0].value}
+                    onChange={(event) => {
+                      if (customWave) commitCustomWave({ ...customWave, mode: event.currentTarget.value as CustomWaveSettings['mode'] }, `custom-wave-mode:${node.id}`);
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    {CUSTOM_WAVE_MODES.map((mode) => (
+                      <option key={mode.value} value={mode.value}>{mode.label}</option>
+                    ))}
+                  </select>
+                </>
+              ) : showSliderDisplay && input.name === 'direction' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    value={String(Math.round(node.params.direction ?? input.defaultValue ?? 0))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">horizontal</option>
+                    <option value="1">vertical</option>
+                  </select>
+                </>
+              ) : showSequencerDisplay && input.name === 'mode' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="Sequencer mode"
+                    value={sequencerUsesGateMode(node.params) ? '1' : '0'}
+                    onChange={(event) => {
+                      const gateMode = Number(event.currentTarget.value) >= 0.5;
+                      const values: Record<string, number> = {
+                        [SEQUENCER_GATE_MODE_PARAM]: gateMode ? 1 : 0,
+                      };
+                      if (gateMode) {
+                        values[SEQUENCER_GATE_INITIALIZED_PARAM] = 1;
+                        for (let rowIndex = 0; rowIndex < (sequencer?.rows ?? 0); rowIndex += 1) {
+                          const triggers = sequencerTriggersForRow(node.params, rowIndex, sequencer?.steps ?? 0);
+                          for (let stepIndex = 0; stepIndex < (sequencer?.steps ?? 0); stepIndex += 1) {
+                            values[sequencerGateParamName(rowIndex, stepIndex, 'active')] = 0;
+                          }
+                          const convertedGates = trimOverlappingSequencerGates(triggers.map((trigger, slot) => {
+                            const start = Math.min(sequencer?.steps ?? 0, trigger.position);
+                            return { slot, start, end: Math.min(sequencer?.steps ?? 0, start + 1), velocity: trigger.velocity };
+                          }));
+                          for (const gate of convertedGates) {
+                            const { slot, start, end } = gate;
+                            values[sequencerGateParamName(rowIndex, slot, 'active')] = 1;
+                            values[sequencerGateParamName(rowIndex, slot, 'start')] = start;
+                            values[sequencerGateParamName(rowIndex, slot, 'end')] = end;
+                            values[sequencerStepVelocityParamName(rowIndex, slot)] = gate.velocity;
+                          }
+                        }
+                      } else {
+                        for (let rowIndex = 0; rowIndex < (sequencer?.rows ?? 0); rowIndex += 1) {
+                          const gates = sequencerGatesForRow(node.params, rowIndex, sequencer?.steps ?? 0);
+                          for (let stepIndex = 0; stepIndex < (sequencer?.steps ?? 0); stepIndex += 1) {
+                            values[sequencerCellParamName(rowIndex, stepIndex)] = 0;
+                            values[sequencerGateParamName(rowIndex, stepIndex, 'active')] = 0;
+                          }
+                          for (const [slot, gate] of gates.entries()) {
+                            const position = Math.max(0, Math.min((sequencer?.steps ?? 1) - SEQUENCER_TRIGGER_GRAB_FRACTION, gate.start));
+                            values[sequencerCellParamName(rowIndex, slot)] = 1;
+                            values[sequencerTriggerPositionParamName(rowIndex, slot)] = position;
+                          }
+                        }
+                      }
+                      data.onParamsChange(node.id, values);
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">trigger</option>
+                    <option value="1">gate</option>
+                  </select>
+                </>
+              ) : (showMeterDisplay || showScopeDisplay) && input.name === 'mode' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label={`${showMeterDisplay ? 'Meter' : 'Scope'} mode`}
+                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">unipolar</option>
+                    <option value="1">bipolar</option>
+                  </select>
+                </>
+              ) : showScopeDisplay && input.name === 'reset' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="Scope reset"
+                    value={String(Math.round(node.params.reset ?? input.defaultValue ?? 1))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">none</option>
+                    <option value="1">zero-crossing</option>
+                  </select>
+                </>
+              ) : showSampleUpload && input.name === 'mode' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">one-shot</option>
+                    <option value="1">loop</option>
+                    <option value="2">ping-pong</option>
+                  </select>
+                </>
+              ) : showBufferDisplay && input.name === 'on reset' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="Buffer on reset"
+                    value={String(clamp(Math.round(node.params['on reset'] ?? input.defaultValue ?? 0), 0, 1))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">clear</option>
+                    <option value="1">preserve</option>
+                  </select>
+                </>
+              ) : showTempoDisplay && input.name === 'source' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="Tempo source"
+                    value={String(clamp(Math.round(node.params.source ?? input.defaultValue ?? 0), 0, 1))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">internal</option>
+                    <option value="1">midi</option>
+                  </select>
+                </>
+              ) : showTempoDisplay && input.name === 'midiSource' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="MIDI clock source"
+                    value={String(clamp(Math.round(node.params.midiSource ?? input.defaultValue ?? 0), 0, Math.max(0, data.midiInput?.devices.length ?? 0)))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">any midi</option>
+                    {(data.midiInput?.devices ?? []).map((device, index) => (
+                      <option key={device.id || `${device.label}-${index}`} value={index + 1}>
+                        {device.label || `MIDI ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : showButtonDisplay && input.name === 'mode' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">toggle</option>
+                    <option value="1">trigger</option>
+                    <option value="2">temporary</option>
+                  </select>
+                </>
+              ) : showAccumulatorDisplay && input.name === 'mode' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label="Accumulator mode"
+                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="0">trigger</option>
+                    <option value="1">continuous</option>
+                  </select>
+                </>
+              ) : (showQuantiseDisplay || showRollDisplay) && input.name === 'scale' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label={`${node.type} scale`}
+                    value={String(clamp(Math.round(node.params.scale ?? input.defaultValue ?? 0), 0, QUANTISE_SCALES.length - 1))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    {QUANTISE_SCALES.map((scale, index) => (
+                      <option key={scale.label} value={index}>{scale.label}</option>
+                    ))}
+                  </select>
+                </>
+              ) : showQuantiseDisplay && input.name === 'root' && !input.preview ? (
+                <>
+                  <PortNameLabel
+                    name={port.label}
+                    editable={false}
+                    draggable={false}
+                    preview={false}
+                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                    activeDragTarget={false}
+                    activeDragSource={false}
+                    onChange={() => undefined}
+                  />
+                  <select
+                    className="shader-port-select nodrag nopan"
+                    aria-label={`${node.type} root`}
+                    value={String(normalisePitchClass(node.params.root ?? input.defaultValue ?? 0))}
+                    onChange={(event) => {
+                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
+                      event.currentTarget.blur();
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    {PITCH_CLASSES.map((pitchClass, note) => (
+                      <option key={pitchClass} value={note}>{pitchClass}</option>
+                    ))}
+                  </select>
+                </>
+              ) : showRollDisplay && input.name === 'middle note' && !input.preview ? (
+                <NoteRangeSelect
+                  label={input.name}
+                  value={node.params[input.name] ?? input.defaultValue ?? 60}
+                  min={0}
+                  max={127}
+                  onChange={(value) => data.onParamChange(node.id, input.name, value)}
+                />
+              ) : (
+                <PortNameLabel
+                  name={port.label}
+                  editable={canRenameInputs && !input.preview}
+                  draggable={canRenameInputs && !input.preview}
+                  preview={input.preview}
+                  selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
+                  activeDragTarget={dragTarget?.side === 'input' && dragTarget.port === input.name}
+                  activeDragSource={dragSource?.side === 'input' && dragSource.port === input.name}
+                  onPointerDown={(event) => {
+                    if (input.preview) return;
+                    if (!canRenameInputs) return;
+                    handlePortPointerDown(event, 'input', input.name);
+                  }}
+                  onChange={(nextName) => data.onPortNameChange(node.id, 'input', input.name, nextName)}
+                />
+              )}
+              {!input.preview && node.type !== 'Outs' && input.valueEditor !== false && input.defaultValue !== undefined && !(showKeysDisplay && input.name === 'mode') && !(showCustomWaveEditor && input.name === 'mode') && !(showSliderDisplay && input.name === 'direction') && !(showSequencerDisplay && input.name === 'mode') && !(showButtonDisplay && input.name === 'mode') && !(showAccumulatorDisplay && input.name === 'mode') && !(showQuantiseDisplay && (input.name === 'scale' || input.name === 'root')) && !(showSampleUpload && input.name === 'mode') && !(showTempoDisplay && (input.name === 'source' || input.name === 'midiSource')) ? (
+                <NumericScrubber
+                  value={node.params[input.name] ?? input.defaultValue ?? 0}
+                  min={input.min}
+                  max={input.max}
+                  integer={input.integer}
+                  step={input.step}
+                  replacedBySetLink={setLinkInputPorts.has(input.name)}
+                  onChange={(value) => data.onParamChange(node.id, input.name, value)}
+                  onClear={isSelector && isSelectorValuePort(input.name) ? () => data.onSelectorInputClear?.(node.id, input.name) : undefined}
+                  midiLearnEvent={canLearnMidiCc(node.type, input.name) ? data.midiInput?.lastControlChange : undefined}
+                  onEditStart={canLearnMidiCc(node.type, input.name) ? () => {
+                    void data.onMidiInputRefresh?.();
+                  } : undefined}
+                  onMidiLearn={canLearnMidiCc(node.type, input.name) ? (event) => {
+                    data.onParamChange(node.id, input.name, event.cc);
+                    if (node.type === 'Slider' || node.type === 'Button') {
+                      data.onParamChange(node.id, 'midiChannel', event.channel);
+                    } else if (node.type === 'Joystick') {
+                      data.onParamChange(node.id, input.name === 'xMidiCc' ? 'xMidiChannel' : 'yMidiChannel', event.channel);
+                    } else if (node.type === 'MidiCc') {
+                      data.onParamChange(node.id, 'channel', event.channel);
+                    }
+                  } : undefined}
+                />
+              ) : null}</div>;
+    }
+    const output = { ...definition!.outputs.find(output => output.name === name)!, preview: false };
+    return <div className="teia-node-parameter">                <PortNameLabel
+                name={port.label}
+                editable={canRenameOutputs && !output.preview}
+                draggable={canRenameOutputs && !output.preview}
+                  preview={output.preview}
+                  selected={data.selectedPort?.side === 'output' && data.selectedPort.name === output.name}
+                  activeDragTarget={dragTarget?.side === 'output' && dragTarget.port === output.name}
+                  activeDragSource={dragSource?.side === 'output' && dragSource.port === output.name}
+                  onPointerDown={(event) => {
+                    if (output.preview) return;
+                    if (!canRenameOutputs) return;
+                    handlePortPointerDown(event, 'output', output.name);
+                  }}
+                  onChange={(nextName) => data.onPortNameChange(node.id, 'output', output.name, nextName)}
+                />
+                {!output.preview && (node.type === 'Ins' || node.type === 'Params') && output.valueEditor !== false ? (
+                  <div className={node.type === 'Params' ? 'shader-params-values' : undefined}>
+                    <NumericScrubber
+                      value={node.params[output.name] ?? output.defaultValue ?? 0}
+                      min={node.type === 'Ins' ? output.min : undefined}
+                      max={node.type === 'Ins' ? output.max : undefined}
+                      integer={output.integer}
+                      onChange={(value) => data.onParamChange(node.id, output.name, value)}
+                    />
+                    {node.type === 'Params' ? (['min', 'max'] as const).map((bound) => (
+                      <NumericScrubber
+                        key={bound}
+                        value={output[bound] ?? (bound === 'min' ? 0 : 1)}
+                        onChange={(value) => data.onParamRangeChange?.(node.id, output.name, bound, value)}
+                      />
+                    )) : null}
+                  </div>
+                ) : null}
+</div>;
+  }
+  const frameStyle: CSSProperties = { ...nodeStyle, ...(showResizableDisplay && (!usesAutoInitialWidth || (showSliderDisplay && autoDisplayWidth !== null)) ? { width: displaySize.width } : {}) };
+  const resizeControls = <>          {showResizableDisplay && !isCanvasLocked && !isAreaUiCollapsedPresentation ? (
+            <>
+              <span
+                className={[
+                  'audio-node-scope-resize-handle audio-node-scope-resize-handle-left nodrag nopan',
+                  scopeResizeCorner === 'bottom-left' ? 'audio-node-scope-resize-handle-active' : '',
+                ].filter(Boolean).join(' ')}
+                title={showSequencerDisplay ? 'Resize sequencer' : showCustomWaveEditor ? 'Resize custom wave' : showSampleUpload ? 'Resize sample waveform' : showBufferDisplay ? 'Resize buffer waveform' : showImageDisplay ? 'Resize image' : showKeysDisplay ? 'Resize keys' : showSliderDisplay ? 'Resize slider' : showJoystickDisplay ? 'Resize joystick' : showButtonDisplay ? 'Resize button' : showMeterDisplay ? 'Resize meter' : showFftDisplay ? 'Resize FFT' : 'Resize scope'}
+                onPointerDown={(event) => handleScopeResizePointerDown(event, 'bottom-left')}
+                onClick={handleScopeResizeClick}
+                onDoubleClick={(event) => event.stopPropagation()}
+              />
+              <span
+                className={[
+                  'audio-node-scope-resize-handle audio-node-scope-resize-handle-right nodrag nopan',
+                  scopeResizeCorner === 'bottom-right' ? 'audio-node-scope-resize-handle-active' : '',
+                ].filter(Boolean).join(' ')}
+                title={showSequencerDisplay ? 'Resize sequencer' : showCustomWaveEditor ? 'Resize custom wave' : showSampleUpload ? 'Resize sample waveform' : showBufferDisplay ? 'Resize buffer waveform' : showImageDisplay ? 'Resize image' : showKeysDisplay ? 'Resize keys' : showSliderDisplay ? 'Resize slider' : showJoystickDisplay ? 'Resize joystick' : showButtonDisplay ? 'Resize button' : showMeterDisplay ? 'Resize meter' : showFftDisplay ? 'Resize FFT' : 'Resize scope'}
+                onPointerDown={(event) => handleScopeResizePointerDown(event, 'bottom-right')}
+                onClick={handleScopeResizeClick}
+                onDoubleClick={(event) => event.stopPropagation()}
+              />
+            </>
+          ) : null}</>;
+  return <SpagbolNodeFrame {...shared} forceCompact={forceCompactPorts} portsHeader={node.type === 'Params' ? <div className="shader-params-columns" aria-hidden="true"><span>default</span><span>min</span><span>max</span></div> : undefined} rootRef={nodeElementRef} headerOutput={node.type !== "Params" && !showSequencerDisplay} portVisible={port => !showSequencerDisplay || port.direction !== "output" || portName(shared.node, port.id, "output") === SEQUENCER_INDEX_OUTPUT} style={frameStyle} overlay={resizeControls} className={[node.type === 'Params' ? 'teia-node-params' : '', fm1Unsupported || hostedUnsupported ? 'teia-node-unsupported' : ''].filter(Boolean).join(' ')} renderPortContent={portContent} portExtras={isSelector ? <button type="button" className="selector-add-input-button nodrag nopan" onClick={() => data.onSelectorInputAdd?.(node.id)}>+</button> : null}>
+    <div className="teia-node-content" onPointerEnter={() => setPointerOver(true)} onPointerLeave={() => setPointerOver(false)} onDragOver={handleSampleDragOver} onDrop={handleSampleDrop}>
+          {isRoutingNode ? <Handle id={node.type === 'Send' ? 'virtual:send' : 'virtual:receive'} type={node.type === 'Send' ? 'source' : 'target'} position={node.type === 'Send' ? Position.Right : Position.Left} isConnectable={false} /> : null}
           {isExpression ? (
             <input
               ref={expressionInputRef}
@@ -1330,25 +1649,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
               onPointerDown={(event) => event.stopPropagation()}
             />
           ) : null}
-          <div className={showTopGraphic ? 'shader-node-content-graphic' : 'shader-node-content-graphic-empty'}>
-          {groupUiPreview ? (
-            <div
-              className="group-ui-preview nodrag nopan"
-              style={{ width: groupUiPreview.width, height: groupUiPreview.height }}
-              onDoubleClick={(event) => event.stopPropagation()}
-            >
-              {groupUiPreview.nodes.map((previewNode) => (
-                <div
-                  key={previewNode.id}
-                  className="group-ui-preview-node"
-                  style={{ left: previewNode.position.x, top: previewNode.position.y }}
-                >
-                  <ShaderNode {...({ data: previewNode.data, selected: false, dragging: false } as NodeProps<ShaderFlowNode>)} />
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {isRuntimeContainer ? <div className="spread-node-fill" aria-hidden="true" /> : null}
+          <div className={showTopGraphic ? 'teia-node-content-graphic' : 'teia-node-content-graphic-empty'}>
           {showSampleUpload ? (
             <SampleWaveformDisplay
               sampleUrl={node.sample?.url}
@@ -1452,7 +1753,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
             />
           ) : null}
           {showSliderDisplay ? (
-            <SliderDisplay
+            <SpagbolControlSlider
               value={node.params.value ?? 0.5}
               displayValue={data.midiSliderValue ?? data.audioSliderValue}
               direction={Math.round(node.params.direction ?? 0) === 1 ? 'vertical' : 'horizontal'}
@@ -1468,7 +1769,7 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
             />
           ) : null}
           {showButtonDisplay ? (
-            <ButtonDisplay
+            <SpagbolControlButton
               mode={buttonModeFromValue(node.params.mode ?? 0)}
               pressed={data.midiButtonPressed ?? node.params.pressed ?? 0}
               onPressedChange={(value) => data.onParamChange(node.id, 'pressed', value)}
@@ -1643,733 +1944,12 @@ export const ShaderNode = memo(function ShaderNode({ id: flowNodeId, data, selec
               <AudioOutputMeterRow label="R" level={outputMeterRight} />
             </div>
           ) : null}
-          <div className={[
-            showTopGraphic ? 'shader-node-content-ports' : 'shader-node-content-ports-empty',
-            normalOutputPorts.length === 0 ? 'shader-node-content-ports-no-outputs' : '',
-          ].filter(Boolean).join(' ')}>
-          <div className="shader-ports shader-inputs" style={inputStyle}>
-            {visibleInputPorts.map((input) => (
-            <div
-              className={[
-                'shader-port shader-port-input',
-                node.type === 'Reverb' && input.name === 'mode' ? 'shader-port-reverb-mode' : '',
-                input.preview ? 'shader-port-preview' : '',
-              ].filter(Boolean).join(' ')}
-              key={`${input.preview ? 'preview' : 'port'}:${input.name}`}
-              ref={(element) => {
-                inputPortRowsRef.current[input.name] = element;
-              }}
-              onDoubleClick={(event) => {
-                if (input.preview) return;
-                if (input.connectable === false) return;
-                event.stopPropagation();
-                data.onPortDoubleClick(node.id, 'input', input.name);
-              }}
-            >
-              {input.connectable !== false ? (
-                <Handle
-                  id={`in:${input.name}`}
-                  type="target"
-                  position={Position.Left}
-                  className={[
-                    'shader-handle shader-handle-input',
-                    selectedLinkInputs.includes(input.name) ? 'shader-handle-selected-link' : '',
-                  ].filter(Boolean).join(' ')}
-                  onDoubleClick={(event) => {
-                    if (input.preview) return;
-                    event.stopPropagation();
-                    data.onPortDoubleClick(node.id, 'input', input.name);
-                  }}
-                />
-              ) : null}
-              {isSelector && isSelectorValuePort(input.name) && !input.preview ? (
-                <button
-                  className={[
-                    'selector-index-button nodrag nopan',
-                    selectorSelectedIndex === Number(input.name) ? 'selector-index-button-active' : '',
-                  ].filter(Boolean).join(' ')}
-                  type="button"
-                  title={`Select input ${input.name}`}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    data.onParamChange(node.id, 'select', Number(input.name));
-                  }}
-                >
-                  {input.name}
-                </button>
-              ) : node.type === 'Reverb' && input.name === 'mode' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label="Reverb mode"
-                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, 'mode', Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">original</option>
-                    <option value="1">dattorro plate</option>
-                    <option value="2">feedback delay network</option>
-                  </select>
-                </>
-              ) : showKeysDisplay && input.name === 'mode' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label="Keys mode"
-                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, 'mode', Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">gate</option>
-                    <option value="1">hold</option>
-                  </select>
-                </>
-              ) : showCustomWaveEditor && input.name === 'mode' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label="Custom Wave mode"
-                    value={customWave?.mode ?? CUSTOM_WAVE_MODES[0].value}
-                    onChange={(event) => {
-                      if (customWave) commitCustomWave({ ...customWave, mode: event.currentTarget.value as CustomWaveSettings['mode'] }, `custom-wave-mode:${node.id}`);
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    {CUSTOM_WAVE_MODES.map((mode) => (
-                      <option key={mode.value} value={mode.value}>{mode.label}</option>
-                    ))}
-                  </select>
-                </>
-              ) : showSliderDisplay && input.name === 'direction' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    value={String(Math.round(node.params.direction ?? input.defaultValue ?? 0))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">horizontal</option>
-                    <option value="1">vertical</option>
-                  </select>
-                </>
-              ) : showSequencerDisplay && input.name === 'mode' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label="Sequencer mode"
-                    value={sequencerUsesGateMode(node.params) ? '1' : '0'}
-                    onChange={(event) => {
-                      const gateMode = Number(event.currentTarget.value) >= 0.5;
-                      const values: Record<string, number> = {
-                        [SEQUENCER_GATE_MODE_PARAM]: gateMode ? 1 : 0,
-                      };
-                      if (gateMode) {
-                        values[SEQUENCER_GATE_INITIALIZED_PARAM] = 1;
-                        for (let rowIndex = 0; rowIndex < (sequencer?.rows ?? 0); rowIndex += 1) {
-                          const triggers = sequencerTriggersForRow(node.params, rowIndex, sequencer?.steps ?? 0);
-                          for (let stepIndex = 0; stepIndex < (sequencer?.steps ?? 0); stepIndex += 1) {
-                            values[sequencerGateParamName(rowIndex, stepIndex, 'active')] = 0;
-                          }
-                          const convertedGates = trimOverlappingSequencerGates(triggers.map((trigger, slot) => {
-                            const start = Math.min(sequencer?.steps ?? 0, trigger.position);
-                            return { slot, start, end: Math.min(sequencer?.steps ?? 0, start + 1), velocity: trigger.velocity };
-                          }));
-                          for (const gate of convertedGates) {
-                            const { slot, start, end } = gate;
-                            values[sequencerGateParamName(rowIndex, slot, 'active')] = 1;
-                            values[sequencerGateParamName(rowIndex, slot, 'start')] = start;
-                            values[sequencerGateParamName(rowIndex, slot, 'end')] = end;
-                            values[sequencerStepVelocityParamName(rowIndex, slot)] = gate.velocity;
-                          }
-                        }
-                      } else {
-                        for (let rowIndex = 0; rowIndex < (sequencer?.rows ?? 0); rowIndex += 1) {
-                          const gates = sequencerGatesForRow(node.params, rowIndex, sequencer?.steps ?? 0);
-                          for (let stepIndex = 0; stepIndex < (sequencer?.steps ?? 0); stepIndex += 1) {
-                            values[sequencerCellParamName(rowIndex, stepIndex)] = 0;
-                            values[sequencerGateParamName(rowIndex, stepIndex, 'active')] = 0;
-                          }
-                          for (const [slot, gate] of gates.entries()) {
-                            const position = Math.max(0, Math.min((sequencer?.steps ?? 1) - SEQUENCER_TRIGGER_GRAB_FRACTION, gate.start));
-                            values[sequencerCellParamName(rowIndex, slot)] = 1;
-                            values[sequencerTriggerPositionParamName(rowIndex, slot)] = position;
-                          }
-                        }
-                      }
-                      data.onParamsChange(node.id, values);
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">trigger</option>
-                    <option value="1">gate</option>
-                  </select>
-                </>
-              ) : (showMeterDisplay || showScopeDisplay) && input.name === 'mode' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label={`${showMeterDisplay ? 'Meter' : 'Scope'} mode`}
-                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">unipolar</option>
-                    <option value="1">bipolar</option>
-                  </select>
-                </>
-              ) : showScopeDisplay && input.name === 'reset' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label="Scope reset"
-                    value={String(Math.round(node.params.reset ?? input.defaultValue ?? 1))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">none</option>
-                    <option value="1">zero-crossing</option>
-                  </select>
-                </>
-              ) : showSampleUpload && input.name === 'mode' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">one-shot</option>
-                    <option value="1">loop</option>
-                    <option value="2">ping-pong</option>
-                  </select>
-                </>
-              ) : showBufferDisplay && input.name === 'on reset' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label="Buffer on reset"
-                    value={String(clamp(Math.round(node.params['on reset'] ?? input.defaultValue ?? 0), 0, 1))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">clear</option>
-                    <option value="1">preserve</option>
-                  </select>
-                </>
-              ) : showTempoDisplay && input.name === 'source' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label="Tempo source"
-                    value={String(clamp(Math.round(node.params.source ?? input.defaultValue ?? 0), 0, 1))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">internal</option>
-                    <option value="1">midi</option>
-                  </select>
-                </>
-              ) : showTempoDisplay && input.name === 'midiSource' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label="MIDI clock source"
-                    value={String(clamp(Math.round(node.params.midiSource ?? input.defaultValue ?? 0), 0, Math.max(0, data.midiInput?.devices.length ?? 0)))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">any midi</option>
-                    {(data.midiInput?.devices ?? []).map((device, index) => (
-                      <option key={device.id || `${device.label}-${index}`} value={index + 1}>
-                        {device.label || `MIDI ${index + 1}`}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              ) : showButtonDisplay && input.name === 'mode' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">toggle</option>
-                    <option value="1">trigger</option>
-                    <option value="2">temporary</option>
-                  </select>
-                </>
-              ) : showAccumulatorDisplay && input.name === 'mode' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label="Accumulator mode"
-                    value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    <option value="0">trigger</option>
-                    <option value="1">continuous</option>
-                  </select>
-                </>
-              ) : (showQuantiseDisplay || showRollDisplay) && input.name === 'scale' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label={`${node.type} scale`}
-                    value={String(clamp(Math.round(node.params.scale ?? input.defaultValue ?? 0), 0, QUANTISE_SCALES.length - 1))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    {QUANTISE_SCALES.map((scale, index) => (
-                      <option key={scale.label} value={index}>{scale.label}</option>
-                    ))}
-                  </select>
-                </>
-              ) : showQuantiseDisplay && input.name === 'root' && !input.preview ? (
-                <>
-                  <PortNameLabel
-                    name={input.name}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="shader-port-select nodrag nopan"
-                    aria-label={`${node.type} root`}
-                    value={String(normalisePitchClass(node.params.root ?? input.defaultValue ?? 0))}
-                    onChange={(event) => {
-                      data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
-                      event.currentTarget.blur();
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    {PITCH_CLASSES.map((pitchClass, note) => (
-                      <option key={pitchClass} value={note}>{pitchClass}</option>
-                    ))}
-                  </select>
-                </>
-              ) : showRollDisplay && input.name === 'middle note' && !input.preview ? (
-                <NoteRangeSelect
-                  label={input.name}
-                  value={node.params[input.name] ?? input.defaultValue ?? 60}
-                  min={0}
-                  max={127}
-                  onChange={(value) => data.onParamChange(node.id, input.name, value)}
-                />
-              ) : (
-                <PortNameLabel
-                  name={input.name}
-                  editable={canRenameInputs && !input.preview}
-                  draggable={canRenameInputs && !input.preview}
-                  preview={input.preview}
-                  selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                  activeDragTarget={dragTarget?.side === 'input' && dragTarget.port === input.name}
-                  activeDragSource={dragSource?.side === 'input' && dragSource.port === input.name}
-                  onPointerDown={(event) => {
-                    if (input.preview) return;
-                    if (!canRenameInputs) return;
-                    handlePortPointerDown(event, 'input', input.name);
-                  }}
-                  onChange={(nextName) => data.onPortNameChange(node.id, 'input', input.name, nextName)}
-                />
-              )}
-              {!input.preview && node.type !== 'Outs' && input.valueEditor !== false && input.defaultValue !== undefined && !(showKeysDisplay && input.name === 'mode') && !(showCustomWaveEditor && input.name === 'mode') && !(showSliderDisplay && input.name === 'direction') && !(showSequencerDisplay && input.name === 'mode') && !(showButtonDisplay && input.name === 'mode') && !(showAccumulatorDisplay && input.name === 'mode') && !(showQuantiseDisplay && (input.name === 'scale' || input.name === 'root')) && !(showSampleUpload && input.name === 'mode') && !(showTempoDisplay && (input.name === 'source' || input.name === 'midiSource')) ? (
-                <NumericScrubber
-                  value={node.params[input.name] ?? input.defaultValue ?? 0}
-                  min={input.min}
-                  max={input.max}
-                  integer={input.integer}
-                  step={input.step}
-                  replacedBySetLink={setLinkInputPorts.has(input.name)}
-                  onChange={(value) => data.onParamChange(node.id, input.name, value)}
-                  onClear={isSelector && isSelectorValuePort(input.name) ? () => data.onSelectorInputClear?.(node.id, input.name) : undefined}
-                  midiLearnEvent={canLearnMidiCc(node.type, input.name) ? data.midiInput?.lastControlChange : undefined}
-                  onEditStart={canLearnMidiCc(node.type, input.name) ? () => {
-                    void data.onMidiInputRefresh?.();
-                  } : undefined}
-                  onMidiLearn={canLearnMidiCc(node.type, input.name) ? (event) => {
-                    data.onParamChange(node.id, input.name, event.cc);
-                    if (node.type === 'Slider' || node.type === 'Button') {
-                      data.onParamChange(node.id, 'midiChannel', event.channel);
-                    } else if (node.type === 'Joystick') {
-                      data.onParamChange(node.id, input.name === 'xMidiCc' ? 'xMidiChannel' : 'yMidiChannel', event.channel);
-                    } else if (node.type === 'MidiCc') {
-                      data.onParamChange(node.id, 'channel', event.channel);
-                    }
-                  } : undefined}
-                />
-              ) : null}
-            </div>
-            ))}
-            {isSelector && showAllPorts ? (
-              <button
-                className="selector-add-input-button nodrag nopan"
-                type="button"
-                aria-label="Add selector input"
-                title="Add selector input"
-                onPointerDown={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  data.onSelectorInputAdd?.(node.id);
-                }}
-              >
-                +
-              </button>
-            ) : null}
-            {node.type === 'Outs' ? (
-              <NewPortPlaceholder label={newPortLabel} onAdd={(name) => data.onPortAdd(node.id, newPortSide, name)} />
-            ) : null}
-          </div>
-          {normalOutputPorts.length > 0 || (hasNewPortPlaceholder && newPortSide === 'output') ? (
-            <div className={`shader-ports shader-outputs${node.type === 'Params' ? ' shader-params-outputs' : ''}`}>
-              {node.type === 'Params' ? (
-                <div className="shader-params-columns" aria-hidden="true"><span>default</span><span>min</span><span>max</span></div>
-              ) : null}
-              {normalOutputPorts.map((output) => (
-              <div
-                className={[
-                  'shader-port shader-port-output',
-                  output.preview ? 'shader-port-preview' : '',
-                ].filter(Boolean).join(' ')}
-                key={`${output.preview ? 'preview' : 'port'}:${output.name}`}
-                ref={(element) => {
-                  outputPortRowsRef.current[output.name] = element;
-                }}
-                onDoubleClick={(event) => {
-                  if (output.preview) return;
-                  event.stopPropagation();
-                  data.onPortDoubleClick(node.id, 'output', output.name);
-                }}
-              >
-                <PortNameLabel
-                name={output.name}
-                editable={canRenameOutputs && !output.preview}
-                draggable={canRenameOutputs && !output.preview}
-                  preview={output.preview}
-                  selected={data.selectedPort?.side === 'output' && data.selectedPort.name === output.name}
-                  activeDragTarget={dragTarget?.side === 'output' && dragTarget.port === output.name}
-                  activeDragSource={dragSource?.side === 'output' && dragSource.port === output.name}
-                  onPointerDown={(event) => {
-                    if (output.preview) return;
-                    if (!canRenameOutputs) return;
-                    handlePortPointerDown(event, 'output', output.name);
-                  }}
-                  onChange={(nextName) => data.onPortNameChange(node.id, 'output', output.name, nextName)}
-                />
-                {!output.preview && (node.type === 'Ins' || node.type === 'Params') && output.valueEditor !== false ? (
-                  <div className={node.type === 'Params' ? 'shader-params-values' : undefined}>
-                    <NumericScrubber
-                      value={node.params[output.name] ?? output.defaultValue ?? 0}
-                      min={node.type === 'Ins' ? output.min : undefined}
-                      max={node.type === 'Ins' ? output.max : undefined}
-                      integer={output.integer}
-                      onChange={(value) => data.onParamChange(node.id, output.name, value)}
-                    />
-                    {node.type === 'Params' ? (['min', 'max'] as const).map((bound) => (
-                      <NumericScrubber
-                        key={bound}
-                        value={output[bound] ?? (bound === 'min' ? 0 : 1)}
-                        onChange={(value) => data.onParamRangeChange?.(node.id, output.name, bound, value)}
-                      />
-                    )) : null}
-                  </div>
-                ) : null}
-                <Handle
-                  id={`out:${output.name}`}
-                  type="source"
-                  position={Position.Right}
-                  className={[
-                    'shader-handle shader-handle-output',
-                    selectedLinkOutputs.includes(output.name) ? 'shader-handle-selected-link' : '',
-                  ].filter(Boolean).join(' ')}
-                  onDoubleClick={(event) => {
-                    if (output.preview) return;
-                    event.stopPropagation();
-                    data.onPortDoubleClick(node.id, 'output', output.name);
-                  }}
-                />
-              </div>
-              ))}
-              {hasNewPortPlaceholder && newPortSide === 'output' ? (
-                <NewPortPlaceholder label={newPortLabel} onAdd={(name) => data.onPortAdd(node.id, newPortSide, name)} />
-              ) : null}
-            </div>
-          ) : null}
-          </div>
-          {showResizableDisplay && !isCanvasLocked && !isAreaUiCollapsedPresentation ? (
-            <>
-              <span
-                className={[
-                  'audio-node-scope-resize-handle audio-node-scope-resize-handle-left nodrag nopan',
-                  scopeResizeCorner === 'bottom-left' ? 'audio-node-scope-resize-handle-active' : '',
-                ].filter(Boolean).join(' ')}
-                title={showSequencerDisplay ? 'Resize sequencer' : showCustomWaveEditor ? 'Resize custom wave' : showSampleUpload ? 'Resize sample waveform' : showBufferDisplay ? 'Resize buffer waveform' : showImageDisplay ? 'Resize image' : showKeysDisplay ? 'Resize keys' : showSliderDisplay ? 'Resize slider' : showJoystickDisplay ? 'Resize joystick' : showButtonDisplay ? 'Resize button' : showMeterDisplay ? 'Resize meter' : showFftDisplay ? 'Resize FFT' : 'Resize scope'}
-                onPointerDown={(event) => handleScopeResizePointerDown(event, 'bottom-left')}
-                onClick={handleScopeResizeClick}
-                onDoubleClick={(event) => event.stopPropagation()}
-              />
-              <span
-                className={[
-                  'audio-node-scope-resize-handle audio-node-scope-resize-handle-right nodrag nopan',
-                  scopeResizeCorner === 'bottom-right' ? 'audio-node-scope-resize-handle-active' : '',
-                ].filter(Boolean).join(' ')}
-                title={showSequencerDisplay ? 'Resize sequencer' : showCustomWaveEditor ? 'Resize custom wave' : showSampleUpload ? 'Resize sample waveform' : showBufferDisplay ? 'Resize buffer waveform' : showImageDisplay ? 'Resize image' : showKeysDisplay ? 'Resize keys' : showSliderDisplay ? 'Resize slider' : showJoystickDisplay ? 'Resize joystick' : showButtonDisplay ? 'Resize button' : showMeterDisplay ? 'Resize meter' : showFftDisplay ? 'Resize FFT' : 'Resize scope'}
-                onPointerDown={(event) => handleScopeResizePointerDown(event, 'bottom-right')}
-                onClick={handleScopeResizeClick}
-                onDoubleClick={(event) => event.stopPropagation()}
-              />
-            </>
-          ) : null}
-        </div>
-          );
-        })()
-      ) : (
-        <div className="shader-node-body shader-node-body-draft">
-          <div className="shader-ports shader-inputs">
-            <div className="shader-port shader-port-input">
-              <Handle
-                id="in:value"
-                type="target"
-                position={Position.Left}
-                className="shader-handle shader-handle-input"
-              />
-              <span>in</span>
-            </div>
-          </div>
-          <div className="shader-ports shader-outputs">
-            <div className="shader-port shader-port-output">
-              <span>out</span>
-              <Handle
-                id="out:value"
-                type="source"
-                position={Position.Right}
-                className="shader-handle shader-handle-output"
-              />
-            </div>
-          </div>
-        </div>
-      )}
+
+
     </div>
-  );
-});
+  </SpagbolNodeFrame>;
+
+}
 
 function KinkOscGraphic({ shape, squareness }: { shape: number; squareness: number }) {
   const safeShape = clamp(Number.isFinite(shape) ? shape : 0, -1, 1);
@@ -2900,33 +2480,37 @@ function useRecentMaxLevel(level: number, enabled: boolean): number {
   }, [level]);
 
   useEffect(() => {
-    if (!enabled) {
-      if (timeoutRef.current !== null) {
-        window.clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      setRecentMaxLevel(level);
-      return;
-    }
-
-    setRecentMaxLevel((currentMax) => {
-      if (level >= currentMax) {
+    // Peak-hold readings are visual state; publish outside the commit phase.
+    const frame = requestAnimationFrame(() => {
+      if (!enabled) {
         if (timeoutRef.current !== null) {
           window.clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
-        return level;
+        setRecentMaxLevel(level);
+        return;
       }
 
-      if (timeoutRef.current === null) {
-        timeoutRef.current = window.setTimeout(() => {
-          timeoutRef.current = null;
-          setRecentMaxLevel(latestLevelRef.current);
-        }, METER_RECENT_MAX_HOLD_MS);
-      }
+      setRecentMaxLevel((currentMax) => {
+        if (level >= currentMax) {
+          if (timeoutRef.current !== null) {
+            window.clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          return level;
+        }
 
-      return currentMax;
+        if (timeoutRef.current === null) {
+          timeoutRef.current = window.setTimeout(() => {
+            timeoutRef.current = null;
+            setRecentMaxLevel(latestLevelRef.current);
+          }, METER_RECENT_MAX_HOLD_MS);
+        }
+
+        return currentMax;
+      });
     });
+    return () => cancelAnimationFrame(frame);
   }, [enabled, level]);
 
   useEffect(() => () => {
@@ -2948,37 +2532,41 @@ function useRecentBipolarLevels(level: number, enabled: boolean): { positive: nu
   }, [level]);
 
   useEffect(() => {
-    if (!enabled) {
-      if (timeoutRef.current !== null) {
-        window.clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      setRecentLevels({ positive: 0, negative: 0 });
-      return;
-    }
-
-    setRecentLevels((current) => {
-      const next = {
-        positive: Math.max(current.positive, level, 0),
-        negative: Math.max(current.negative, -level, 0),
-      };
-      if (next.positive !== current.positive || next.negative !== current.negative) {
+    // Peak-hold readings are visual state; publish outside the commit phase.
+    const frame = requestAnimationFrame(() => {
+      if (!enabled) {
         if (timeoutRef.current !== null) {
           window.clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
-        return next;
+        setRecentLevels({ positive: 0, negative: 0 });
+        return;
       }
 
-      if (timeoutRef.current === null) {
-        timeoutRef.current = window.setTimeout(() => {
-          timeoutRef.current = null;
-          const latest = latestLevelRef.current;
-          setRecentLevels({ positive: Math.max(0, latest), negative: Math.max(0, -latest) });
-        }, METER_RECENT_MAX_HOLD_MS);
-      }
-      return current;
+      setRecentLevels((current) => {
+        const next = {
+          positive: Math.max(current.positive, level, 0),
+          negative: Math.max(current.negative, -level, 0),
+        };
+        if (next.positive !== current.positive || next.negative !== current.negative) {
+          if (timeoutRef.current !== null) {
+            window.clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          return next;
+        }
+
+        if (timeoutRef.current === null) {
+          timeoutRef.current = window.setTimeout(() => {
+            timeoutRef.current = null;
+            const latest = latestLevelRef.current;
+            setRecentLevels({ positive: Math.max(0, latest), negative: Math.max(0, -latest) });
+          }, METER_RECENT_MAX_HOLD_MS);
+        }
+        return current;
+      });
     });
+    return () => cancelAnimationFrame(frame);
   }, [enabled, level]);
 
   useEffect(() => () => {
@@ -3111,163 +2699,6 @@ function audioInputStatusLabel(status: NonNullable<ShaderNodeData['audioInput']>
     default:
       return 'idle';
   }
-}
-
-interface SliderDisplayProps {
-  value: number;
-  displayValue?: number;
-  direction: 'horizontal' | 'vertical';
-  onChange: (value: number) => void;
-}
-
-const SLIDER_WHEEL_SPEED = 0.5;
-
-function sliderPrecisionDivisor(event: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): number {
-  if (event.metaKey || event.ctrlKey) return 5;
-  if (event.shiftKey && event.altKey) return 3;
-  return 1;
-}
-
-function SliderDisplay({ value, displayValue, direction, onChange }: SliderDisplayProps) {
-  const dragRef = useRef<{
-    pointerId: number;
-    lastPointerValue: number;
-    value: number;
-    cursorBias: number;
-    precisionDivisor: number;
-  } | null>(null);
-  const normalized = clamp(displayValue ?? value, 0, 1);
-  const wheelValueRef = useRef(normalized);
-  const lastWheelTimeRef = useRef(-Infinity);
-  const wheelTargetRef = useModifiedWheel<HTMLInputElement>((event, target) => {
-    if (event.timeStamp - lastWheelTimeRef.current > 160) {
-      wheelValueRef.current = normalized;
-    }
-    lastWheelTimeRef.current = event.timeStamp;
-    const travel = direction === 'vertical' ? target.clientHeight : target.clientWidth;
-    const precisionDivisor = sliderPrecisionDivisor(event);
-    const wheelDelta = wheelAxisDeltaPixels(event, direction);
-    if (wheelDelta === 0) return;
-    const nextValue = clamp(
-      wheelValueRef.current
-        + wheelDelta * (direction === 'vertical' ? 1 : -1) * SLIDER_WHEEL_SPEED
-          / Math.max(1, travel)
-          / precisionDivisor,
-      0,
-      1,
-    );
-    wheelValueRef.current = nextValue;
-    onChange(nextValue);
-  });
-  const fillStyle = direction === 'vertical'
-    ? { height: `${normalized * 100}%` }
-    : { width: `${normalized * 100}%` };
-
-  function pointerValue(event: PointerEvent<HTMLInputElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    // Keep this unbounded while dragging. Fine control uses relative travel,
-    // so clamping here would lose movement once the pointer passed an edge.
-    return direction === 'vertical'
-      ? 1 - ((event.clientY - bounds.top) / Math.max(1, bounds.height))
-      : (event.clientX - bounds.left) / Math.max(1, bounds.width);
-  }
-
-  function updateFromPointer(event: PointerEvent<HTMLInputElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-
-    const cursorValue = pointerValue(event);
-    const precisionDivisor = sliderPrecisionDivisor(event);
-    if (precisionDivisor !== drag.precisionDivisor) {
-      // Re-anchor when the modifier changes so switching speeds never snaps to
-      // the cursor. Without fine control, the bias preserves this position.
-      drag.lastPointerValue = cursorValue;
-      drag.cursorBias = drag.value - cursorValue;
-      drag.precisionDivisor = precisionDivisor;
-      return;
-    }
-
-    const nextValue = precisionDivisor > 1
-      ? drag.value + (cursorValue - drag.lastPointerValue) / precisionDivisor
-      : cursorValue + drag.cursorBias;
-    drag.lastPointerValue = cursorValue;
-    drag.value = clamp(nextValue, 0, 1);
-    onChange(drag.value);
-  }
-
-  return (
-    <div className={[
-      'audio-node-slider-display nodrag nopan',
-      direction === 'vertical' ? 'audio-node-slider-display-vertical' : 'audio-node-slider-display-horizontal',
-    ].join(' ')}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <span className="audio-node-slider-fill" style={fillStyle} aria-hidden="true" />
-      <input
-        ref={wheelTargetRef}
-        aria-label="Slider value"
-        type="range"
-        tabIndex={-1}
-        min={0}
-        max={1}
-        step={0.001}
-        value={normalized}
-        onChange={(event) => {
-          if (dragRef.current) return;
-          onChange(Number(event.currentTarget.value));
-          event.currentTarget.blur();
-        }}
-        onFocus={(event) => event.currentTarget.blur()}
-        onPointerDown={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (!event.isPrimary || event.button !== 0) return;
-          const cursorValue = pointerValue(event);
-          const precisionDivisor = sliderPrecisionDivisor(event);
-          const initialValue = precisionDivisor > 1 ? normalized : clamp(cursorValue, 0, 1);
-          dragRef.current = {
-            pointerId: event.pointerId,
-            lastPointerValue: cursorValue,
-            value: initialValue,
-            cursorBias: initialValue - cursorValue,
-            precisionDivisor,
-          };
-          event.currentTarget.setPointerCapture(event.pointerId);
-          if (precisionDivisor === 1) onChange(initialValue);
-        }}
-        onPointerMove={(event) => {
-          if (dragRef.current?.pointerId !== event.pointerId) return;
-          event.preventDefault();
-          event.stopPropagation();
-          updateFromPointer(event);
-        }}
-        onPointerUp={(event) => {
-          event.stopPropagation();
-          if (dragRef.current?.pointerId === event.pointerId) {
-            dragRef.current = null;
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              event.currentTarget.releasePointerCapture(event.pointerId);
-            }
-          }
-          event.currentTarget.blur();
-        }}
-        onPointerCancel={(event) => {
-          event.stopPropagation();
-          if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
-          event.currentTarget.blur();
-        }}
-        onLostPointerCapture={(event) => {
-          if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
-        }}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          event.currentTarget.blur();
-        }}
-        onDoubleClick={(event) => event.stopPropagation()}
-      />
-    </div>
-  );
 }
 
 interface JoystickDisplayProps {
@@ -3408,105 +2839,6 @@ function JoystickDisplay({ x, y, elasticity, onChange }: JoystickDisplayProps) {
         aria-hidden="true"
       />
     </div>
-  );
-}
-
-type ButtonMode = 'toggle' | 'trigger' | 'temporary';
-const BUTTON_CLICK_FLASH_MS = 120;
-
-interface ButtonDisplayProps {
-  mode: ButtonMode;
-  pressed: number;
-  onPressedChange: (value: number) => void;
-  onClickPulse: () => void;
-}
-
-function ButtonDisplay({ mode, pressed, onPressedChange, onClickPulse }: ButtonDisplayProps) {
-  const [pointerActive, setPointerActive] = useState(false);
-  const [clickFlashActive, setClickFlashActive] = useState(false);
-  const clickFlashTimeoutRef = useRef<number | null>(null);
-  const previousPressedRef = useRef(false);
-  const isPressed = pressed >= 0.5;
-  const isLit = mode === 'trigger'
-    ? clickFlashActive
-    : mode === 'temporary'
-      ? pointerActive || isPressed
-      : isPressed;
-
-  function flashClick() {
-    if (clickFlashTimeoutRef.current !== null) {
-      window.clearTimeout(clickFlashTimeoutRef.current);
-    }
-    setClickFlashActive(true);
-    clickFlashTimeoutRef.current = window.setTimeout(() => {
-      clickFlashTimeoutRef.current = null;
-      setClickFlashActive(false);
-    }, BUTTON_CLICK_FLASH_MS);
-  }
-
-  useEffect(() => {
-    if (mode === 'trigger' && isPressed && !previousPressedRef.current) {
-      flashClick();
-    }
-    previousPressedRef.current = isPressed;
-  }, [isPressed, mode]);
-
-  useEffect(() => () => {
-    if (clickFlashTimeoutRef.current !== null) {
-      window.clearTimeout(clickFlashTimeoutRef.current);
-    }
-  }, []);
-
-  function releaseTemporary() {
-    setPointerActive(false);
-    if (mode === 'temporary') {
-      onPressedChange(0);
-    }
-  }
-
-  return (
-    <button
-      className={[
-        'audio-node-button-display nodrag nopan',
-        isLit ? 'audio-node-button-display-active' : '',
-      ].filter(Boolean).join(' ')}
-      type="button"
-      aria-label="Button value"
-      aria-pressed={isLit}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        if (mode === 'temporary') {
-          setPointerActive(true);
-          onPressedChange(1);
-        } else if (mode === 'trigger') {
-          flashClick();
-          onClickPulse();
-        }
-      }}
-      onPointerUp={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-        releaseTemporary();
-      }}
-      onPointerCancel={(event) => {
-        event.stopPropagation();
-        releaseTemporary();
-      }}
-      onLostPointerCapture={releaseTemporary}
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (mode === 'toggle') {
-          onPressedChange(isPressed ? 0 : 1);
-        }
-      }}
-      onDoubleClick={(event) => event.stopPropagation()}
-    />
   );
 }
 
@@ -3687,92 +3019,6 @@ function RollGrid({ params, steps, beatLength, stepLength, rows, currentStep, on
       onDeleteGate={(displayRow, slot) => onParamsChange({ [rollGateParamName(rows[storageRow(displayRow)].index, slot, 'active')]: 0 })}
     />
   );
-}
-
-function LegacyRollGrid({ params, steps, beatLength, stepLength, startNote, currentStep, onParamsChange }: RollGridProps) {
-  const polyphonic = true;
-  const activeStep = Number.isFinite(currentStep) ? Math.floor(currentStep ?? -1) : -1;
-  const dragRef = useRef<{ pointerId: number; row: number; slot: number; start: number; end: number; x: number; y: number; velocity: number; action: 'move' | 'left' | 'right' | 'velocity' } | null>(null);
-  const beginDrag = (event: PointerEvent<HTMLElement>, row: number, slot: number, start: number, end: number, velocity: number, action: 'move' | 'left' | 'right' | 'velocity') => {
-    event.preventDefault(); event.stopPropagation();
-    dragRef.current = { pointerId: event.pointerId, row, slot, start, end, x: event.clientX, y: event.clientY, velocity, action };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const moveDrag = (event: PointerEvent<HTMLElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const width = event.currentTarget.closest('.roll-cells')?.getBoundingClientRect().width ?? steps * 26;
-    const delta = ((event.clientX - drag.x) / Math.max(1, width)) * steps;
-    const height = event.currentTarget.closest('.roll-cells')?.getBoundingClientRect().height ?? 26;
-    if (drag.action === 'velocity') {
-      onParamsChange({ [rollGateVelocityParamName(drag.row, drag.slot)]: Math.max(SEQUENCER_MIN_VELOCITY, Math.min(1, drag.velocity - (event.clientY - drag.y) / Math.max(1, height))) });
-      return;
-    }
-    const length = drag.end - drag.start;
-    let start = drag.start;
-    let end = drag.end;
-    if (drag.action === 'move') { start = Math.max(0, Math.min(steps - length, start + delta)); end = start + length; }
-    else if (drag.action === 'left') start = Math.max(0, Math.min(end - 0.05, start + delta));
-    else end = Math.max(start + 0.05, Math.min(steps, end + delta));
-    onParamsChange({ [rollGateParamName(drag.row, drag.slot, 'start')]: start, [rollGateParamName(drag.row, drag.slot, 'end')]: end });
-  };
-  const endDrag = (event: PointerEvent<HTMLElement>) => {
-    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
-  };
-  return (
-    <div className="roll-node-panel nodrag nopan" style={{ '--roll-steps': steps } as CSSProperties} aria-label="Piano roll">
-      {Array.from({ length: ROLL_ROWS }, (_, displayRow) => {
-        const row = ROLL_ROWS - displayRow - 1;
-        const note = startNote + row;
-        const gates = rollGatesForRow(params, row, steps);
-        return (
-          <div className="roll-row" key={note}>
-            <div className={['roll-note-label', isBlackKey(note) ? 'roll-note-label-black' : ''].filter(Boolean).join(' ')}>{midiNoteLabel(note)}</div>
-            <div className="roll-cells" role="row">
-              {Array.from({ length: steps }, (_, step) => {
-                const highlightedBeat = Math.floor(step / beatLength) % 2 === 1;
-                return (
-                  <button
-                    type="button"
-                    key={step}
-                    className={['roll-cell', highlightedBeat ? 'roll-cell-beat-highlight' : '', activeStep === step ? 'roll-cell-current' : '', isBlackKey(note) ? 'roll-cell-black-key' : ''].filter(Boolean).join(' ')}
-                    aria-label={`${midiNoteLabel(note)}, step ${step + 1}`}
-                    aria-pressed={false}
-                    onPointerDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const slot = Array.from({ length: steps }, (_, index) => index).find((index) => !gates.some((gate) => gate.slot === index));
-                      if (slot === undefined) return;
-                      const values: Record<string, number> = {
-                        [rollGateParamName(row, slot, 'active')]: 1,
-                        [rollGateParamName(row, slot, 'start')]: step,
-                        [rollGateParamName(row, slot, 'end')]: Math.min(steps, step + stepLength),
-                        [rollGateVelocityParamName(row, slot)]: 1,
-                        [rollCellParamName(row, slot)]: 0,
-                      };
-                      if (!polyphonic) for (let otherRow = 0; otherRow < ROLL_ROWS; otherRow += 1) for (const otherGate of rollGatesForRow(params, otherRow, steps)) values[rollGateParamName(otherRow, otherGate.slot, 'active')] = 0;
-                      onParamsChange(values);
-                    }}
-                  />
-                );
-              })}
-              {gates.map((gate) => (
-                <div key={gate.slot} className="roll-gate" style={{ top: `${(1 - gate.velocity) * 100}%`, left: `${gate.start / steps * 100}%`, width: `${(gate.end - gate.start) / steps * 100}%` }} onPointerDown={(event) => beginDrag(event, row, gate.slot, gate.start, gate.end, gate.velocity, 'move')} onPointerMove={moveDrag} onPointerUp={endDrag}>
-                  <span className="roll-velocity-handle" onPointerDown={(event) => beginDrag(event, row, gate.slot, gate.start, gate.end, gate.velocity, 'velocity')} />
-                  <span className="roll-gate-handle roll-gate-handle-left" onPointerDown={(event) => beginDrag(event, row, gate.slot, gate.start, gate.end, gate.velocity, 'left')} />
-                  <span className="roll-gate-handle roll-gate-handle-right" onPointerDown={(event) => beginDrag(event, row, gate.slot, gate.start, gate.end, gate.velocity, 'right')} />
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function isBlackKey(note: number): boolean {
-  return [1, 3, 6, 8, 10].includes(((note % 12) + 12) % 12);
 }
 
 /**
@@ -4186,549 +3432,6 @@ function SequencerGrid({
         ? { [sequencerGateParamName(rowIndex, slot, 'active')]: 0 }
         : { [sequencerCellParamName(rowIndex, slot)]: 0 })}
     />
-  );
-}
-
-function LegacySequencerGrid({
-  params,
-  rows,
-  rowLabels,
-  hasSavedLabelColumnWidth,
-  steps,
-  beatLength,
-  currentStep,
-  selectedLinkOutputs,
-  setOutputRowRef,
-  onParamsChange,
-  onRowLabelsChange,
-}: SequencerGridProps) {
-  const gateMode = sequencerUsesGateMode(params);
-  const activeStep = Number.isFinite(currentStep) ? Math.floor(currentStep ?? -1) : -1;
-  const dragRef = useRef<{
-    pointerId: number;
-    rowIndex: number;
-    slot?: number;
-    action?: 'move' | 'resize-left' | 'resize-right' | 'velocity';
-    anchorX?: number;
-    anchorY?: number;
-    anchorVelocity?: number;
-    anchorStart?: number;
-    anchorEnd?: number;
-    moved?: boolean;
-  } | null>(null);
-
-  const triggerDragRef = useRef<{
-    pointerId: number;
-    rowIndex: number;
-    slot: number;
-    anchorX: number;
-    anchorPosition: number;
-    previewPosition: number;
-    moved: boolean;
-  } | null>(null);
-  const [triggerPreview, setTriggerPreview] = useState<{
-    rowIndex: number;
-    slot: number;
-    position: number;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!triggerPreview) return;
-    const finish = (event: globalThis.PointerEvent) => finishTriggerDrag(event.pointerId);
-    window.addEventListener('pointerup', finish);
-    window.addEventListener('pointercancel', finish);
-    return () => {
-      window.removeEventListener('pointerup', finish);
-      window.removeEventListener('pointercancel', finish);
-    };
-  }, [triggerPreview]);
-
-  const triggerPaintRef = useRef<{
-    pointerId: number;
-    rowIndex: number;
-    visited: Set<number>;
-    lastStep: number;
-  } | null>(null);
-  const [triggerPaintPreview, setTriggerPaintPreview] = useState<{ rowIndex: number; positions: number[] } | null>(null);
-
-  const gateCreateRef = useRef<{
-    pointerId: number;
-    rowIndex: number;
-    anchorX: number;
-    start: number;
-    end: number;
-    moved: boolean;
-  } | null>(null);
-  const [gateCreatePreview, setGateCreatePreview] = useState<{
-    rowIndex: number;
-    start: number;
-    end: number;
-  } | null>(null);
-  const [draftRowLabels, setDraftRowLabels] = useState<string[]>([]);
-
-  useEffect(() => {
-    setDraftRowLabels(Array.from({ length: rows }, (_, rowIndex) => rowLabels?.[rowIndex] ?? String(rowIndex + 1)));
-  }, [rowLabels, rows]);
-
-  useEffect(() => {
-    if (hasSavedLabelColumnWidth) return;
-    onRowLabelsChange(Array.from({ length: rows }, (_, rowIndex) => rowLabels?.[rowIndex] ?? String(rowIndex + 1)));
-  }, [hasSavedLabelColumnWidth, onRowLabelsChange, rowLabels, rows]);
-
-  function commitRowLabel(rowIndex: number) {
-    const label = draftRowLabels[rowIndex]?.trim() || String(rowIndex + 1);
-    const labels = Array.from({ length: rows }, (_, index) => (
-      index === rowIndex ? label : rowLabels?.[index] ?? String(index + 1)
-    ));
-    onRowLabelsChange(labels);
-  }
-
-  function updateRowLabel(rowIndex: number, value: string) {
-    const next = [...draftRowLabels];
-    next[rowIndex] = value;
-    setDraftRowLabels(next);
-    onRowLabelsChange(next);
-  }
-
-  useEffect(() => {
-    if (!triggerPaintPreview && !gateCreatePreview) return;
-    const finish = (event: globalThis.PointerEvent) => {
-      finishTriggerPaint(event.pointerId);
-      finishGateCreate(event.pointerId);
-    };
-    window.addEventListener('pointerup', finish);
-    window.addEventListener('pointercancel', finish);
-    return () => {
-      window.removeEventListener('pointerup', finish);
-      window.removeEventListener('pointercancel', finish);
-    };
-  }, [triggerPaintPreview, gateCreatePreview]);
-
-  function beginTriggerPaint(event: PointerEvent<HTMLButtonElement>, rowIndex: number, stepIndex: number) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    triggerPaintRef.current = {
-      pointerId: event.pointerId,
-      rowIndex,
-      visited: new Set([stepIndex]),
-      lastStep: stepIndex,
-    };
-    setTriggerPaintPreview({ rowIndex, positions: [stepIndex] });
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function updateTriggerPaint(event: PointerEvent<HTMLButtonElement>) {
-    const paint = triggerPaintRef.current;
-    if (!paint || paint.pointerId !== event.pointerId) return;
-    const row = event.currentTarget.closest('.sequencer-cells')?.getBoundingClientRect();
-    if (!row) return;
-    const nextStep = Math.max(0, Math.min(steps - 1, Math.floor(((event.clientX - row.left) / Math.max(1, row.width)) * steps)));
-    const direction = nextStep >= paint.lastStep ? 1 : -1;
-    for (let stepIndex = paint.lastStep; stepIndex !== nextStep + direction; stepIndex += direction) {
-      paint.visited.add(stepIndex);
-    }
-    paint.lastStep = nextStep;
-    setTriggerPaintPreview({ rowIndex: paint.rowIndex, positions: [...paint.visited] });
-  }
-
-  function finishTriggerPaint(pointerId: number) {
-    const paint = triggerPaintRef.current;
-    if (!paint || paint.pointerId !== pointerId) return;
-    const existing = sequencerTriggersForRow(params, paint.rowIndex, steps);
-    const usedSlots = new Set(existing.map((trigger) => trigger.slot));
-    const existingPositions = new Set(existing.map((trigger) => Math.round(trigger.position * 1000000)));
-    const values: Record<string, number> = {};
-    for (const position of paint.visited) {
-      if (existingPositions.has(Math.round(position * 1000000))) continue;
-      const slot = Array.from({ length: steps }, (_, index) => index).find((index) => !usedSlots.has(index));
-      if (slot === undefined) break;
-      usedSlots.add(slot);
-      values[sequencerCellParamName(paint.rowIndex, slot)] = 1;
-      values[sequencerTriggerPositionParamName(paint.rowIndex, slot)] = position;
-    }
-    onParamsChange(values);
-    triggerPaintRef.current = null;
-    setTriggerPaintPreview(null);
-  }
-
-  function positionInSequencerRow(event: PointerEvent<HTMLElement>): number {
-    const row = event.currentTarget.closest('.sequencer-cells')?.getBoundingClientRect();
-    if (!row) return 0;
-    return Math.max(0, Math.min(steps, ((event.clientX - row.left) / Math.max(1, row.width)) * steps));
-  }
-
-  function beginGateCreate(event: PointerEvent<HTMLButtonElement>, rowIndex: number, stepIndex: number) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const start = stepIndex;
-    const gates = sequencerGatesForRow(params, rowIndex, steps);
-    if (gates.some((gate) => start >= gate.start && start < gate.end)) return;
-    const nextStart = gates.find((gate) => gate.start > start)?.start ?? steps;
-    const end = Math.min(nextStart, start + 1);
-    if (end - start < 0.05) return;
-    gateCreateRef.current = {
-      pointerId: event.pointerId,
-      rowIndex,
-      anchorX: event.clientX,
-      start,
-      end,
-      moved: false,
-    };
-    setGateCreatePreview({ rowIndex, start, end });
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function updateGateCreate(event: PointerEvent<HTMLButtonElement>) {
-    const create = gateCreateRef.current;
-    if (!create || create.pointerId !== event.pointerId) return;
-    if (Math.abs(event.clientX - create.anchorX) >= 3) create.moved = true;
-    if (!create.moved) return;
-    const nextStart = sequencerGatesForRow(params, create.rowIndex, steps)
-      .find((gate) => gate.start > create.start)?.start ?? steps;
-    create.end = Math.max(create.start + 0.05, positionInSequencerRow(event));
-    create.end = Math.min(nextStart, create.end);
-    setGateCreatePreview({ rowIndex: create.rowIndex, start: create.start, end: create.end });
-  }
-
-  function finishGateCreate(pointerId: number) {
-    const create = gateCreateRef.current;
-    if (!create || create.pointerId !== pointerId) return;
-    const usedSlots = new Set(sequencerGatesForRow(params, create.rowIndex, steps).map((gate) => gate.slot));
-    const slot = Array.from({ length: steps }, (_, index) => index).find((index) => !usedSlots.has(index));
-    if (slot !== undefined) {
-      onParamsChange({
-        [SEQUENCER_GATE_INITIALIZED_PARAM]: 1,
-        [sequencerGateParamName(create.rowIndex, slot, 'active')]: 1,
-        [sequencerGateParamName(create.rowIndex, slot, 'start')]: create.start,
-        [sequencerGateParamName(create.rowIndex, slot, 'end')]: create.end,
-      });
-    }
-    gateCreateRef.current = null;
-    setGateCreatePreview(null);
-  }
-
-  function beginTriggerDrag(event: PointerEvent<HTMLDivElement>, rowIndex: number, slot: number, position: number) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    triggerDragRef.current = {
-      pointerId: event.pointerId,
-      rowIndex,
-      slot,
-      anchorX: event.clientX,
-      anchorPosition: position,
-      previewPosition: position,
-      moved: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function updateTriggerDrag(event: PointerEvent<HTMLDivElement>) {
-    const drag = triggerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const rowWidth = event.currentTarget.closest('.sequencer-cells')?.getBoundingClientRect().width ?? steps * 26;
-    const delta = ((event.clientX - drag.anchorX) / Math.max(1, rowWidth)) * steps;
-    if (Math.abs(event.clientX - drag.anchorX) >= 3) drag.moved = true;
-    if (!drag.moved) return;
-    const position = Math.max(0, Math.min(steps - SEQUENCER_TRIGGER_GRAB_FRACTION, drag.anchorPosition + delta));
-    drag.previewPosition = position;
-    setTriggerPreview({ rowIndex: drag.rowIndex, slot: drag.slot, position });
-  }
-
-  function finishTriggerDrag(pointerId: number) {
-    const drag = triggerDragRef.current;
-    if (!drag || drag.pointerId !== pointerId) return;
-    if (!drag.moved) {
-      onParamsChange({ [sequencerCellParamName(drag.rowIndex, drag.slot)]: 0 });
-    } else {
-      onParamsChange({
-        [sequencerTriggerPositionParamName(drag.rowIndex, drag.slot)]: drag.previewPosition,
-      });
-    }
-    triggerDragRef.current = null;
-    setTriggerPreview(null);
-  }
-
-  function endTriggerDrag(event: PointerEvent<HTMLDivElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    finishTriggerDrag(event.pointerId);
-  }
-
-  function beginGateDrag(
-    event: PointerEvent<HTMLElement>,
-    rowIndex: number,
-    slot: number,
-    start: number,
-    end: number,
-    action: 'move' | 'resize-left' | 'resize-right' | 'velocity',
-  ) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    dragRef.current = {
-      pointerId: event.pointerId,
-      rowIndex,
-      slot,
-      action,
-      anchorX: event.clientX,
-      anchorStart: start,
-      anchorEnd: end,
-      anchorY: event.clientY,
-      anchorVelocity: params[sequencerStepVelocityParamName(rowIndex, slot)] ?? 1,
-      moved: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function updateGateDrag(event: PointerEvent<HTMLElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId || drag.slot === undefined || !drag.action) return;
-    const rowRect = event.currentTarget.closest('.sequencer-cells')?.getBoundingClientRect();
-    const rowWidth = rowRect?.width ?? steps * 26;
-    const rowHeight = rowRect?.height ?? 26;
-    const delta = ((event.clientX - (drag.anchorX ?? event.clientX)) / Math.max(1, rowWidth)) * steps;
-    const velocityDelta = ((event.clientY - (drag.anchorY ?? event.clientY)) / Math.max(1, rowHeight));
-    if (Math.hypot(event.clientX - (drag.anchorX ?? event.clientX), event.clientY - (drag.anchorY ?? event.clientY)) >= 3) drag.moved = true;
-    if (!drag.moved) return;
-
-    if (drag.action === 'velocity') {
-      onParamsChange({
-        [sequencerStepVelocityParamName(drag.rowIndex, drag.slot)]: Math.max(SEQUENCER_MIN_VELOCITY, Math.min(1, (drag.anchorVelocity ?? 1) - velocityDelta)),
-      });
-      return;
-    }
-
-    const minimumLength = 0.05;
-    let start = drag.anchorStart ?? 0;
-    let end = drag.anchorEnd ?? start + 1;
-    const otherGates = sequencerGatesForRow(params, drag.rowIndex, steps)
-      .filter((gate) => gate.slot !== drag.slot);
-    const previousEnd = otherGates
-      .filter((gate) => gate.start < (drag.anchorStart ?? 0))
-      .reduce((boundary, gate) => Math.max(boundary, gate.end), 0);
-    const nextStart = otherGates
-      .filter((gate) => gate.start >= (drag.anchorEnd ?? 0))
-      .reduce((boundary, gate) => Math.min(boundary, gate.start), steps);
-    if (drag.action === 'move') {
-      const length = end - start;
-      start = Math.max(previousEnd, Math.min(nextStart - length, start + delta));
-      end = start + length;
-    } else if (drag.action === 'resize-left') {
-      start = Math.max(previousEnd, Math.min(end - minimumLength, start + delta));
-    } else {
-      end = Math.max(start + minimumLength, Math.min(nextStart, end + delta));
-    }
-    onParamsChange({
-      [sequencerGateParamName(drag.rowIndex, drag.slot, 'start')]: start,
-      [sequencerGateParamName(drag.rowIndex, drag.slot, 'end')]: end,
-    });
-  }
-
-  function endGateDrag(event: PointerEvent<HTMLElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId || drag.slot === undefined) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (!drag.moved && drag.action !== 'velocity') {
-      onParamsChange({ [sequencerGateParamName(drag.rowIndex, drag.slot, 'active')]: 0 });
-    }
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    dragRef.current = null;
-  }
-
-  return (
-    <div
-      className="sequencer-node-panel nodrag nopan"
-      style={{ '--sequencer-steps': steps } as CSSProperties}
-      aria-label="Sequencer pattern"
-    >
-      {Array.from({ length: rows }, (_, rowIndex) => {
-        const outputName = sequencerOutputName(rowIndex);
-        const gates = gateMode ? sequencerGatesForRow(params, rowIndex, steps) : [];
-        const triggers = gateMode ? [] : sequencerTriggersForRow(params, rowIndex, steps);
-        return (
-          <div
-            className="sequencer-row"
-            key={outputName}
-            ref={(element) => setOutputRowRef(outputName, element)}
-          >
-            <div className="sequencer-cells" role="row">
-              {Array.from({ length: steps }, (_, stepIndex) => {
-                const highlightedBeat = Math.floor(stepIndex / beatLength) % 2 === 1;
-                return (
-                  <button
-                    className={[
-                      'sequencer-cell',
-                      highlightedBeat ? 'sequencer-cell-beat-highlight' : '',
-                      activeStep === stepIndex ? 'sequencer-cell-current' : '',
-                    ].filter(Boolean).join(' ')}
-                    key={stepIndex}
-                    type="button"
-                    role="gridcell"
-                    data-sequencer-cell="true"
-                    data-row-index={rowIndex}
-                    data-step-index={stepIndex}
-                    aria-label={`Row ${rowIndex + 1}, step ${stepIndex + 1}`}
-                    aria-pressed={false}
-                    title={`Row ${rowIndex + 1}, step ${stepIndex + 1}`}
-                    onPointerDown={(event) => {
-                      if (gateMode) beginGateCreate(event, rowIndex, stepIndex);
-                      else beginTriggerPaint(event, rowIndex, stepIndex);
-                    }}
-                    onPointerMove={(event) => {
-                      if (gateMode) updateGateCreate(event);
-                      else updateTriggerPaint(event);
-                    }}
-                    onPointerUp={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                        event.currentTarget.releasePointerCapture(event.pointerId);
-                      }
-                      if (gateMode) finishGateCreate(event.pointerId);
-                      else finishTriggerPaint(event.pointerId);
-                    }}
-                    onPointerCancel={(event) => {
-                      if (gateMode) finishGateCreate(event.pointerId);
-                      else finishTriggerPaint(event.pointerId);
-                    }}
-                    onLostPointerCapture={(event) => {
-                      if (gateMode) finishGateCreate(event.pointerId);
-                      else finishTriggerPaint(event.pointerId);
-                    }}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                  />
-                );
-              })}
-              {!gateMode && triggerPaintPreview?.rowIndex === rowIndex
-                ? triggerPaintPreview.positions.map((position) => (
-                    <div
-                      key={`paint-${position}`}
-                      className="sequencer-trigger sequencer-step-create-preview"
-                      style={{ left: `${(position / steps) * 100}%`, width: `${(1 / steps) * 100}%` }}
-                    />
-                  ))
-                : null}
-              {gateMode && gateCreatePreview?.rowIndex === rowIndex ? (
-                <div
-                  className="sequencer-gate sequencer-step-create-preview"
-                  style={{
-                    left: `${(gateCreatePreview.start / steps) * 100}%`,
-                    width: `${((gateCreatePreview.end - gateCreatePreview.start) / steps) * 100}%`,
-                  }}
-                />
-              ) : null}
-              {triggers.map((trigger) => (
-                <div
-                  key={trigger.slot}
-                  className="sequencer-trigger"
-                  style={{
-                    left: `${(((triggerPreview?.rowIndex === rowIndex && triggerPreview.slot === trigger.slot)
-                      ? triggerPreview.position
-                      : trigger.position) / steps) * 100}%`,
-                    width: `${(1 / steps) * 100}%`,
-                    top: `${(1 - trigger.velocity) * 100}%`,
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Row ${rowIndex + 1} trigger at ${trigger.position.toFixed(2)}`}
-                  title="Drag to move; drag top edge to set velocity; click to delete"
-                  onPointerDown={(event) => {
-                    if (event.target === event.currentTarget) beginTriggerDrag(event, rowIndex, trigger.slot, trigger.position);
-                  }}
-                  onPointerMove={updateTriggerDrag}
-                  onPointerUp={endTriggerDrag}
-                  onPointerCancel={endTriggerDrag}
-                  onLostPointerCapture={(event) => finishTriggerDrag(event.pointerId)}
-                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                >
-                  <span
-                    className="sequencer-velocity-handle"
-                    onPointerDown={(event) => beginGateDrag(event, rowIndex, trigger.slot, trigger.position, trigger.position + 1, 'velocity')}
-                    onPointerMove={updateGateDrag}
-                    onPointerUp={endGateDrag}
-                    onPointerCancel={endGateDrag}
-                  />
-                </div>
-              ))}
-              {gates.map((gate) => (
-                <div
-                  key={gate.slot}
-                  className="sequencer-gate"
-                  style={{
-                    left: `${(gate.start / steps) * 100}%`,
-                    width: `${((gate.end - gate.start) / steps) * 100}%`,
-                    top: `${(1 - gate.velocity) * 100}%`,
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Row ${rowIndex + 1} gate from ${gate.start.toFixed(2)} to ${gate.end.toFixed(2)}, velocity ${gate.velocity.toFixed(2)}`}
-                  title="Drag to move; drag side edges to resize; drag top edge to set velocity; click to delete"
-                  onPointerDown={(event) => {
-                    if (event.target === event.currentTarget) {
-                      beginGateDrag(event, rowIndex, gate.slot, gate.start, gate.end, 'move');
-                    }
-                  }}
-                  onPointerMove={updateGateDrag}
-                  onPointerUp={endGateDrag}
-                  onPointerCancel={endGateDrag}
-                  onLostPointerCapture={() => { dragRef.current = null; }}
-                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                >
-                  <span
-                    className="sequencer-velocity-handle"
-                    onPointerDown={(event) => beginGateDrag(event, rowIndex, gate.slot, gate.start, gate.end, 'velocity')}
-                    onPointerMove={updateGateDrag}
-                    onPointerUp={endGateDrag}
-                    onPointerCancel={endGateDrag}
-                  />
-                  <span
-                    className="sequencer-gate-handle sequencer-gate-handle-left"
-                    onPointerDown={(event) => beginGateDrag(event, rowIndex, gate.slot, gate.start, gate.end, 'resize-left')}
-                  />
-                  <span
-                    className="sequencer-gate-handle sequencer-gate-handle-right"
-                    onPointerDown={(event) => beginGateDrag(event, rowIndex, gate.slot, gate.start, gate.end, 'resize-right')}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="sequencer-output-port">
-              <input
-                className="sequencer-row-label"
-                aria-label={`Label for row ${rowIndex + 1}`}
-                value={draftRowLabels[rowIndex] ?? String(rowIndex + 1)}
-                size={Math.max(3, (draftRowLabels[rowIndex] ?? String(rowIndex + 1)).length)}
-                onChange={(event) => updateRowLabel(rowIndex, event.target.value)}
-                onBlur={() => commitRowLabel(rowIndex)}
-                onPointerDown={(event) => event.stopPropagation()}
-                onKeyDown={(event) => {
-                  event.stopPropagation();
-                  if (event.key === 'Enter') event.currentTarget.blur();
-                }}
-              />
-              <Handle
-                id={`out:${outputName}`}
-                type="source"
-                position={Position.Right}
-                className={[
-                  'shader-handle shader-handle-output shader-handle-output-sequencer',
-                  selectedLinkOutputs.includes(outputName) ? 'shader-handle-selected-link' : '',
-                ].filter(Boolean).join(' ')}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -5267,13 +3970,7 @@ function formatUnitValue(value: number): string {
   return trimTrailingZeros(clamp(value, 0, 1).toFixed(3));
 }
 
-function formatSliderReadoutValue(value: number): string {
-  if (!Number.isFinite(value)) return '0';
-  if (Object.is(value, -0)) return '0';
-  return String(Number(value.toPrecision(6)));
-}
-
-function buttonModeFromValue(value: number): ButtonMode {
+function buttonModeFromValue(value: number): SpagbolControlButtonMode {
   const mode = Math.round(value);
   if (mode === 1) return 'trigger';
   if (mode === 2) return 'temporary';
@@ -5283,166 +3980,6 @@ function buttonModeFromValue(value: number): ButtonMode {
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));
-}
-
-interface NodeTypePickerProps {
-  nodeType: NodeType | null;
-  displayLabel?: string;
-  closedSuffix?: string;
-  isEditingSubpatch: boolean;
-  open: boolean;
-  onOpen: () => void;
-  onClose: () => void;
-  onCancel: () => void;
-  onChange: (type: NodeType) => void;
-  onConvertToArea: () => void;
-  onCustomLabelCommit?: (label: string) => void;
-}
-
-interface CollapsedNodeLabelProps {
-  nodeType: NodeType | null;
-  customLabel?: string;
-  displaySuffix?: string;
-  onChange: (label: string) => void;
-  onSelect: (additive: boolean) => void;
-}
-
-function CollapsedNodeLabel({ nodeType, customLabel, displaySuffix, onChange, onSelect }: CollapsedNodeLabelProps) {
-  const defaultLabel = nodeType ? getNodeTypeLabel(nodeType) : 'type';
-  const displayLabel = customLabel || defaultLabel;
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(displayLabel);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const selectTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (selectTimeoutRef.current !== null) window.clearTimeout(selectTimeoutRef.current);
-  }, []);
-
-  useEffect(() => {
-    if (!editing) setDraft(displayLabel);
-  }, [displayLabel, editing]);
-
-  useEffect(() => {
-    if (!editing) return;
-    const animationFrame = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
-    return () => cancelAnimationFrame(animationFrame);
-  }, [editing]);
-
-  function commit() {
-    onChange(draft);
-    setEditing(false);
-  }
-
-  function cancel() {
-    setDraft(displayLabel);
-    setEditing(false);
-  }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        className="collapsed-node-label-editor nodrag nopan"
-        size={Math.max(1, draft.length)}
-        value={draft}
-        aria-label="Collapsed node label"
-        onChange={(event) => setDraft(event.currentTarget.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (event.key === 'Enter') commit();
-          if (event.key === 'Escape') cancel();
-        }}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-        spellCheck={false}
-      />
-    );
-  }
-
-  return (
-    <button
-      className={[
-        'collapsed-node-label',
-        displaySuffix ? 'node-title-with-live-readout' : '',
-      ].filter(Boolean).join(' ')}
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        if (selectTimeoutRef.current !== null) window.clearTimeout(selectTimeoutRef.current);
-        const additive = event.metaKey || event.ctrlKey || event.shiftKey;
-        selectTimeoutRef.current = window.setTimeout(() => {
-          selectTimeoutRef.current = null;
-          onSelect(additive);
-        }, 600);
-      }}
-      onDoubleClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (selectTimeoutRef.current !== null) {
-          window.clearTimeout(selectTimeoutRef.current);
-          selectTimeoutRef.current = null;
-        }
-        setEditing(true);
-      }}
-    >
-      {displayLabel}
-      {displaySuffix ? <span className="slider-node-title-readout" aria-hidden="true">{displaySuffix}</span> : null}
-    </button>
-  );
-}
-
-function NewPortPlaceholder({ label, onAdd }: { label: string; onAdd: (name: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
-
-  function finish() {
-    if (draft.trim()) onAdd(draft);
-    setDraft('');
-    setEditing(false);
-  }
-
-  return (
-    <div className="shader-port shader-port-placeholder nodrag nopan">
-      {editing ? (
-        <input
-          ref={inputRef}
-          className="port-name-editor nodrag nopan"
-          aria-label={label}
-          value={draft}
-          onChange={(event) => setDraft(event.currentTarget.value)}
-          onBlur={finish}
-          onKeyDown={(event) => {
-            event.stopPropagation();
-            if (event.key === 'Enter') finish();
-            if (event.key === 'Escape') { setDraft(''); setEditing(false); }
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-          onDoubleClick={(event) => event.stopPropagation()}
-          spellCheck={false}
-        />
-      ) : (
-        <button
-          type="button"
-          className="port-name-placeholder nodrag nopan"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => { event.stopPropagation(); setEditing(true); }}
-          onDoubleClick={(event) => event.stopPropagation()}
-        >{label}</button>
-      )}
-    </div>
-  );
 }
 
 interface PortNameLabelProps {
@@ -5586,251 +4123,6 @@ function canLearnMidiCc(nodeType: NodeType | null, inputName: string): boolean {
   );
 }
 
-function NodeTypePicker({
-  nodeType,
-  displayLabel,
-  closedSuffix,
-  isEditingSubpatch,
-  open,
-  onOpen,
-  onClose,
-  onCancel,
-  onChange,
-  onConvertToArea,
-  onCustomLabelCommit,
-}: NodeTypePickerProps) {
-  const fm1Mode = useContext(Fm1ModeContext);
-  const hostedMode = useContext(HostedModeContext);
-  const nodeTypeLabel = nodeType ? getNodeTypeLabel(nodeType) : 'type';
-  const pickerLabel = displayLabel ?? nodeTypeLabel;
-  const [query, setQuery] = useState<string>(nodeType ? pickerLabel : '');
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [dragIntent, setDragIntent] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
-  const searchQuery = displayLabel && query.trim() === pickerLabel
-    ? nodeTypeLabel
-    : query;
-  const options = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-
-    return [...NODE_TYPE_LIST, 'Area' as const]
-      .filter((option) => {
-        if (hostedMode?.nodeTypes && option !== 'Area' && !hostedMode.nodeTypes.includes(option)) return false;
-        if (fm1Mode && option !== 'Area' && !isFm1NodeImplemented(option)) return false;
-        if ((!isEditingSubpatch && (option === 'Ins' || option === 'Outs')) || (isEditingSubpatch && option === 'Params')) return false;
-        const label = option === 'Area' ? 'Area' : getNodeTypeLabel(option);
-        return (
-          option.toLowerCase().includes(normalizedQuery) ||
-          label.toLowerCase().includes(normalizedQuery)
-        );
-      })
-      .sort((left, right) => {
-        const leftLabel = left === 'Area' ? 'Area' : getNodeTypeLabel(left);
-        const rightLabel = right === 'Area' ? 'Area' : getNodeTypeLabel(right);
-        const leftStartsWithQuery = (
-          left.toLowerCase().startsWith(normalizedQuery) ||
-          leftLabel.toLowerCase().startsWith(normalizedQuery)
-        );
-        const rightStartsWithQuery = (
-          right.toLowerCase().startsWith(normalizedQuery) ||
-          rightLabel.toLowerCase().startsWith(normalizedQuery)
-        );
-
-        return Number(rightStartsWithQuery) - Number(leftStartsWithQuery);
-      });
-  }, [fm1Mode, hostedMode, isEditingSubpatch, searchQuery]);
-  useEffect(() => {
-    if (!open) {
-      setQuery(nodeType ? pickerLabel : '');
-      setHighlightedIndex(0);
-    }
-  }, [nodeType, open, pickerLabel]);
-
-  useEffect(() => {
-    if (open) {
-      setQuery(nodeType ? pickerLabel : '');
-      setHighlightedIndex(0);
-      const focusAndSelect = () => {
-        inputRef.current?.focus({ preventScroll: true });
-        inputRef.current?.select();
-      };
-      const animationFrame = requestAnimationFrame(focusAndSelect);
-      const firstTimeout = window.setTimeout(focusAndSelect, 0);
-      const secondTimeout = window.setTimeout(focusAndSelect, 50);
-
-      return () => {
-        cancelAnimationFrame(animationFrame);
-        window.clearTimeout(firstTimeout);
-        window.clearTimeout(secondTimeout);
-      };
-    }
-  }, [nodeType, open, pickerLabel]);
-
-  useEffect(() => {
-    if (!open) return;
-    optionRefs.current[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
-  }, [highlightedIndex, open]);
-
-  function choose(option: NodeType | 'Area') {
-    if (option === 'Area') {
-      onConvertToArea();
-    } else {
-      onChange(option);
-    }
-    onClose();
-  }
-
-  function commitCustomLabel(): boolean {
-    const label = query.trim();
-    if (!onCustomLabelCommit || label.length === 0) return false;
-
-    onCustomLabelCommit(label);
-    onClose();
-    return true;
-  }
-
-  function closeOrCommitCustomLabel() {
-    if (options.length === 0 && commitCustomLabel()) return;
-    onClose();
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    event.stopPropagation();
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setHighlightedIndex((index) => Math.min(index + 1, Math.max(options.length - 1, 0)));
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setHighlightedIndex((index) => Math.max(index - 1, 0));
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      const selectedType = options[highlightedIndex] ?? options[0];
-      if (selectedType) {
-        choose(selectedType);
-      } else {
-        commitCustomLabel();
-      }
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onCancel();
-    }
-  }
-
-  if (!open) {
-    return (
-      <button
-        className={[
-          'node-type-picker-button',
-          dragIntent ? 'node-type-picker-button-drag-intent' : '',
-          closedSuffix ? 'node-title-with-live-readout' : '',
-        ].filter(Boolean).join(' ')}
-        type="button"
-        onPointerDown={(event) => {
-          pointerStartRef.current = { x: event.clientX, y: event.clientY };
-          setDragIntent(false);
-        }}
-        onPointerMove={(event) => {
-          const pointerStart = pointerStartRef.current;
-          if (!pointerStart) return;
-
-          const moved = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 4;
-          if (!moved) return;
-
-          setDragIntent(true);
-          event.currentTarget.blur();
-        }}
-        onPointerUp={() => {
-          window.setTimeout(() => setDragIntent(false), 0);
-        }}
-        onPointerCancel={() => {
-          pointerStartRef.current = null;
-          setDragIntent(false);
-        }}
-        onClick={(event) => {
-          const pointerStart = pointerStartRef.current;
-          pointerStartRef.current = null;
-          const moved = pointerStart
-            ? Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 4
-            : false;
-          if (moved) {
-            event.currentTarget.blur();
-            return;
-          }
-        }}
-        onDoubleClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onOpen();
-        }}
-      >
-        {pickerLabel}
-        {closedSuffix ? <span className="slider-node-title-readout" aria-hidden="true">{closedSuffix}</span> : null}
-      </button>
-    );
-  }
-
-  return (
-    <span className="node-type-picker-open-shell">
-      <span className="node-type-picker-placeholder" aria-hidden="true">{pickerLabel}</span>
-      <div className="node-type-picker nodrag nopan nowheel" onMouseDown={(event) => event.stopPropagation()}>
-        <input
-          ref={inputRef}
-          className="node-type-picker-input"
-          autoFocus
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setHighlightedIndex(0);
-            if (menuRef.current) {
-              menuRef.current.scrollTop = 0;
-            }
-          }}
-          onBlur={closeOrCommitCustomLabel}
-          onFocus={(event) => event.currentTarget.select()}
-          onKeyDown={handleKeyDown}
-          onPointerDown={(event) => event.stopPropagation()}
-          onDoubleClick={(event) => event.stopPropagation()}
-          spellCheck={false}
-        />
-        <div
-          ref={menuRef}
-          className="node-type-picker-menu nowheel"
-          onMouseDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-          onWheel={(event) => event.stopPropagation()}
-        >
-          {options.map((option, index) => (
-            <button
-              className={index === highlightedIndex ? 'active' : ''}
-              key={option}
-              ref={(element) => {
-                optionRefs.current[index] = element;
-              }}
-              type="button"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                choose(option);
-              }}
-            >
-              {option === 'Area' ? 'Area' : getNodeTypeLabel(option)}
-            </button>
-          ))}
-          {options.length === 0 ? <div className="node-type-picker-empty">no match</div> : null}
-        </div>
-      </div>
-    </span>
-  );
-}
-
 type MidiCcLearnEvent = NonNullable<NonNullable<ShaderNodeData['midiInput']>['lastControlChange']>;
 
 interface NumericScrubberProps {
@@ -5886,269 +4178,12 @@ function NoteRangeSelect({
   );
 }
 
-function NumericScrubber({
-  value,
-  min,
-  max,
-  step: baseStep,
-  integer = false,
-  replacedBySetLink = false,
-  onChange,
-  onClear,
-  midiLearnEvent,
-  onEditStart,
-  onMidiLearn,
-}: NumericScrubberProps) {
-  const dragStep = integer ? (baseStep ?? 0.01) * 3 : baseStep;
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(formatNumericValue(value));
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const lastMidiLearnIdRef = useRef<number | null>(null);
-  const wheelValueRef = useRef(value);
-  const lastWheelTimeRef = useRef(-Infinity);
-  const wheelTargetRef = useModifiedWheel<HTMLDivElement>((event) => {
-    if (event.timeStamp - lastWheelTimeRef.current > 160) {
-      wheelValueRef.current = value;
-    }
-    lastWheelTimeRef.current = event.timeStamp;
-    const wheelDelta = wheelAxisDeltaPixels(event, 'vertical');
-    if (wheelDelta === 0) return;
-    const nextValue = constrainValue(
-      roundValue(wheelValueRef.current + wheelDelta * scrubberStep(event, dragStep)),
-      min,
-      max,
-      integer,
-    );
-    wheelValueRef.current = nextValue;
-    onChange(nextValue);
-  });
-  const dragRef = useRef<{
-    pointerId: number;
-    anchorY: number;
-    anchorValue: number;
-    currentValue: number;
-    step: number;
-    dragging: boolean;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!editing) {
-      setDraft(formatNumericValue(value));
-    }
-  }, [editing, value]);
-
-  useEffect(() => {
-    if (editing) {
-      setDraft(formatNumericValue(value));
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      });
-    }
-  }, [editing, value]);
-
-  useEffect(() => {
-    if (!editing || !midiLearnEvent || !onMidiLearn) return;
-    if (lastMidiLearnIdRef.current === midiLearnEvent.id) return;
-
-    lastMidiLearnIdRef.current = midiLearnEvent.id;
-    const nextValue = constrainValue(midiLearnEvent.cc, min, max, integer);
-    setDraft(formatNumericValue(nextValue));
-    onMidiLearn(midiLearnEvent);
-  }, [editing, integer, max, midiLearnEvent, min, onMidiLearn]);
-
-  function beginEditing() {
-    lastMidiLearnIdRef.current = midiLearnEvent?.id ?? null;
-    onEditStart?.();
-    setEditing(true);
-  }
-
-  function startDrag(event: PointerEvent<HTMLDivElement>) {
-    event.stopPropagation();
-    dragRef.current = {
-      pointerId: event.pointerId,
-      anchorY: event.clientY,
-      anchorValue: value,
-      currentValue: value,
-      step: scrubberStep(event, dragStep),
-      dragging: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function updateDrag(event: PointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-
-    const distance = drag.anchorY - event.clientY;
-    if (!drag.dragging && Math.abs(distance) < 3) return;
-
-    drag.dragging = true;
-    event.preventDefault();
-    event.stopPropagation();
-
-    const step = scrubberStep(event, dragStep);
-    if (step !== drag.step) {
-      drag.anchorY = event.clientY;
-      drag.anchorValue = drag.currentValue;
-      drag.step = step;
-    }
-
-    const nextValue = constrainValue(
-      roundValue(drag.anchorValue + (drag.anchorY - event.clientY) * drag.step),
-      min,
-      max,
-      integer,
-    );
-    drag.currentValue = nextValue;
-    onChange(nextValue);
-  }
-
-  function endDrag(event: PointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-
-    event.stopPropagation();
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    dragRef.current = null;
-
-    if (drag.dragging) {
-      event.currentTarget.blur();
-    } else {
-      beginEditing();
-    }
-  }
-
-  function commitDraft() {
-    const trimmedDraft = draft.trim();
-    if (trimmedDraft.length === 0 && onClear) {
-      onClear();
-      setEditing(false);
-      return;
-    }
-
-    const nextValue = Number(trimmedDraft);
-    if (Number.isFinite(nextValue)) {
-      onChange(constrainValue(nextValue, min, max, integer));
-    } else {
-      setDraft(formatNumericValue(value));
-    }
-    setEditing(false);
-  }
-
-  function cancelDraft() {
-    setDraft(formatNumericValue(value));
-    setEditing(false);
-  }
-
-  function handleEditKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    event.stopPropagation();
-    if (event.key === 'Enter') {
-      commitDraft();
-    }
-    if (event.key === 'Escape') {
-      cancelDraft();
-    }
-  }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        className={`numeric-scrubber numeric-scrubber-editing${replacedBySetLink ? ' numeric-scrubber-replaced' : ''} nodrag nopan`}
-        type="text"
-        inputMode={integer ? 'numeric' : 'decimal'}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commitDraft}
-        onKeyDown={handleEditKeyDown}
-        onPointerDown={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-        spellCheck={false}
-      />
-    );
-  }
-
-  return (
-    <div
-      ref={wheelTargetRef}
-      className={`numeric-scrubber${replacedBySetLink ? ' numeric-scrubber-replaced' : ''} nodrag nopan`}
-      role="spinbutton"
-      tabIndex={-1}
-      aria-valuenow={value}
-      aria-valuemin={min}
-      aria-valuemax={max}
-      onPointerDown={startDrag}
-      onPointerMove={updateDrag}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
-      onMouseDown={(event) => event.stopPropagation()}
-      onClick={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.stopPropagation();
-          beginEditing();
-        }
-      }}
-    >
-      {formatNumericValue(value)}
-    </div>
-  );
-}
-
-function roundValue(value: number): number {
-  return Math.round(value * 10000) / 10000;
-}
-
-function scrubberStep(event: { metaKey: boolean; shiftKey: boolean }, baseStep = 0.01): number {
-  if (event.metaKey && event.shiftKey) return baseStep * 200;
-  if (event.metaKey) return baseStep * 20;
-  if (event.shiftKey) return baseStep * 0.1;
-  return baseStep;
-}
-
-function useModifiedWheel<T extends HTMLElement>(
-  onWheel: (event: WheelEvent, target: T) => void,
-): RefObject<T | null> {
-  const targetRef = useRef<T | null>(null);
-  const handlerRef = useRef(onWheel);
-  handlerRef.current = onWheel;
-
-  useEffect(() => {
-    const target = targetRef.current;
-    if (!target) return;
-
-    const handleWheel = (event: WheelEvent) => {
-      if (!event.shiftKey && !event.altKey) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      handlerRef.current(event, target);
-    };
-
-    target.addEventListener('wheel', handleWheel, { capture: true, passive: false });
-    return () => target.removeEventListener('wheel', handleWheel, { capture: true });
-  });
-
-  return targetRef;
-}
-
-function wheelAxisDeltaPixels(
-  event: Pick<WheelEvent, 'deltaX' | 'deltaY' | 'deltaMode'>,
-  direction: 'horizontal' | 'vertical',
-): number {
-  const delta = direction === 'vertical' ? event.deltaY : event.deltaX;
-  if (event.deltaMode === 1) return delta * 16;
-  if (event.deltaMode === 2) return delta * window.innerHeight;
-  return delta;
-}
-
-function constrainValue(value: number, min?: number, max?: number, integer = false): number {
-  const rounded = integer ? Math.round(value) : value;
-  return Math.min(Math.max(rounded, min ?? -Infinity), max ?? Infinity);
+function NumericScrubber({ midiLearnEvent, onMidiLearn, replacedBySetLink, ...props }: NumericScrubberProps) {
+  const { editor } = useSpagbol();
+  return <SpagbolControlNumber {...props} replaced={replacedBySetLink}
+    capture={midiLearnEvent && onMidiLearn ? { id: midiLearnEvent.id, value: midiLearnEvent.cc, onCapture: () => onMidiLearn(midiLearnEvent) } : undefined}
+    onGestureStart={() => { if (!editor.getSnapshot().gesture) editor.beginGesture('Edit Teia value'); }}
+    onGestureEnd={cancel => { if (!editor.getSnapshot().gesture) return; if (cancel) editor.cancelGesture(); else editor.commitGesture(); }} />;
 }
 
 function hasDraggedFiles(event: DragEvent<HTMLElement>): boolean {
@@ -6164,4 +4199,19 @@ export function makeNodeId(type: PatchNode['type'] | 'node', existingIds: Set<st
     id = `${base}_${index}`;
   }
   return id;
+}
+
+/** DSP layouts can position shared ports; they never create a second connection system. */
+function Handle(props: React.ComponentProps<typeof FlowHandle>) {
+  const { editor, projection } = useSpagbol();
+  const flowId = useNodeId();
+  const presented = useContext(TeiaNodeModel);
+  if (projection) return null;
+  const node = presented ?? editor.graph.nodes.find(node => `node:${node.id}` === flowId);
+  const direction = props.type === 'source' ? 'output' : 'input';
+  const name = String(props.id ?? '').replace(/^(in|out):/, '');
+  const port = node && portsFor(node, editor.nodes).find(port => port.direction === direction && portName(node, port.id, direction) === name);
+  if (!port && String(props.id).startsWith('virtual:')) return <SpagbolNodePort port={{ id: 'teia.virtual', label: 'virtual route', direction }} connectable={false} style={{ opacity: 0 }} />;
+  if (!port) return null;
+  return <SpagbolNodePort port={port} connectable={props.isConnectable !== false} style={props.style} className={props.className} position={props.position} />;
 }

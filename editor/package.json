@@ -10,8 +10,9 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@pauloricca/spagbol": "file:../vendor/pauloricca-spagbol-0.1.0.tgz",
     "@vitejs/plugin-react": "^5.0.0",
-    "@xyflow/react": "^12.8.4",
+    "@xyflow/react": "^12.11.0",
     "@xyflow/system": "0.0.77",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

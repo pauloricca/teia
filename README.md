@@ -337,8 +337,8 @@ Shortcuts are ignored while editing text or numeric fields unless noted otherwis
 | `Alt`-drag an Area, Spread, or Spawn | Duplicate the complete container hierarchy and contained graph. Add `Cmd`, `Ctrl`, or `Shift` to preserve links to nodes outside it. |
 | `Cmd`, `Ctrl`, or `Alt` while reconnecting a link endpoint | Keep the original link and create the reconnected link as a duplicate. |
 | Drag empty canvas | Rectangle-select nodes; their incoming and outgoing links highlight without selecting the links themselves. |
-| `Cmd/Ctrl`-drag empty canvas | Create an area. The gesture can switch between area creation and rectangle selection while the modifier is pressed or released. |
-| Double-click empty canvas | Create a new untyped node at the pointer. |
+| `Cmd/Ctrl`-drag empty canvas | Create an area. |
+| Double-click empty canvas | Open the node picker at the pointer. |
 | Double-click a link | Insert a new node into that link. |
 | Double-click a node title | Change the node type, or rename a compact node. A single click selects the node. |
 | Drag a node title | Move the node, whether its ports are expanded or compact. |
@@ -661,3 +661,20 @@ FFT remains unavailable in native mode; its separate implementation plan and all
 thread, queue and allocation rules are in [the host handover](docs/host-handover.md).
 
 Restoring official FM-1 V15 from Teia requires firmware **922 or newer**, which fixes the read-only boot-head comparison used by the official updater. See [return to official V15](firmware/fm1/UPLOAD.md#return-to-official-v15) for the validated-file requirement and USB installer command.
+## Shared graph UI (Spagbol)
+
+Both standalone and hosted Teia mount one `SpagbolCanvas` backed by Spagbol's `GraphEditor`. Spagbol owns the graph document, selection, history, node frames/ports, link controls, reconnection, duplication, clipboard, areas, grouping, nested navigation and exposed group panels. Teia's former canvas/controller and cable renderer have been removed.
+
+Teia supplies its DSP catalogue, specialized content in `editor/src/editor/TeiaNodeContent.tsx`, MIDI/engine observations, assets, transport, persistence and host/FM-1 bindings. `editor/src/spagbol/patchCodec.ts` converts existing patch formats to/from the shared model; saved patch JSON remains Teia's format. Runtime container geometry is normalized atomically with shared edits. Compiler/DSP and firmware implementations are unchanged. Slider, button and numeric scrubber implementations and their CSS belong to Spagbol; MIDI learning is a Teia binding to the numeric control's generic input capture.
+
+The shared frame keeps circular enable switches, +/− compact controls and inline type editing. Signal pins stay on the header. Compact nodes retain their content and connected port rows; hovering during connection dragging reveals nearby ports. Selected links use the shared two-row strength/mode box above the cables, with green endpoint pins. Group/Ins/Outs, boundary editing, UI/Controls areas and per-instance overrides are shared features. Type changes remap links through a shared command; selection scaling also runs through the shared controller as one undoable edit. Menus and zoom/history controls come from the canvas; Teia supplies audio, save/load, export and MIDI/FM-1 actions.
+
+After updating this local package, run `docker compose up --build` with your usual theme/environment, then refresh the existing Teia tab. Compose refreshes its dependency volume with `npm ci` before starting. No app restart or browser/audio test is performed by the migration itself. Check node controls, type conversion, connection/reconnection/strength links, duplication and undo; group nodes, edit Ins/Outs, expose controls through a UI area, and save/reload the patch. Browser/audio/host/hardware parity requires functional verification.
+
+The package is consumed from `vendor/pauloricca-spagbol-0.1.0.tgz`, without sibling source aliases. Build/pack Spagbol in Docker, copy its tarball into `vendor/`, and update the lockfile in an isolated Docker dependency volume. Static validation includes `node scripts/check-spagbol-codec.mjs`: all saved patch fixtures must round-trip and compile to unchanged DSP programs after a canonical edit. Root build/typecheck also audit engine and FM-1 capability contracts.
+
+Shared-canvas shortcuts: double-click the background to choose a node; double-click a selected node title to change its type; Cmd/Ctrl-drag the background to draw an area; Alt-drag nodes to duplicate; Cmd/Ctrl/Alt-drag selected cable endpoints to duplicate links. Cmd/Ctrl+C/V copies/pastes the shared fragment, Cmd/Ctrl+D duplicates, Cmd/Ctrl+A selects nodes, Cmd/Ctrl+Z undoes, Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y redoes, Cmd/Ctrl+0 resets zoom, and Delete/Backspace deletes the shared selection. Escape cancels the active canvas gesture/picker. With a selection, X toggles enabled state; S/A/M/B chooses set/add/multiply/bend link modes. Numeric fields keep Teia's modifier-based scrubbing/wheel behavior. App Space playback and save shortcuts remain Teia bindings. These shared-canvas instructions supersede descriptions of the removed canvas earlier in this reference.
+
+The shared canvas retains unchanged graph branches and node presentations, batches live observations to animation frames, and renders only visible nodes and cables. Numeric edits use shared value commands directly; ordinary layout moves retain the DSP preparation-key boundary. Params displays default/min/max columns, and nodes with only a signal input (or no inputs) and at most one output use Teia's automatic compact presentation. The corner actions share the original spacing and have no automatic menu divider.
+
+See [the Spagbol migration performance comparison](docs/benchmarks/2026-11-08-spagbol-canvas.md) for the original-editor baseline, matched dirty-saw measurements and the remaining audio-budget limitation. Docker development explicitly enables Vite polling when `CHOKIDAR_USEPOLLING=true` so source changes invalidate cached transforms.

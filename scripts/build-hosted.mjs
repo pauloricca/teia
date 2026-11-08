@@ -27,7 +27,10 @@ const result = await build({
   } }],
 });
 await copyFile(join(root, 'docs/hosted.md'), join(output, 'README.md'));
-await copyFile(join(root, 'editor/src/styles.css'), join(output, 'styles.css'));
+// Keep the exported stylesheet complete for hosts importing only this public
+// CSS entry. flow.css remains the separately exported React Flow base sheet.
+const sharedStyles = (await readFile(join(output, 'editor.css'), 'utf8')).replace(/@import\s+["']@xyflow\/react\/dist\/style\.css["'];?/g, '');
+await writeFile(join(output, 'styles.css'), sharedStyles + '\n' + await readFile(join(root, 'editor/src/styles.css'), 'utf8'));
 await copyFile(join(root, 'editor/src/themes.css'), join(output, 'themes.css'));
 await copyFile(join(root, 'node_modules/@xyflow/react/dist/style.css'), join(output, 'flow.css'));
 await mkdir(join(output, 'native/teia-kernel/src'), { recursive: true });
@@ -57,8 +60,8 @@ if(evidenceMatches) {
 }
 const manifest = {
   format: 'teia-hosted-compatibility', version: 1,
-  sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-  sourceDirty: execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], { cwd: root, encoding: 'utf8' }).length > 0,
+  sourceCommit: execFileSync('git', ['-c', `safe.directory=${root}`, 'rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+  sourceDirty: execFileSync('git', ['-c', `safe.directory=${root}`, 'status', '--porcelain', '--untracked-files=normal'], { cwd: root, encoding: 'utf8' }).length > 0,
   versions: { packages: Object.fromEntries(await Promise.all(['editor', 'runtime', 'kernel', 'hosted'].map(async path => [path, JSON.parse(await readFile(join(root, path, 'package.json'), 'utf8')).version]))), package: JSON.parse(await readFile(join(root, 'hosted/package.json'), 'utf8')).version, document: 1, legacyDocument: 0, program: 1, runtime: 1, bridge: 2, bridgeCompatible: [1, 2], xpManifest: 2, engineApis: [1, 2, 3] },
   nativeProfile: 'native-scalar-v1', nativeFunctionalVerification: evidenceMatches ? 'WASM/native equivalence; see verification.json for scope' : 'no current source-matched equivalence evidence',
   artifacts: files.sort((a, b) => a.path.localeCompare(b.path)),

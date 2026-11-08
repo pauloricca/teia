@@ -392,3 +392,5 @@ resource-free subset compared against Node WASM. Compiling fixtures alone is not
 verification. Import the whole matching `hosted/dist` tree and native source.
 
 Conditional Execution requires engine API 3 and execution revision 5. Hosted builds include the updated editor/compiler and native kernel sources; the host must rebuild its native kernel to execute the new persistent, sample-gated mode. The compatibility manifest declares engine APIs 1, 2 and 3. Static builds do not establish audio or host integration verification.
+
+The editor now consumes the complete Spagbol canvas/controller. Hosts keep the same `HostedNodeEditor` entry and CSS imports; exported `styles.css` includes Spagbol's graph/control styles. React Flow must satisfy `^12.11.0`. Teia retains DSP definitions, asset handling and bridge bindings. Spagbol owns graph state, history, grouping, frames/ports, cables and interactions. Domain type conversion and recorded-buffer copying use explicit canvas lifecycle hooks; the host's restrictions still apply. Building the hosted artifact compiles the isolation/conformance harnesses but does not run them.

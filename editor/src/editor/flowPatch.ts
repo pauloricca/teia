@@ -26,8 +26,10 @@ export type EditorPatchNode = Omit<PatchNode, 'type'> & {
   scopeSize?: ScopeNodeSize;
 };
 
-export interface ShaderNodeData extends Record<string, unknown> {
+export interface TeiaNodeData extends Record<string, unknown> {
   patchNode: EditorPatchNode;
+  /** Host-owned transient gestures, separate from canonical document values. */
+  transientParams?: Record<string, number>;
   /** Canvas-wide view lock: preserves layout while hiding connection affordances. */
   isCanvasLocked?: boolean;
   canvasZoom?: number;
@@ -129,14 +131,14 @@ export interface ShaderNodeData extends Record<string, unknown> {
     nodes: Array<{
       id: string;
       position: { x: number; y: number };
-      data: ShaderNodeData;
+      data: TeiaNodeData;
     }>;
   };
 }
 
-export type ShaderFlowNode = Node<ShaderNodeData, 'shaderNode'>;
+export type TeiaFlowNode = Node<TeiaNodeData, 'teiaNode'>;
 
-export interface ShaderEdgeData extends Record<string, unknown> {
+export interface TeiaEdgeData extends Record<string, unknown> {
   weight: number;
   mode: LinkMode;
   enabled: boolean;
@@ -150,9 +152,9 @@ export interface ShaderEdgeData extends Record<string, unknown> {
   modulatesEdgeId?: string;
   weightModulations?: LinkWeightModulation[];
   isWeightTarget?: boolean;
-  onReconnect?: ReactFlowProps<ShaderFlowNode, ShaderFlowEdge>['onReconnect'];
-  onReconnectStart?: ReactFlowProps<ShaderFlowNode, ShaderFlowEdge>['onReconnectStart'];
-  onReconnectEnd?: ReactFlowProps<ShaderFlowNode, ShaderFlowEdge>['onReconnectEnd'];
+  onReconnect?: ReactFlowProps<TeiaFlowNode, TeiaFlowEdge>['onReconnect'];
+  onReconnectStart?: ReactFlowProps<TeiaFlowNode, TeiaFlowEdge>['onReconnectStart'];
+  onReconnectEnd?: ReactFlowProps<TeiaFlowNode, TeiaFlowEdge>['onReconnectEnd'];
   isReconnecting?: boolean;
   showLinkControls?: boolean;
   /** Draw this link with the selected-link treatment because one of its nodes is selected. */
@@ -168,7 +170,7 @@ export interface ShaderEdgeData extends Record<string, unknown> {
   isAreaCollapsedPresentation?: boolean;
 }
 
-export type ShaderFlowEdge = Edge<ShaderEdgeData, 'shaderEdge' | 'virtualRoute'>;
+export type TeiaFlowEdge = Edge<TeiaEdgeData, 'teiaEdge' | 'virtualRoute'>;
 
 export interface PersistedEditorState {
   version: 1;
@@ -227,7 +229,7 @@ export interface PersistedEditorState {
 export type EditorArea = PatchArea;
 
 type NodeCallbacks = Pick<
-  ShaderNodeData,
+  TeiaNodeData,
   | 'onParamChange'
   | 'onParamsChange'
   | 'onCustomWaveChange'
@@ -254,10 +256,10 @@ export function toFlowNodes(
   patch: Patch,
   callbacks: NodeCallbacks,
   editingTypeNodeId: string | null,
-): ShaderFlowNode[] {
+): TeiaFlowNode[] {
   return patch.nodes.map((patchNode) => ({
     id: patchNode.id,
-    type: 'shaderNode',
+    type: 'teiaNode',
     position: patchNode.position ?? { x: 0, y: 0 },
     data: {
       patchNode,
@@ -269,10 +271,10 @@ export function toFlowNodes(
 
 export function toFlowEdges(
   patch: Patch,
-  onWeightChange: ShaderEdgeData['onWeightChange'],
-  onModeChange: ShaderEdgeData['onModeChange'],
-  onInsertNode: ShaderEdgeData['onInsertNode'],
-): ShaderFlowEdge[] {
+  onWeightChange: TeiaEdgeData['onWeightChange'],
+  onModeChange: TeiaEdgeData['onModeChange'],
+  onInsertNode: TeiaEdgeData['onInsertNode'],
+): TeiaFlowEdge[] {
   return expandWeightModulationEdges(
     patch.links.map((link) => edgeFromLink(link, onWeightChange, onModeChange, onInsertNode)),
     onWeightChange, onModeChange, onInsertNode,
@@ -283,11 +285,11 @@ export function editorStateToFlowNodes(
   state: PersistedEditorState,
   callbacks: NodeCallbacks,
   editingTypeNodeId: string | null,
-): ShaderFlowNode[] {
+): TeiaFlowNode[] {
   const normalizedState = normalizePersistedState(state);
   return normalizedState.nodes.map((node) => ({
     id: node.id,
-    type: 'shaderNode',
+    type: 'teiaNode',
     position: node.position,
     data: {
       patchNode: {
@@ -322,14 +324,14 @@ export function editorStateToFlowNodes(
 
 export function editorStateToFlowEdges(
   state: PersistedEditorState,
-  onWeightChange: ShaderEdgeData['onWeightChange'],
-  onModeChange: ShaderEdgeData['onModeChange'],
-  onInsertNode: ShaderEdgeData['onInsertNode'],
-): ShaderFlowEdge[] {
+  onWeightChange: TeiaEdgeData['onWeightChange'],
+  onModeChange: TeiaEdgeData['onModeChange'],
+  onInsertNode: TeiaEdgeData['onInsertNode'],
+): TeiaFlowEdge[] {
   const normalizedState = normalizePersistedState(state);
   return expandWeightModulationEdges(normalizedState.edges.map((edge) => ({
     ...edge,
-    type: 'shaderEdge',
+    type: 'teiaEdge',
     data: {
       weight: edge.weight ?? 1,
       mode: edge.mode ?? 'set',
@@ -341,13 +343,13 @@ export function editorStateToFlowEdges(
       onInsertNode,
       isFeedback: !edge.modulatesEdgeId && edge.source === edge.target,
     },
-    className: 'shader-edge',
+    className: 'teia-edge',
   })), onWeightChange, onModeChange, onInsertNode);
 }
 
 export function flowToEditorState(
-  nodes: ShaderFlowNode[],
-  edges: ShaderFlowEdge[],
+  nodes: TeiaFlowNode[],
+  edges: TeiaFlowEdge[],
   ui?: PersistedEditorState['ui'],
 ): PersistedEditorState {
   return {
@@ -436,7 +438,7 @@ function normalizeNodeDimension(value: number): number {
   return Number.isFinite(value) ? Math.max(1, Math.round(value)) : 1;
 }
 
-export function patchFromFlow(nodes: ShaderFlowNode[], edges: ShaderFlowEdge[], areas?: EditorArea[]): Patch {
+export function patchFromFlow(nodes: TeiaFlowNode[], edges: TeiaFlowEdge[], areas?: EditorArea[]): Patch {
   const typedNodeIds = new Set<string>();
   const passthroughNodeIds = new Set<string>();
   const patchNodes: PatchNode[] = [];
@@ -475,12 +477,12 @@ export function patchFromFlow(nodes: ShaderFlowNode[], edges: ShaderFlowEdge[], 
     });
   }
 
-  const modulationsByTarget = new Map<string, ShaderFlowEdge[]>();
+  const modulationsByTarget = new Map<string, TeiaFlowEdge[]>();
   for (const edge of edges) {
     const targetId = edge.data?.modulatesEdgeId;
     if (targetId) modulationsByTarget.set(targetId, [...(modulationsByTarget.get(targetId) ?? []), edge]);
   }
-  const modulationFromEdge = (edge: ShaderFlowEdge, visited: Set<string>): LinkWeightModulation | null => {
+  const modulationFromEdge = (edge: TeiaFlowEdge, visited: Set<string>): LinkWeightModulation | null => {
     if (visited.has(edge.id)) return null;
     const source = parseHandle(edge.sourceHandle);
     if (source?.kind !== 'out' || !typedNodeIds.has(edge.source)) return null;
@@ -517,13 +519,13 @@ export function patchFromFlow(nodes: ShaderFlowNode[], edges: ShaderFlowEdge[], 
 
 export function edgeFromLink(
   link: PatchLink,
-  onWeightChange: ShaderEdgeData['onWeightChange'],
-  onModeChange: ShaderEdgeData['onModeChange'],
-  onInsertNode: ShaderEdgeData['onInsertNode'],
-): ShaderFlowEdge {
+  onWeightChange: TeiaEdgeData['onWeightChange'],
+  onModeChange: TeiaEdgeData['onModeChange'],
+  onInsertNode: TeiaEdgeData['onInsertNode'],
+): TeiaFlowEdge {
   return {
     id: edgeId(link),
-    type: 'shaderEdge',
+    type: 'teiaEdge',
     source: link.from.node,
     sourceHandle: `out:${link.from.port}`,
     target: link.to.node,
@@ -538,27 +540,27 @@ export function edgeFromLink(
       onInsertNode,
       isFeedback: link.from.node === link.to.node,
     },
-    className: 'shader-edge',
+    className: 'teia-edge',
   };
 }
 
 function expandWeightModulationEdges(
-  edges: ShaderFlowEdge[],
-  onWeightChange: ShaderEdgeData['onWeightChange'],
-  onModeChange: ShaderEdgeData['onModeChange'],
-  onInsertNode: ShaderEdgeData['onInsertNode'],
-): ShaderFlowEdge[] {
-  const expanded: ShaderFlowEdge[] = [];
-  const append = (edge: ShaderFlowEdge, modulation: LinkWeightModulation, index: number) => {
+  edges: TeiaFlowEdge[],
+  onWeightChange: TeiaEdgeData['onWeightChange'],
+  onModeChange: TeiaEdgeData['onModeChange'],
+  onInsertNode: TeiaEdgeData['onInsertNode'],
+): TeiaFlowEdge[] {
+  const expanded: TeiaFlowEdge[] = [];
+  const append = (edge: TeiaFlowEdge, modulation: LinkWeightModulation, index: number) => {
     const id = `weight-modulation:${edge.id}:${index}`;
-    const child: ShaderFlowEdge = {
+    const child: TeiaFlowEdge = {
       id,
-      type: 'shaderEdge',
+      type: 'teiaEdge',
       source: modulation.from.node,
       sourceHandle: `out:${modulation.from.port}`,
       target: edge.target,
       targetHandle: edge.targetHandle,
-      className: 'shader-edge',
+      className: 'teia-edge',
       reconnectable: false,
       data: {
         weight: modulation.weight ?? 1,
@@ -978,12 +980,12 @@ function persistedEdgeFromPatchLink(link: PatchLink): PersistedEditorState['edge
   };
 }
 
-export function dedupeEdges(edges: ShaderFlowEdge[]): ShaderFlowEdge[] {
-  const deduped: ShaderFlowEdge[] = [];
-  const seen = new Map<string, ShaderFlowEdge>();
+export function dedupeEdges(edges: TeiaFlowEdge[]): TeiaFlowEdge[] {
+  const deduped: TeiaFlowEdge[] = [];
+  const seen = new Map<string, TeiaFlowEdge>();
   const aliases = new Map<string, string>();
   const byId = new Map(edges.map((edge) => [edge.id, edge]));
-  const identity = (edge: ShaderFlowEdge, visited = new Set<string>()): string => {
+  const identity = (edge: TeiaFlowEdge, visited = new Set<string>()): string => {
     const parent = edge.data?.modulatesEdgeId ? byId.get(edge.data.modulatesEdgeId) : undefined;
     if (!parent || visited.has(edge.id)) return linkFromEdge(edge) ? edgeId(linkFromEdge(edge)!) : edge.id;
     return JSON.stringify([edge.source, edge.sourceHandle, identity(parent, new Set([...visited, edge.id]))]);

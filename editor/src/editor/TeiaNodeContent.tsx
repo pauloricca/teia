@@ -42,9 +42,9 @@ import {
   DEFAULT_SCOPE_NODE_SIZE,
   SEQUENCER_MIN_CELL_SIZE,
   type ScopeNodeSize,
-  type ShaderFlowEdge,
-  type ShaderFlowNode,
-  type ShaderNodeData,
+  type TeiaFlowEdge,
+  type TeiaFlowNode,
+  type TeiaNodeData,
 } from './flowPatch';
 import { getSampleWaveform, type SampleWaveform, type SampleWaveformBin } from '../audio/sampleWaveformCache';
 import {
@@ -61,10 +61,10 @@ const FFT_ANALYSIS_MIN_FREQUENCY = 20;
 const FFT_ANALYSIS_MAX_FREQUENCY = 20000;
 
 const TeiaNodeModel = createContext<GraphNode | null>(null);
-export const TeiaNodeContent = memo(function TeiaNodeContent(props: { data: ShaderNodeData; shared: SpagbolNodeViewProps }) {
+export const TeiaNodeContent = memo(function TeiaNodeContent(props: { data: TeiaNodeData; shared: SpagbolNodeViewProps }) {
   return <TeiaNodeModel.Provider value={props.shared.node}><TeiaNodeContentInner {...props} /></TeiaNodeModel.Provider>;
 });
-function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: SpagbolNodeViewProps }) {
+function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: SpagbolNodeViewProps }) {
   const { selected } = shared;
   const flowNodeId = useNodeId() ?? `node:${shared.node.id}`;
   const node = data.patchNode;
@@ -88,7 +88,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
   const connectionInProgress = useConnection((connection) => connection.inProgress);
   const isCanvasLocked = data.isCanvasLocked === true;
   const scopeGradientId = `scope-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
-  const reactFlow = useReactFlow<ShaderFlowNode, ShaderFlowEdge>();
+  const reactFlow = useReactFlow<TeiaFlowNode, TeiaFlowEdge>();
   const graphZoomScale = graphDetailZoomScale(data.canvasZoom ?? Number.NaN);
   const graphScreenEmphasis = graphDetailScreenEmphasis(graphZoomScale);
   const headerTitleScale = canvasHeaderTitleScale(data.canvasZoom ?? Number.NaN);
@@ -912,8 +912,8 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                 type="target"
                 position={Position.Left}
                 className={[
-                  'shader-handle shader-handle-input spread-count-handle spawn-trigger-handle',
-                  selectedLinkInputs.includes('trigger') ? 'shader-handle-selected-link' : '',
+                  'teia-handle teia-handle-input spread-count-handle spawn-trigger-handle',
+                  selectedLinkInputs.includes('trigger') ? 'teia-handle-selected-link' : '',
                 ].filter(Boolean).join(' ')}
               />
               <span>trigger</span>
@@ -924,8 +924,8 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                 type="target"
                 position={Position.Left}
                 className={[
-                  'shader-handle shader-handle-input spread-count-handle spawn-release-trigger-handle',
-                  selectedLinkInputs.includes('release trigger') ? 'shader-handle-selected-link' : '',
+                  'teia-handle teia-handle-input spread-count-handle spawn-release-trigger-handle',
+                  selectedLinkInputs.includes('release trigger') ? 'teia-handle-selected-link' : '',
                 ].filter(Boolean).join(' ')}
               />
               <span>release trigger</span>
@@ -938,8 +938,8 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
               type="target"
               position={Position.Left}
               className={[
-                'shader-handle shader-handle-input spread-count-handle',
-                selectedLinkInputs.includes(isConditional ? 'gate' : 'count') ? 'shader-handle-selected-link' : '',
+                'teia-handle teia-handle-input spread-count-handle',
+                selectedLinkInputs.includes(isConditional ? 'gate' : 'count') ? 'teia-handle-selected-link' : '',
               ].filter(Boolean).join(' ')}
             />
             <span>{isConditional ? 'gate' : 'count'}</span>
@@ -962,8 +962,8 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                   type="source"
                   position={Position.Bottom}
                   className={[
-                    'shader-handle shader-handle-output spread-item-index-handle',
-                    selectedLinkOutputs.includes('instance gate') ? 'shader-handle-selected-link' : '',
+                    'teia-handle teia-handle-output spread-item-index-handle',
+                    selectedLinkOutputs.includes('instance gate') ? 'teia-handle-selected-link' : '',
                   ].filter(Boolean).join(' ')}
                 />
               </div>
@@ -974,10 +974,10 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                 type={isSpawn ? 'target' : 'source'}
                 position={Position.Bottom}
                 className={[
-                  `shader-handle ${isSpawn ? 'shader-handle-input' : 'shader-handle-output'} spread-item-index-handle`,
+                  `teia-handle ${isSpawn ? 'teia-handle-input' : 'teia-handle-output'} spread-item-index-handle`,
                   (isSpawn
                     ? selectedLinkInputs.includes('kill trigger')
-                  : selectedLinkOutputs.includes('item index')) ? 'shader-handle-selected-link' : '',
+                  : selectedLinkOutputs.includes('item index')) ? 'teia-handle-selected-link' : '',
                 ].filter(Boolean).join(' ')}
               />
               <span>{isSpawn ? 'kill trigger' : 'item index'}</span>
@@ -996,7 +996,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
         ref={nodeElementRef}
         className={[
           'routing-node-marker spagbol-canvas-drag-handle',
-          fm1Unsupported ? 'shader-node-fm1-unsupported' : '',
+          fm1Unsupported ? 'teia-node-fm1-unsupported' : '',
           `routing-node-marker-${isSend ? 'send' : 'receive'}`,
           connectionInProgress ? 'routing-node-drop-active' : '',
           data.routingHighlighted === true ? 'routing-node-marker-highlighted' : '',
@@ -1054,7 +1054,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label="Reverb mode"
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -1083,7 +1083,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label="Keys mode"
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -1111,7 +1111,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label="Custom Wave mode"
                     value={customWave?.mode ?? CUSTOM_WAVE_MODES[0].value}
                     onChange={(event) => {
@@ -1140,7 +1140,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     value={String(Math.round(node.params.direction ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
                       data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
@@ -1167,7 +1167,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label="Sequencer mode"
                     value={sequencerUsesGateMode(node.params) ? '1' : '0'}
                     onChange={(event) => {
@@ -1232,7 +1232,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label={`${showMeterDisplay ? 'Meter' : 'Scope'} mode`}
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -1260,7 +1260,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label="Scope reset"
                     value={String(Math.round(node.params.reset ?? input.defaultValue ?? 1))}
                     onChange={(event) => {
@@ -1288,7 +1288,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
                       data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
@@ -1316,7 +1316,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label="Buffer on reset"
                     value={String(clamp(Math.round(node.params['on reset'] ?? input.defaultValue ?? 0), 0, 1))}
                     onChange={(event) => {
@@ -1344,7 +1344,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label="Tempo source"
                     value={String(clamp(Math.round(node.params.source ?? input.defaultValue ?? 0), 0, 1))}
                     onChange={(event) => {
@@ -1372,7 +1372,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label="MIDI clock source"
                     value={String(clamp(Math.round(node.params.midiSource ?? input.defaultValue ?? 0), 0, Math.max(0, data.midiInput?.devices.length ?? 0)))}
                     onChange={(event) => {
@@ -1404,7 +1404,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
                       data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
@@ -1432,7 +1432,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label="Accumulator mode"
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -1460,7 +1460,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label={`${node.type} scale`}
                     value={String(clamp(Math.round(node.params.scale ?? input.defaultValue ?? 0), 0, QUANTISE_SCALES.length - 1))}
                     onChange={(event) => {
@@ -1489,7 +1489,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                     onChange={() => undefined}
                   />
                   <select
-                    className="shader-port-select nodrag nopan"
+                    className="teia-port-select nodrag nopan"
                     aria-label={`${node.type} root`}
                     value={String(normalisePitchClass(node.params.root ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -1574,7 +1574,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
                   onChange={(nextName) => data.onPortNameChange(node.id, 'output', output.name, nextName)}
                 />
                 {!output.preview && (node.type === 'Ins' || node.type === 'Params') && output.valueEditor !== false ? (
-                  <div className={node.type === 'Params' ? 'shader-params-values' : undefined}>
+                  <div className={node.type === 'Params' ? 'teia-params-values' : undefined}>
                     <NumericScrubber
                       value={node.params[output.name] ?? output.defaultValue ?? 0}
                       min={node.type === 'Ins' ? output.min : undefined}
@@ -1618,7 +1618,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
               />
             </>
           ) : null}</>;
-  return <SpagbolNodeFrame {...shared} forceCompact={forceCompactPorts} portsHeader={node.type === 'Params' ? <div className="shader-params-columns" aria-hidden="true"><span>default</span><span>min</span><span>max</span></div> : undefined} rootRef={nodeElementRef} headerOutput={node.type !== "Params" && !showSequencerDisplay} portVisible={port => !showSequencerDisplay || port.direction !== "output" || portName(shared.node, port.id, "output") === SEQUENCER_INDEX_OUTPUT} style={frameStyle} overlay={resizeControls} className={[node.type === 'Params' ? 'teia-node-params' : '', fm1Unsupported || hostedUnsupported ? 'teia-node-unsupported' : ''].filter(Boolean).join(' ')} renderPortContent={portContent} portExtras={isSelector ? <button type="button" className="selector-add-input-button nodrag nopan" onClick={() => data.onSelectorInputAdd?.(node.id)}>+</button> : null}>
+  return <SpagbolNodeFrame {...shared} forceCompact={forceCompactPorts} portsHeader={node.type === 'Params' ? <div className="teia-params-columns" aria-hidden="true"><span>default</span><span>min</span><span>max</span></div> : undefined} rootRef={nodeElementRef} headerOutput={node.type !== "Params" && !showSequencerDisplay} portVisible={port => !showSequencerDisplay || port.direction !== "output" || portName(shared.node, port.id, "output") === SEQUENCER_INDEX_OUTPUT} style={frameStyle} overlay={resizeControls} className={[node.type === 'Params' ? 'teia-node-params' : '', fm1Unsupported || hostedUnsupported ? 'teia-node-unsupported' : ''].filter(Boolean).join(' ')} renderPortContent={portContent} portExtras={isSelector ? <button type="button" className="selector-add-input-button nodrag nopan" onClick={() => data.onSelectorInputAdd?.(node.id)}>+</button> : null}>
     <div className="teia-node-content" onPointerEnter={() => setPointerOver(true)} onPointerLeave={() => setPointerOver(false)} onDragOver={handleSampleDragOver} onDrop={handleSampleDrop}>
           {isRoutingNode ? <Handle id={node.type === 'Send' ? 'virtual:send' : 'virtual:receive'} type={node.type === 'Send' ? 'source' : 'target'} position={node.type === 'Send' ? Position.Right : Position.Left} isConnectable={false} /> : null}
           {isExpression ? (
@@ -1686,7 +1686,7 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
             </div>
           ) : null}
           {showImageDisplay ? (
-            <div className="shader-node-full-width-display image-node-display nodrag nopan" aria-label={node.image?.url ? 'Image coordinate preview' : 'Image preview'}>
+            <div className="teia-node-full-width-display image-node-display nodrag nopan" aria-label={node.image?.url ? 'Image coordinate preview' : 'Image preview'}>
               {imagePreviewUrl ? <img src={imagePreviewUrl} alt={node.image?.name ?? 'Host image preview'} draggable={false} onLoad={handleImageLoad} /> : <span>{hostedMode ? 'Image preview requires host data' : 'Select an image'}</span>}
               {imagePreviewUrl ? <>
                 <i className="image-node-crosshair image-node-crosshair-vertical" style={{ left: `calc(${imageX} * (100% - 1px))` }} />
@@ -1757,6 +1757,8 @@ function TeiaNodeContentInner({ data, shared }: { data: ShaderNodeData; shared: 
               value={node.params.value ?? 0.5}
               displayValue={data.midiSliderValue ?? data.audioSliderValue}
               direction={Math.round(node.params.direction ?? 0) === 1 ? 'vertical' : 'horizontal'}
+              onGestureStart={() => shared.beginGesture('Change slider value')}
+              onGestureEnd={(cancel) => shared.endGesture(cancel)}
               onChange={(value) => data.onParamChange(node.id, 'value', value)}
             />
           ) : null}
@@ -2461,7 +2463,7 @@ interface CustomWaveEditorProps {
 }
 
 interface AudioInputDisplayProps {
-  state: ShaderNodeData['audioInput'];
+  state: TeiaNodeData['audioInput'];
   muted: boolean;
   onMutedChange: (muted: boolean) => void;
   onDeviceChange: (deviceId: string) => void;
@@ -2681,7 +2683,7 @@ function AudioInputDisplay({ state, muted, onMutedChange, onDeviceChange, onRefr
   );
 }
 
-function audioInputStatusLabel(status: NonNullable<ShaderNodeData['audioInput']>['status']): string {
+function audioInputStatusLabel(status: NonNullable<TeiaNodeData['audioInput']>['status']): string {
   switch (status) {
     case 'connected':
       return 'connected';
@@ -3402,8 +3404,8 @@ function SequencerGrid({
               type="source"
               position={Position.Right}
               className={[
-                'shader-handle shader-handle-output shader-handle-output-sequencer',
-                selectedLinkOutputs.includes(outputName) ? 'shader-handle-selected-link' : '',
+                'teia-handle teia-handle-output teia-handle-output-sequencer',
+                selectedLinkOutputs.includes(outputName) ? 'teia-handle-selected-link' : '',
               ].filter(Boolean).join(' ')}
             />
           </div>
@@ -4123,7 +4125,7 @@ function canLearnMidiCc(nodeType: NodeType | null, inputName: string): boolean {
   );
 }
 
-type MidiCcLearnEvent = NonNullable<NonNullable<ShaderNodeData['midiInput']>['lastControlChange']>;
+type MidiCcLearnEvent = NonNullable<NonNullable<TeiaNodeData['midiInput']>['lastControlChange']>;
 
 interface NumericScrubberProps {
   value: number;
@@ -4159,7 +4161,7 @@ function NoteRangeSelect({
     <>
       <PortNameLabel name={label} editable={false} draggable={false} preview={false} selected={false} activeDragTarget={false} activeDragSource={false} onChange={() => undefined} />
       <select
-        className="shader-port-select nodrag nopan"
+        className="teia-port-select nodrag nopan"
         aria-label={`Roll ${label}`}
         value={String(selected)}
         onChange={(event) => {

@@ -62,9 +62,9 @@ import {
   type PersistedEditorState,
   type EditorArea,
   type ScopeNodeSize,
-  type ShaderFlowEdge,
-  type ShaderFlowNode,
-  type ShaderNodeData,
+  type TeiaFlowEdge,
+  type TeiaFlowNode,
+  type TeiaNodeData,
   toFlowEdges,
   toFlowNodes,
 } from './flowPatch';
@@ -250,7 +250,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
 
   const [settledGraphZoom, setSettledGraphZoom] = useState(initialViewport.zoom);
   const [editorSize, setEditorSize] = useState({ width: 0, height: 0 });
-  const [reactFlow, setReactFlow] = useState<ReactFlowInstance<ShaderFlowNode, ShaderFlowEdge> | null>(null);
+  const [reactFlow, setReactFlow] = useState<ReactFlowInstance<TeiaFlowNode, TeiaFlowEdge> | null>(null);
   const initialPatch = useMemo(() => initialState
     ? { ...patchFromFlow(editorStateToFlowNodes(initialState, nodeCallbacksPlaceholder(), null), editorStateToFlowEdges(initialState, updateEdgeWeightPlaceholder, updateEdgeModePlaceholder, insertNodeOnEdgePlaceholder), initialState.areas), name: initialState.ui?.patchName, buffers: initialState.buffers }
     : demoPatch, []);
@@ -282,11 +282,11 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
   // React Flow gives us a new nodes array for every drag frame. Keep the
   // presentation objects for unaffected nodes referentially stable so the
   // memoized node components do not render just because another node moved.
-  const nodePresentationCacheRef = useRef<ShaderFlowNode[]>([]);
+  const nodePresentationCacheRef = useRef<TeiaFlowNode[]>([]);
   // Live visual data is attached in a later pass. It needs its own cache: the
   // audio payload object is replaced frequently even when a particular node's
   // displayed value did not change.
-  const renderedNodeCacheRef = useRef<ShaderFlowNode[]>([]);
+  const renderedNodeCacheRef = useRef<TeiaFlowNode[]>([]);
   const areasRef = useRef(areas);
   const edgesRef = useRef(edges);
   const editorShellRef = useRef<HTMLElement | null>(null);
@@ -1890,6 +1890,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
       const data = {
         ...nodeCallbacksPlaceholder(),
         patchNode: { ...effectiveInnerNode, id: previewId, position: undefined, params: { ...effectiveParams, ...hostedTransient[dspNodeId] } },
+        transientParams: hostedTransient[dspNodeId],
         isCanvasLocked: canvasLocked,
         canvasZoom: settledGraphZoom,
         isAreaUiCollapsedPresentation: true,
@@ -1931,7 +1932,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
         ...(innerNode.type === 'Buffer' ? { audioBuffer: audio.buffers[dspNodeId] } : {}),
         ...(innerNode.type === 'Buffer' && (!hosted || hosted.capabilities.bufferMutation) ? { onBufferClear: () => clearBufferRecording(dspNodeId) } : {}),
         ...(innerNode.type === 'SamplePlayer' ? { audioSampleParams: samplePlayerVisualizationParams(dspNodeId, audio.linkMeters) } : {}),
-      } satisfies ShaderNodeData;
+      } satisfies TeiaNodeData;
       return {
         id: previewId,
         position: {
@@ -1966,7 +1967,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
   const renderedNodes = useMemo(() => {
     const nextNodes = nodesWithGroupUi.map((sourceNode) => {
     const dspNodeId = runtimeDspNodeIdForFlowNode(sourceNode, nodesWithGroupUi, activeDspGroupIds);
-    const node = hostedTransient[dspNodeId] ? { ...sourceNode, data: { ...sourceNode.data, patchNode: { ...sourceNode.data.patchNode, params: { ...sourceNode.data.patchNode.params, ...hostedTransient[dspNodeId] } } } } : sourceNode;
+    const node = hostedTransient[dspNodeId] ? { ...sourceNode, data: { ...sourceNode.data, transientParams: hostedTransient[dspNodeId], patchNode: { ...sourceNode.data.patchNode, params: { ...sourceNode.data.patchNode.params, ...hostedTransient[dspNodeId] } } } } : sourceNode;
     const monitorLinkId = monitorLinkIdByNode.get(dspNodeId);
     const audioOutputLeft = audio.linkMeters[`${dspNodeId}:left`]?.output ?? 0;
     const audioOutputRight = audio.linkMeters[`${dspNodeId}:right`]?.output ?? 0;
@@ -2431,7 +2432,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
       ...current.map((node) => ({ ...node, selected: false })),
       {
         id,
-        type: 'shaderNode',
+        type: 'teiaNode',
         position,
         selected: true,
         data: {
@@ -2614,7 +2615,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
               onChangeNodeKind={changeCanvasNodeKind}
               className="teia-graph-canvas"
               defaultViewport={initialViewport}
-              onInit={instance => setReactFlow(instance as unknown as ReactFlowInstance<ShaderFlowNode, ShaderFlowEdge>)}
+              onInit={instance => setReactFlow(instance as unknown as ReactFlowInstance<TeiaFlowNode, TeiaFlowEdge>)}
               onViewportChange={viewport => { viewportRef.current = viewport; setSettledViewport(viewport); if (!hosted) storeViewport(viewport); }}
               controls={{
                 leading: <>
@@ -3753,13 +3754,13 @@ function addDiagnostic(map: Map<string, string[]>, key: string, error: string): 
  * The controlled React Flow API updates the nodes array while a node is being
  * dragged. Decoration below adds callbacks and visual state, so rebuilding
  * that decoration naively changes every node's `data` reference and defeats
- * `memo(ShaderNode)`. Reuse a prior presentation whenever its shallow values
+ * `memo(TeiaNodeView)`. Reuse a prior presentation whenever its shallow values
  * are identical; the moved/resized node still receives its new object.
  */
 function reuseUnchangedNodePresentations(
-  previousNodes: ShaderFlowNode[],
-  nextNodes: ShaderFlowNode[],
-): ShaderFlowNode[] {
+  previousNodes: TeiaFlowNode[],
+  nextNodes: TeiaFlowNode[],
+): TeiaFlowNode[] {
   const previousById = new Map(previousNodes.map((node) => [node.id, node]));
   return nextNodes.map((nextNode) => {
     const previousNode = previousById.get(nextNode.id);
@@ -3769,7 +3770,7 @@ function reuseUnchangedNodePresentations(
   });
 }
 
-function shallowEqualFlowNodePresentation(left: ShaderFlowNode, right: ShaderFlowNode): boolean {
+function shallowEqualFlowNodePresentation(left: TeiaFlowNode, right: TeiaFlowNode): boolean {
   const leftRecord = left as unknown as Record<string, unknown>;
   const rightRecord = right as unknown as Record<string, unknown>;
   const leftKeys = Object.keys(leftRecord);
@@ -3931,8 +3932,8 @@ function compareLocalSubpatchSources(a: LocalSubpatchImportSource, b: LocalSubpa
 }
 
 function flowPositionForNewImport(
-  reactFlow: ReactFlowInstance<ShaderFlowNode, ShaderFlowEdge> | null,
-  nodes: ShaderFlowNode[],
+  reactFlow: ReactFlowInstance<TeiaFlowNode, TeiaFlowEdge> | null,
+  nodes: TeiaFlowNode[],
 ): { x: number; y: number } {
   if (reactFlow) {
     return reactFlow.screenToFlowPosition({
@@ -4035,8 +4036,8 @@ function patchWithMidiControlVisuals(patch: Patch, visuals: Record<string, MidiC
 
 function midiControlVisualsForChange(
   current: Record<string, MidiControlVisualState>,
-  nodes: ShaderFlowNode[],
-  edges: ShaderFlowEdge[],
+  nodes: TeiaFlowNode[],
+  edges: TeiaFlowEdge[],
   controlChange: MidiControlChange,
 ): Record<string, MidiControlVisualState> {
   let next = current;
@@ -4157,12 +4158,12 @@ function midiControlVisualsForChange(
 }
 
 function applyMidiControlChangeToNodes(
-  nodes: ShaderFlowNode[],
-  edges: ShaderFlowEdge[],
+  nodes: TeiaFlowNode[],
+  edges: TeiaFlowEdge[],
   controlChange: MidiControlChange,
   previousVisuals: Record<string, MidiControlVisualState>,
   nextVisuals: Record<string, MidiControlVisualState>,
-): ShaderFlowNode[] {
+): TeiaFlowNode[] {
   let changed = false;
 
   const nextNodes = nodes.map((node) => {
@@ -4267,8 +4268,8 @@ function clearMidiControlVisual(
 }
 
 function routingSelectionHighlights(
-  nodes: ShaderFlowNode[],
-  edges: ShaderFlowEdge[],
+  nodes: TeiaFlowNode[],
+  edges: TeiaFlowEdge[],
 ): { nodeIds: Set<string>; edgeIds: Set<string>; pairs: Array<[string, string]> } {
   const nodeById = new Map(nodes.map((node) => [node.id, node.data.patchNode]));
   const nodeIds = new Set<string>();
@@ -4394,7 +4395,7 @@ function routingNodeNumber(value: number | undefined): number {
   return clampInteger(value ?? 1, 1, 10);
 }
 
-function nodeInputIsConnected(edges: ShaderFlowEdge[], nodeId: string, port: string): boolean {
+function nodeInputIsConnected(edges: TeiaFlowEdge[], nodeId: string, port: string): boolean {
   return edges.some((edge) => {
     const link = linkFromEdge(edge);
     return link?.to.node === nodeId && link.to.port === port;
@@ -4450,7 +4451,7 @@ function boundaryPortDefinitions(
   return definitions;
 }
 
-function edgeEndpoints(edge: ShaderFlowEdge): PatchLink | null {
+function edgeEndpoints(edge: TeiaFlowEdge): PatchLink | null {
   return linkFromEdge(edge.data?.modulatesEdgeId
     ? { ...edge, data: { ...edge.data, modulatesEdgeId: undefined } }
     : edge);
@@ -4515,7 +4516,7 @@ function resizedPatternScopeSize(patchNode: PatchNode, nextParams: Record<string
   return undefined;
 }
 
-function viewportNodeSize(node: ShaderFlowNode): { width: number; height: number } {
+function viewportNodeSize(node: TeiaFlowNode): { width: number; height: number } {
   const measuredWidth = finitePositiveNumber(node.measured?.width ?? node.width ?? node.initialWidth);
   const measuredHeight = finitePositiveNumber(node.measured?.height ?? node.height ?? node.initialHeight);
   if (measuredWidth !== null && measuredHeight !== null) {
@@ -4589,7 +4590,7 @@ function viewportNodeSize(node: ShaderFlowNode): { width: number; height: number
  * prevents traces from stopping while a node sits just outside the viewport.
  */
 function isNodeVisibleInViewport(
-  node: ShaderFlowNode,
+  node: TeiaFlowNode,
   viewport: Viewport,
   editorSize: { width: number; height: number },
 ): boolean {
@@ -4609,7 +4610,7 @@ function isNodeVisibleInViewport(
     && node.position.y <= bottom;
 }
 
-function flowNodeIsInsideSpread(spread: ShaderFlowNode, node: ShaderFlowNode): boolean {
+function flowNodeIsInsideSpread(spread: TeiaFlowNode, node: TeiaFlowNode): boolean {
   if (
     (spread.data.patchNode.type !== 'Spread' && spread.data.patchNode.type !== 'Spawn' && spread.data.patchNode.type !== 'ConditionalExecution')
     || node.id === spread.id
@@ -4628,8 +4629,8 @@ function flowNodeIsInsideSpread(spread: ShaderFlowNode, node: ShaderFlowNode): b
 }
 
 function runtimeDspNodeIdForFlowNode(
-  node: ShaderFlowNode,
-  nodes: ShaderFlowNode[],
+  node: TeiaFlowNode,
+  nodes: TeiaFlowNode[],
   groupIds: readonly string[],
 ): string {
   const container = nodes.find((candidate) => flowNodeIsInsideSpread(candidate, node));
@@ -4649,7 +4650,7 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function nodeBounds(nodes: ShaderFlowNode[]): { x: number; y: number; width: number; height: number } {
+function nodeBounds(nodes: TeiaFlowNode[]): { x: number; y: number; width: number; height: number } {
   const xs = nodes.map((node) => node.position.x);
   const ys = nodes.map((node) => node.position.y);
   const minX = Math.min(...xs);
@@ -4685,7 +4686,7 @@ function connectedAreaIds(areas: EditorArea[], rootId: string): Set<string> {
 
 function nodeIdsContainedByAreaHierarchy(
   areas: EditorArea[],
-  nodes: ShaderFlowNode[],
+  nodes: TeiaFlowNode[],
   rootId: string,
 ): Set<string> {
   const containedAreaIds = connectedAreaIds(areas, rootId);
@@ -4715,7 +4716,7 @@ function areaContainsArea(area: EditorArea, candidate: EditorArea): boolean {
     : areaContainsPoint(area, candidate.position);
 }
 
-function areaContainsNode(area: EditorArea, node: ShaderFlowNode): boolean {
+function areaContainsNode(area: EditorArea, node: TeiaFlowNode): boolean {
   // Locked membership is an explicit snapshot, including an explicitly empty
   // one. Never fall back to overlap for a locked Area, Spread, or Spawn.
   return area.locked
@@ -4802,12 +4803,12 @@ function nextBoundaryPortParams(
 }
 
 function renameEdgePort(
-  edge: ShaderFlowEdge,
+  edge: TeiaFlowEdge,
   nodeId: string,
   side: 'input' | 'output',
   previousPort: string,
   nextPort: string,
-): ShaderFlowEdge {
+): TeiaFlowEdge {
   if (edge.data?.modulatesEdgeId) {
     if (side === 'output' && edge.source === nodeId && edge.sourceHandle === `out:${previousPort}`) {
       return { ...edge, sourceHandle: `out:${nextPort}` };
@@ -4921,11 +4922,11 @@ function remapSelectorParamsAfterRemoval(
 }
 
 function remapSelectorEdgeAfterRemoval(
-  edge: ShaderFlowEdge,
+  edge: TeiaFlowEdge,
   nodeId: string,
   portMap: Map<string, string>,
   removedIndex: number,
-): ShaderFlowEdge[] {
+): TeiaFlowEdge[] {
   const link = linkFromEdge(edge);
   if (!link || link.to.node !== nodeId || !isSelectorValuePortName(link.to.port)) return [edge];
   if (Number(link.to.port) === removedIndex) return [];
@@ -4987,16 +4988,16 @@ function nodeZIndex(
 
 
 function transformEdgeTree(
-  edges: ShaderFlowEdge[],
-  transform: (edge: ShaderFlowEdge) => ShaderFlowEdge | null,
-): ShaderFlowEdge[] {
-  const replacements = new Map<string, ShaderFlowEdge>();
+  edges: TeiaFlowEdge[],
+  transform: (edge: TeiaFlowEdge) => TeiaFlowEdge | null,
+): TeiaFlowEdge[] {
+  const replacements = new Map<string, TeiaFlowEdge>();
   for (const edge of edges) {
     const replacement = transform(edge);
     if (replacement) replacements.set(edge.id, replacement);
   }
-  const resolved = new Map<string, ShaderFlowEdge | null>();
-  const resolve = (edge: ShaderFlowEdge, visited = new Set<string>()): ShaderFlowEdge | null => {
+  const resolved = new Map<string, TeiaFlowEdge | null>();
+  const resolve = (edge: TeiaFlowEdge, visited = new Set<string>()): TeiaFlowEdge | null => {
     if (resolved.has(edge.id)) return resolved.get(edge.id) ?? null;
     if (visited.has(edge.id)) return null;
     const replacement = replacements.get(edge.id);

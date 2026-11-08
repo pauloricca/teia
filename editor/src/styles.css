@@ -696,13 +696,13 @@ button:hover {
   background: currentColor;
 }
 
-.shader-node-area-hidden {
+.teia-node-area-hidden {
   visibility: hidden;
   pointer-events: none;
 }
 
-.shader-node-area-ui-collapsed .react-flow__handle,
-.shader-node-area-ui-collapsed .shader-handle {
+.teia-node-area-ui-collapsed .react-flow__handle,
+.teia-node-area-ui-collapsed .teia-handle {
   /* Keep handle boxes measurable while hiding them. React Flow can otherwise
      emit a transient (0, 0) cable endpoint as collapsed membership changes. */
   visibility: hidden;
@@ -710,26 +710,26 @@ button:hover {
 }
 
 /* LK hides handles without changing their measured positions or node geometry. */
-.shader-node-canvas-locked .react-flow__handle,
-.shader-node-canvas-locked .shader-handle {
+.teia-node-canvas-locked .react-flow__handle,
+.teia-node-canvas-locked .teia-handle {
   visibility: hidden;
   pointer-events: none;
 }
 
-.shader-node-canvas-locked .node-enabled-toggle,
-.shader-node-canvas-locked .node-compact-toggle {
+.teia-node-canvas-locked .node-enabled-toggle,
+.teia-node-canvas-locked .node-compact-toggle {
   visibility: hidden;
   pointer-events: none;
 }
 
-.shader-node-area-ui-collapsed .audio-node-scope-resize-handle,
-.shader-node-area-ui-collapsed .node-enabled-toggle,
-.shader-node-area-ui-collapsed .node-compact-toggle {
+.teia-node-area-ui-collapsed .audio-node-scope-resize-handle,
+.teia-node-area-ui-collapsed .node-enabled-toggle,
+.teia-node-area-ui-collapsed .node-compact-toggle {
   display: none;
 }
 
 /* The visible UI is for operating the control; node editing resumes on expand. */
-.shader-node-area-ui-collapsed .shader-node-title {
+.teia-node-area-ui-collapsed .teia-node-title {
   pointer-events: none;
 }
 
@@ -831,7 +831,7 @@ button:hover {
   border: 0;
 }
 
-.shader-node {
+.teia-node {
   position: relative;
   width: max-content;
   zoom: var(--node-scale, 1);
@@ -847,7 +847,7 @@ button:hover {
   overflow: visible;
 }
 
-.shader-node-disabled {
+.teia-node-disabled {
   border-style: dashed;
   opacity: 0.48;
 }
@@ -977,135 +977,135 @@ button:hover {
   right: 0;
 }
 
-.shader-node-scope {
+.teia-node-scope {
   width: max(var(--node-display-width, 224px), 160px);
   background: var(--color-surface);
 }
 
-.shader-node-meter {
+.teia-node-meter {
   width: max(var(--node-display-width, 224px), 160px);
   background: var(--color-surface);
 }
 
-.shader-node-fft {
+.teia-node-fft {
   width: max(var(--node-display-width, 420px), 160px);
   background: var(--color-surface);
 }
 
-.shader-node-slider {
+.teia-node-slider {
   width: var(--node-display-width, 224px);
   min-width: 72px;
   background: var(--color-surface);
 }
 
-.shader-node-joystick {
+.teia-node-joystick {
   width: var(--node-display-width, 160px);
   min-width: 72px;
   background: var(--color-surface);
 }
 
-.shader-node-button {
+.teia-node-button {
   width: var(--node-display-width, 224px);
   min-width: 72px;
   background: var(--color-surface);
 }
 
-.shader-node-keys {
+.teia-node-keys {
   width: var(--node-display-width, 372px);
   min-width: 180px;
   background: var(--color-surface);
 }
 
-.shader-node-accumulator {
+.teia-node-accumulator {
   --accumulator-control-width: 96px;
   min-width: 116px;
   background: var(--color-surface);
 }
 
-.shader-node-quantise {
+.teia-node-quantise {
   min-width: calc(var(--input-label-width, 0ch) + 106px);
 }
 
-.shader-node-joystick:has(.shader-inputs:not(:empty)),
-.shader-node-button:has(.shader-inputs:not(:empty)),
-.shader-node-keys:has(.shader-inputs:not(:empty)) {
+.teia-node-joystick:has(.teia-inputs:not(:empty)),
+.teia-node-button:has(.teia-inputs:not(:empty)),
+.teia-node-keys:has(.teia-inputs:not(:empty)) {
   min-width: max(72px, calc(var(--input-label-width, 0ch) + 90px));
 }
 
-.shader-node-slider .shader-node-content-ports {
+.teia-node-slider .teia-node-content-ports {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   overflow: hidden;
 }
 
-.shader-node-slider .shader-node-content-ports .shader-outputs {
+.teia-node-slider .teia-node-content-ports .teia-outputs {
   width: 100%;
   min-width: 0;
   overflow: hidden;
 }
 
-.shader-node-slider .shader-node-content-ports .shader-port-input {
+.teia-node-slider .teia-node-content-ports .teia-port-input {
   grid-template-columns: minmax(0, 1fr) 68px;
 }
 
-.shader-node-slider .shader-node-content-ports .shader-port-output span {
+.teia-node-slider .teia-node-content-ports .teia-port-output span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.shader-node-sequencer,
-.shader-node-roll {
+.teia-node-sequencer,
+.teia-node-roll {
   width: var(--node-display-width, 416px);
   min-width: 0;
   background: var(--color-surface);
 }
 
-.shader-node-audio-out {
+.teia-node-audio-out {
   min-width: 172px;
 }
 
-.shader-node-audio-input {
+.teia-node-audio-input {
   width: 244px;
   background: var(--color-surface);
 }
 
-.shader-node-midi-note {
+.teia-node-midi-note {
   width: 252px;
   background: var(--color-surface);
 }
 
-.shader-node-custom-wave {
+.teia-node-custom-wave {
   width: max(var(--node-display-width, 372px), 220px);
   background: var(--color-surface);
 }
 
-.shader-node-sampleplayer {
+.teia-node-sampleplayer {
   width: max(var(--node-display-width, 372px), 220px);
   background: var(--color-surface);
 }
 
-.shader-node-buffer {
+.teia-node-buffer {
   width: max(var(--node-display-width, 372px), 220px);
   background: var(--color-surface);
 }
 
-.shader-node-image {
+.teia-node-image {
   width: var(--node-display-width, 372px);
   min-width: 160px;
   background: var(--color-surface);
 }
 
-.shader-node.shader-node-auto-width {
+.teia-node.teia-node-auto-width {
   width: max-content;
 }
 
-.shader-node-auto-width.shader-node-slider {
+.teia-node-auto-width.teia-node-slider {
   width: var(--node-display-width, max-content);
 }
 
-.shader-node-auto-width.shader-node-scope,
-.shader-node-auto-width.shader-node-meter,
-.shader-node-auto-width.shader-node-fft {
+.teia-node-auto-width.teia-node-scope,
+.teia-node-auto-width.teia-node-meter,
+.teia-node-auto-width.teia-node-fft {
   min-width: 160px;
 }
 
@@ -1210,43 +1210,43 @@ button:hover {
   order: 1;
 }
 
-.shader-node-area-ui-collapsed .spread-port-panel .react-flow__handle,
-.shader-node-area-ui-collapsed .spread-port-panel .shader-handle {
+.teia-node-area-ui-collapsed .spread-port-panel .react-flow__handle,
+.teia-node-area-ui-collapsed .spread-port-panel .teia-handle {
   display: block;
 }
 
-.shader-node-expression {
+.teia-node-expression {
   width: 240px;
 }
 
-.react-flow__node.selected .shader-node,
-.shader-node-selected {
+.react-flow__node.selected .teia-node,
+.teia-node-selected {
   outline: 2px solid var(--color-node-selection-outline);
   outline-offset: 4px;
   box-shadow: 0 0 0 1px var(--color-background), 0 0 0 6px var(--color-foreground-28);
 }
 
-.react-flow__node.selected .shader-node-title,
-.shader-node-selected .shader-node-title {
+.react-flow__node.selected .teia-node-title,
+.teia-node-selected .teia-node-title {
   background: var(--color-selection);
   color: var(--color-background);
 }
 
-.react-flow__node.shader-node-preview {
+.react-flow__node.teia-node-preview {
   opacity: 0.48;
   pointer-events: none;
 }
 
-.shader-node-preview .shader-node {
+.teia-node-preview .teia-node {
   border-style: dashed;
   background: var(--color-background-42);
 }
 
-.shader-node-preview .shader-node-title {
+.teia-node-preview .teia-node-title {
   background: var(--color-foreground-72);
 }
 
-.shader-node-title {
+.teia-node-title {
   position: relative;
   display: flex;
   align-items: center;
@@ -1261,7 +1261,7 @@ button:hover {
   font-weight: 700;
 }
 
-.shader-node-compact .shader-node-title:last-child {
+.teia-node-compact .teia-node-title:last-child {
   border-bottom: 0;
 }
 
@@ -1269,7 +1269,7 @@ button:hover {
   display: contents;
 }
 
-.shader-node-slider .node-title-control-shell {
+.teia-node-slider .node-title-control-shell {
   position: relative;
   display: block;
   height: 22px;
@@ -1277,7 +1277,7 @@ button:hover {
   flex: 1 1 auto;
 }
 
-.shader-node-slider .node-title-control-shell:has(.node-title-with-live-readout) {
+.teia-node-slider .node-title-control-shell:has(.node-title-with-live-readout) {
   overflow: hidden;
 }
 
@@ -1328,7 +1328,7 @@ button:hover {
   white-space: nowrap;
 }
 
-.shader-node-resettable-header .slider-node-title-readout {
+.teia-node-resettable-header .slider-node-title-readout {
   background: var(--color-background);
   color: var(--color-foreground);
 }
@@ -1338,16 +1338,16 @@ button:hover {
   outline-offset: 2px;
 }
 
-.shader-node-group > .shader-node-title {
+.teia-node-group > .teia-node-title {
   background: var(--color-accent);
   color: var(--color-background);
 }
 
-.shader-node-group:has(.group-ui-preview) {
+.teia-node-group:has(.group-ui-preview) {
   width: max(var(--group-ui-width, 0px), 160px);
 }
 
-.shader-node-group:has(.group-ui-preview)::after {
+.teia-node-group:has(.group-ui-preview)::after {
   position: absolute;
   z-index: 1;
   top: 31px;
@@ -1371,30 +1371,30 @@ button:hover {
   position: absolute;
 }
 
-.group-ui-preview-node > .shader-node {
+.group-ui-preview-node > .teia-node {
   pointer-events: auto;
 }
 
-.react-flow__node.selected .group-ui-preview-node > .shader-node,
-.shader-node-selected .group-ui-preview-node > .shader-node {
+.react-flow__node.selected .group-ui-preview-node > .teia-node,
+.teia-node-selected .group-ui-preview-node > .teia-node {
   outline: 0;
   box-shadow: none;
 }
 
-.shader-node-resettable-header .shader-node-title,
-.react-flow__node.selected .shader-node-resettable-header .shader-node-title,
-.shader-node-selected .shader-node-resettable-header .shader-node-title {
+.teia-node-resettable-header .teia-node-title,
+.react-flow__node.selected .teia-node-resettable-header .teia-node-title,
+.teia-node-selected .teia-node-resettable-header .teia-node-title {
   pointer-events: auto;
   cursor: pointer;
   background: var(--color-background);
   color: var(--color-foreground);
 }
 
-.shader-node-dsp-error {
+.teia-node-dsp-error {
   border-color: var(--color-error);
 }
 
-.shader-node-dsp-error .shader-node-title {
+.teia-node-dsp-error .teia-node-title {
   box-shadow: inset 0 -2px 0 var(--color-error);
 }
 
@@ -1465,7 +1465,7 @@ button:hover {
   border-radius: 50%;
 }
 
-.shader-node-disabled .node-enabled-icon {
+.teia-node-disabled .node-enabled-icon {
   background: currentColor;
 }
 
@@ -1499,8 +1499,8 @@ button:hover {
   outline: 0;
 }
 
-.shader-node-dragging .node-type-picker-button:hover,
-.shader-node-dragging .node-type-picker-button:focus,
+.teia-node-dragging .node-type-picker-button:hover,
+.teia-node-dragging .node-type-picker-button:focus,
 .react-flow__node.dragging .node-type-picker-button:hover,
 .react-flow__node.dragging .node-type-picker-button:focus,
 .node-type-picker-button-drag-intent,
@@ -1594,7 +1594,7 @@ button:hover {
   color: var(--color-text-muted);
 }
 
-.shader-node-body {
+.teia-node-body {
   position: relative;
   display: grid;
   grid-template-columns: max-content max-content;
@@ -1604,14 +1604,14 @@ button:hover {
   padding: var(--node-content-padding);
 }
 
-.shader-node-body-no-outputs {
+.teia-node-body-no-outputs {
   grid-template-columns: minmax(0, 1fr);
   justify-content: start;
 }
 
 /* Every node with a visual editor uses the same two-row layout: graphic first,
    then a shared input/output port grid. */
-.shader-node-body-graphic {
+.teia-node-body-graphic {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1655,7 +1655,7 @@ button:hover {
   padding-bottom: 0;
 }
 
-.shader-node-content-ports {
+.teia-node-content-ports {
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
   column-gap: 10px;
@@ -1663,50 +1663,50 @@ button:hover {
   min-width: 0;
 }
 
-.shader-node-content-ports-empty {
+.teia-node-content-ports-empty {
   display: contents;
 }
 
-.shader-node-content-ports-no-outputs {
+.teia-node-content-ports-no-outputs {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.shader-node-content-ports .shader-inputs,
-.shader-node-content-ports .shader-outputs {
+.teia-node-content-ports .teia-inputs,
+.teia-node-content-ports .teia-outputs {
   width: 100%;
   min-width: 0;
   padding: var(--node-content-padding);
 }
 
-.shader-node-content-ports .shader-inputs {
+.teia-node-content-ports .teia-inputs {
   grid-column: 1;
 }
 
-.shader-node-content-ports .shader-outputs {
+.teia-node-content-ports .teia-outputs {
   grid-column: 2;
   width: max-content;
 }
 
-.shader-node-content-ports .shader-port {
+.teia-node-content-ports .teia-port {
   width: 100%;
   min-width: 0;
 }
 
-.shader-node-content-ports .shader-port-input {
+.teia-node-content-ports .teia-port-input {
   grid-template-columns: minmax(max-content, var(--input-label-width, max-content)) 68px;
 }
 
-.shader-node-content-ports .shader-port-input span {
+.teia-node-content-ports .teia-port-input span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.shader-node-content-ports .shader-port-output {
+.teia-node-content-ports .teia-port-output {
   width: 100%;
 }
 
-.shader-node-body-expression {
+.teia-node-body-expression {
   grid-template-columns: minmax(0, 1fr);
   width: 100%;
 }
@@ -1958,7 +1958,7 @@ button:hover {
   height: 1px;
 }
 
-.shader-node-body-audio-input {
+.teia-node-body-audio-input {
   grid-template-columns: minmax(0, 1fr);
   width: 100%;
 }
@@ -2121,7 +2121,7 @@ button:hover {
   opacity: 0.5;
 }
 
-.shader-node-full-width-display {
+.teia-node-full-width-display {
   grid-column: 1 / -1;
   width: 100%;
   max-width: 100%;
@@ -2332,17 +2332,17 @@ button:hover {
   line-height: 20px;
 }
 
-.shader-node-body-draft {
+.teia-node-body-draft {
   grid-template-columns: minmax(52px, 1fr) 52px;
   min-height: 26px;
 }
 
-.shader-node-body-audio-out {
+.teia-node-body-audio-out {
   row-gap: 6px;
 }
 
-.shader-node-body-sequencer,
-.shader-node-body-roll {
+.teia-node-body-sequencer,
+.teia-node-body-roll {
   grid-template-columns: max-content max-content;
   gap: 10px;
   justify-content: space-between;
@@ -2352,7 +2352,7 @@ button:hover {
 }
 
 /* Roll's PatternGrid is the first flex child: it must meet the header directly. */
-.shader-node-body-roll { gap: 0; }
+.teia-node-body-roll { gap: 0; }
 
 .scope-preview {
   display: block;
@@ -2377,27 +2377,27 @@ button:hover {
   margin-top: 4px;
 }
 
-.shader-ports {
+.teia-ports {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: max-content;
 }
 
-.shader-inputs {
+.teia-inputs {
   grid-column: 1;
 }
 
-.shader-outputs {
+.teia-outputs {
   grid-column: 2;
 }
 
-.shader-node-body-no-outputs .shader-ports {
+.teia-node-body-no-outputs .teia-ports {
   width: 100%;
   min-width: 0;
 }
 
-.shader-port {
+.teia-port {
   position: relative;
   display: flex;
   align-items: center;
@@ -2405,14 +2405,14 @@ button:hover {
   min-width: max-content;
 }
 
-.shader-port-input {
+.teia-port-input {
   display: grid;
   grid-template-columns: minmax(max-content, var(--input-label-width, max-content)) 68px;
   align-items: center;
   gap: 6px;
 }
 
-.shader-port-input span {
+.teia-port-input span {
   min-width: max-content;
   overflow: visible;
   text-overflow: clip;
@@ -2788,20 +2788,20 @@ button:hover {
 
 
 
-.shader-port-output {
+.teia-port-output {
   gap: 6px;
   justify-content: flex-end;
   padding-right: 4px;
 }
 
-.shader-port-output span {
+.teia-port-output span {
   flex: 0 0 auto;
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;
 }
 
-.shader-port-preview {
+.teia-port-preview {
   opacity: 0.42;
 }
 
@@ -3271,14 +3271,14 @@ button:hover {
   box-shadow: none;
 }
 
-.shader-node-body-accumulator .shader-inputs {
+.teia-node-body-accumulator .teia-inputs {
   width: 100%;
   min-width: 0;
   background: transparent;
 }
 
-.shader-node-body-sequencer .shader-inputs,
-.shader-node-body-sequencer .shader-outputs {
+.teia-node-body-sequencer .teia-inputs,
+.teia-node-body-sequencer .teia-outputs {
   padding: var(--node-content-padding);
 }
 
@@ -3294,14 +3294,14 @@ button:hover {
   white-space: nowrap;
 }
 
-.shader-node-compact .shader-node-body-accumulator .shader-inputs:empty,
-.shader-node-compact .shader-node-body-sequencer .shader-inputs:empty,
-.shader-node-compact .shader-node-content-ports .shader-inputs:empty {
+.teia-node-compact .teia-node-body-accumulator .teia-inputs:empty,
+.teia-node-compact .teia-node-body-sequencer .teia-inputs:empty,
+.teia-node-compact .teia-node-content-ports .teia-inputs:empty {
   display: none;
   padding: 0;
 }
 
-.shader-port-select {
+.teia-port-select {
   width: 68px;
   min-width: 0;
   height: 22px;
@@ -3313,11 +3313,11 @@ button:hover {
   line-height: 20px;
 }
 
-.shader-port-reverb-mode {
+.teia-port-reverb-mode {
   grid-template-columns: minmax(max-content, var(--input-label-width, max-content)) max-content;
 }
 
-.shader-port-reverb-mode .shader-port-select {
+.teia-port-reverb-mode .teia-port-select {
   width: 190px;
 }
 
@@ -3441,7 +3441,7 @@ button:hover {
   line-height: 20px;
 }
 
-.shader-handle {
+.teia-handle {
   width: var(--node-pin-size);
   height: var(--node-pin-size);
   border: 1px solid var(--color-foreground);
@@ -3451,7 +3451,7 @@ button:hover {
   transform: translateY(-50%);
 }
 
-.shader-handle-selected-link {
+.teia-handle-selected-link {
   border-color: var(--color-accent);
   background: var(--color-accent);
   box-shadow: 0 0 0 2px var(--color-edge-underlay);
@@ -3459,40 +3459,40 @@ button:hover {
   pointer-events: none;
 }
 
-.shader-handle-selected-link:active {
+.teia-handle-selected-link:active {
   cursor: grabbing;
 }
 
-.shader-handle-input {
+.teia-handle-input {
   left: var(--node-body-pin-offset);
 }
 
-.shader-handle-input-title {
+.teia-handle-input-title {
   left: var(--node-title-pin-offset);
 }
 
-.shader-handle-scope {
+.teia-handle-scope {
   left: var(--node-title-pin-offset);
 }
 
-.shader-handle-meter {
+.teia-handle-meter {
   left: var(--node-title-pin-offset);
 }
 
-.shader-handle-output {
+.teia-handle-output {
   right: var(--node-body-pin-offset);
 }
 
-.shader-handle-output-sequencer {
+.teia-handle-output-sequencer {
   right: calc(-1 * var(--node-pin-half-size));
 }
 
-.shader-handle-output-title {
+.teia-handle-output-title {
   right: var(--node-title-pin-offset);
 }
 
-.shader-edge .shader-edge-path-foreground,
-.shader-edge-path-foreground {
+.teia-edge .teia-edge-path-foreground,
+.teia-edge-path-foreground {
   stroke: var(--color-foreground);
   stroke-width: 2;
 }
@@ -3502,84 +3502,84 @@ button:hover {
   stroke-width: 3 !important;
 }
 
-.react-flow__edge.updating .react-flow__edge-path.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus .react-flow__edge-path.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus-visible .react-flow__edge-path.shader-edge-path-foreground {
+.react-flow__edge.updating .react-flow__edge-path.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus .react-flow__edge-path.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus-visible .react-flow__edge-path.teia-edge-path-foreground {
   stroke: var(--color-foreground) !important;
 }
 
-.shader-edge .shader-edge-path-underlay,
-.shader-edge-path-underlay {
+.teia-edge .teia-edge-path-underlay,
+.teia-edge-path-underlay {
   stroke: var(--color-edge-underlay);
   stroke-width: 5.4;
   pointer-events: none;
 }
 
-.react-flow__edge.updating .react-flow__edge-path.shader-edge-path-underlay,
-.react-flow__edge.selectable:focus .react-flow__edge-path.shader-edge-path-underlay,
-.react-flow__edge.selectable:focus-visible .react-flow__edge-path.shader-edge-path-underlay {
+.react-flow__edge.updating .react-flow__edge-path.teia-edge-path-underlay,
+.react-flow__edge.selectable:focus .react-flow__edge-path.teia-edge-path-underlay,
+.react-flow__edge.selectable:focus-visible .react-flow__edge-path.teia-edge-path-underlay {
   stroke: var(--color-edge-underlay) !important;
 }
 
-.shader-edge-path-mode-set.shader-edge-path-foreground {
+.teia-edge-path-mode-set.teia-edge-path-foreground {
   stroke: var(--color-link-set);
 }
 
-.shader-edge-path-mode-add.shader-edge-path-foreground {
+.teia-edge-path-mode-add.teia-edge-path-foreground {
   stroke: var(--color-link-add);
 }
 
-.shader-edge-path-mode-multiply.shader-edge-path-foreground {
+.teia-edge-path-mode-multiply.teia-edge-path-foreground {
   stroke: var(--color-link-multiply);
 }
 
-.shader-edge-path-mode-bend.shader-edge-path-foreground {
+.teia-edge-path-mode-bend.teia-edge-path-foreground {
   stroke: var(--color-link-bend);
 }
 
-.shader-edge-path-disabled {
+.teia-edge-path-disabled {
   stroke-dasharray: 7 5;
   opacity: 0.42;
 }
 
-.shader-edge-path-dimmed {
+.teia-edge-path-dimmed {
   opacity: 0.52;
 }
 
-.react-flow__edge.updating .react-flow__edge-path.shader-edge-path-mode-set.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus .react-flow__edge-path.shader-edge-path-mode-set.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus-visible .react-flow__edge-path.shader-edge-path-mode-set.shader-edge-path-foreground,
-.react-flow__edge.selected .react-flow__edge-path.shader-edge-path-mode-set.shader-edge-path-foreground {
+.react-flow__edge.updating .react-flow__edge-path.teia-edge-path-mode-set.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus .react-flow__edge-path.teia-edge-path-mode-set.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus-visible .react-flow__edge-path.teia-edge-path-mode-set.teia-edge-path-foreground,
+.react-flow__edge.selected .react-flow__edge-path.teia-edge-path-mode-set.teia-edge-path-foreground {
   stroke: var(--color-link-set) !important;
 }
 
-.react-flow__edge.updating .react-flow__edge-path.shader-edge-path-mode-add.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus .react-flow__edge-path.shader-edge-path-mode-add.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus-visible .react-flow__edge-path.shader-edge-path-mode-add.shader-edge-path-foreground,
-.react-flow__edge.selected .react-flow__edge-path.shader-edge-path-mode-add.shader-edge-path-foreground {
+.react-flow__edge.updating .react-flow__edge-path.teia-edge-path-mode-add.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus .react-flow__edge-path.teia-edge-path-mode-add.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus-visible .react-flow__edge-path.teia-edge-path-mode-add.teia-edge-path-foreground,
+.react-flow__edge.selected .react-flow__edge-path.teia-edge-path-mode-add.teia-edge-path-foreground {
   stroke: var(--color-link-add) !important;
 }
 
-.react-flow__edge.updating .react-flow__edge-path.shader-edge-path-mode-multiply.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus .react-flow__edge-path.shader-edge-path-mode-multiply.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus-visible .react-flow__edge-path.shader-edge-path-mode-multiply.shader-edge-path-foreground,
-.react-flow__edge.selected .react-flow__edge-path.shader-edge-path-mode-multiply.shader-edge-path-foreground {
+.react-flow__edge.updating .react-flow__edge-path.teia-edge-path-mode-multiply.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus .react-flow__edge-path.teia-edge-path-mode-multiply.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus-visible .react-flow__edge-path.teia-edge-path-mode-multiply.teia-edge-path-foreground,
+.react-flow__edge.selected .react-flow__edge-path.teia-edge-path-mode-multiply.teia-edge-path-foreground {
   stroke: var(--color-link-multiply) !important;
 }
 
-.react-flow__edge.updating .react-flow__edge-path.shader-edge-path-mode-bend.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus .react-flow__edge-path.shader-edge-path-mode-bend.shader-edge-path-foreground,
-.react-flow__edge.selectable:focus-visible .react-flow__edge-path.shader-edge-path-mode-bend.shader-edge-path-foreground,
-.react-flow__edge.selected .react-flow__edge-path.shader-edge-path-mode-bend.shader-edge-path-foreground {
+.react-flow__edge.updating .react-flow__edge-path.teia-edge-path-mode-bend.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus .react-flow__edge-path.teia-edge-path-mode-bend.teia-edge-path-foreground,
+.react-flow__edge.selectable:focus-visible .react-flow__edge-path.teia-edge-path-mode-bend.teia-edge-path-foreground,
+.react-flow__edge.selected .react-flow__edge-path.teia-edge-path-mode-bend.teia-edge-path-foreground {
   stroke: var(--color-link-bend) !important;
 }
 
-.shader-edge-path-dsp-error.shader-edge-path-foreground {
+.teia-edge-path-dsp-error.teia-edge-path-foreground {
   stroke: var(--color-error);
   stroke-dasharray: 6 4;
 }
 
-.shader-edge-path-dsp-error.shader-edge-path-underlay {
+.teia-edge-path-dsp-error.teia-edge-path-underlay {
   stroke: var(--color-edge-error-underlay);
   stroke-width: 7;
 }
@@ -3601,8 +3601,8 @@ button:hover {
   pointer-events: auto;
 }
 
-.react-flow__edge.selected .shader-edge-path-foreground,
-.shader-edge-path-selected {
+.react-flow__edge.selected .teia-edge-path-foreground,
+.teia-edge-path-selected {
   stroke-width: 4;
 }
 
@@ -3618,27 +3618,27 @@ button:hover {
   cursor: grabbing;
 }
 
-.react-flow__edge.selected .shader-edge-path-mode-set.shader-edge-path-foreground,
-.shader-edge-path-selected.shader-edge-path-mode-set {
+.react-flow__edge.selected .teia-edge-path-mode-set.teia-edge-path-foreground,
+.teia-edge-path-selected.teia-edge-path-mode-set {
   filter: drop-shadow(0 0 2px var(--color-link-set));
 }
 
-.react-flow__edge.selected .shader-edge-path-mode-add.shader-edge-path-foreground,
-.shader-edge-path-selected.shader-edge-path-mode-add {
+.react-flow__edge.selected .teia-edge-path-mode-add.teia-edge-path-foreground,
+.teia-edge-path-selected.teia-edge-path-mode-add {
   filter: drop-shadow(0 0 2px var(--color-link-add));
 }
 
-.react-flow__edge.selected .shader-edge-path-mode-multiply.shader-edge-path-foreground,
-.shader-edge-path-selected.shader-edge-path-mode-multiply {
+.react-flow__edge.selected .teia-edge-path-mode-multiply.teia-edge-path-foreground,
+.teia-edge-path-selected.teia-edge-path-mode-multiply {
   filter: drop-shadow(0 0 2px var(--color-link-multiply));
 }
 
-.react-flow__edge.selected .shader-edge-path-mode-bend.shader-edge-path-foreground,
-.shader-edge-path-selected.shader-edge-path-mode-bend {
+.react-flow__edge.selected .teia-edge-path-mode-bend.teia-edge-path-foreground,
+.teia-edge-path-selected.teia-edge-path-mode-bend {
   filter: drop-shadow(0 0 2px var(--color-link-bend));
 }
 
-.react-flow__edge.selected .shader-edge-path-underlay {
+.react-flow__edge.selected .teia-edge-path-underlay {
   stroke: var(--color-edge-underlay) !important;
   stroke-width: 8;
 }
@@ -3670,20 +3670,20 @@ button:hover {
  * its reconnect radius so it sits outside a normal node. Spawn/Spread
  * lifecycle pins are embedded in their container, so cancel that exact
  * 12px shift and keep the target centred on the visible pin. */
-.react-flow__edge.shader-edge-internal-runtime-endpoint .react-flow__edgeupdater {
+.react-flow__edge.teia-edge-internal-runtime-endpoint .react-flow__edgeupdater {
   transform: translateY(-12px);
 }
 
-.shader-edge-preview .shader-edge-path-underlay,
-.shader-edge-preview.shader-edge-path-underlay {
+.teia-edge-preview .teia-edge-path-underlay,
+.teia-edge-preview.teia-edge-path-underlay {
   stroke: var(--color-background-82);
   stroke-width: 5;
   stroke-dasharray: 5 5;
   pointer-events: none;
 }
 
-.shader-edge-preview .shader-edge-path-foreground,
-.shader-edge-preview.shader-edge-path-foreground {
+.teia-edge-preview .teia-edge-path-foreground,
+.teia-edge-preview.teia-edge-path-foreground {
   stroke: var(--color-foreground-72);
   stroke-dasharray: 5 5;
   pointer-events: none;
@@ -4376,7 +4376,7 @@ select:not([multiple]):focus-visible {
   color: var(--color-warning);
 }
 
-.shader-preview {
+.teia-preview {
   width: 100%;
   flex: 1;
   min-height: 0;
@@ -4410,10 +4410,10 @@ select:not([multiple]):focus-visible {
   }
 }
 
-.shader-params-outputs, .teia-node-params { --params-box-width: 68px; --params-box-gap: 6px; }
-.shader-params-columns, .shader-params-values { display: grid; grid-template-columns: repeat(3, var(--params-box-width)); gap: var(--params-box-gap); }
-.shader-params-columns { align-self: flex-end; margin-right: 4px; color: var(--color-foreground); font-size: 11px; text-align: center; }
-.shader-params-values .spagbol-control-number { width: var(--params-box-width); }
+.teia-params-outputs, .teia-node-params { --params-box-width: 68px; --params-box-gap: 6px; }
+.teia-params-columns, .teia-params-values { display: grid; grid-template-columns: repeat(3, var(--params-box-width)); gap: var(--params-box-gap); }
+.teia-params-columns { align-self: flex-end; margin-right: 4px; color: var(--color-foreground); font-size: 11px; text-align: center; }
+.teia-params-values .spagbol-control-number { width: var(--params-box-width); }
 
 /* The FM-1 dialog uses the native modal layer for focus trapping and background inertness. */
 dialog.fm1-modal {
@@ -4486,13 +4486,13 @@ dialog.fm1-modal::backdrop { background: var(--color-background-54); }
 }
 
 /* FM1 availability remains visible in compact, disabled and routing presentations. */
-.shader-node.shader-node-fm1-unsupported,
-.routing-node-marker.shader-node-fm1-unsupported {
+.teia-node.teia-node-fm1-unsupported,
+.routing-node-marker.teia-node-fm1-unsupported {
   border-color: #e34848;
   background-color: #4b2020;
   box-shadow: 0 0 0 2px #e34848;
 }
-.shader-node-fm1-unsupported .shader-node-title {
+.teia-node-fm1-unsupported .teia-node-title {
   color: #ff9a9a;
   box-shadow: inset 0 -2px 0 #e34848;
 }
@@ -4530,7 +4530,7 @@ dialog.fm1-modal::backdrop { background: var(--color-background-54); }
 .teia-graph-canvas .spagbol-node-frame-auto-compact { min-width: 0; }
 .teia-node-unsupported { outline: 2px solid var(--color-error, #f66); }
 
-.teia-node-params .shader-params-columns { grid-column: 1 / -1; grid-row: 1; justify-self: end; margin-right: 0; }
+.teia-node-params .teia-params-columns { grid-column: 1 / -1; grid-row: 1; justify-self: end; margin-right: 0; }
 .teia-node-params .spagbol-node-port-row { grid-column: 1 !important; }
 .teia-node-params .teia-node-parameter { display: flex; align-items: center; gap: 8px; }
-.teia-node-params .shader-params-values { flex-shrink: 0; }
+.teia-node-params .teia-params-values { flex-shrink: 0; }

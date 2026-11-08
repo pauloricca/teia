@@ -1,21 +1,21 @@
-import { createContext, memo, useContext, useMemo, useRef, useEffect, useState, type ReactNode } from 'react';
+import { createContext, startTransition, memo, useContext, useMemo, useRef, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useSpagbol, type SpagbolNodeViewProps, type SpagbolNodeView, type GraphNode } from '@pauloricca/spagbol';
 import { TeiaNodeContent } from '../editor/TeiaNodeContent';
 import { nodeToPatch, portName } from './patchCodec';
-import type { ShaderFlowNode, ShaderNodeData } from '../editor/flowPatch';
+import type { TeiaFlowNode, TeiaNodeData } from '../editor/flowPatch';
 import { teiaCatalogue } from './catalogue';
 
 type HostGesture = (node: GraphNode, path: readonly string[], values: Record<string, number>) => boolean;
 interface NodeBindings {
-  data: Map<string, ShaderNodeData>;
+  data: Map<string, TeiaNodeData>;
   listeners: Map<string, Set<() => void>>;
   gesture: HostGesture;
   subscribe(key: string, listener: () => void): () => void;
 }
 const Bindings = createContext<NodeBindings | null>(null);
-function presentationMap(nodes: ShaderFlowNode[]) {
-  const entries = new Map<string, ShaderNodeData>();
-  const add = (id: string, value: ShaderNodeData) => {
+function presentationMap(nodes: TeiaFlowNode[]) {
+  const entries = new Map<string, TeiaNodeData>();
+  const add = (id: string, value: TeiaNodeData) => {
     entries.set(id, value);
     for (const child of value.groupUiPreview?.nodes ?? []) {
       const prefix = `__group_ui__${id}__`;
@@ -25,7 +25,7 @@ function presentationMap(nodes: ShaderFlowNode[]) {
   for (const node of nodes) add(node.id, node.data);
   return entries;
 }
-export function TeiaGraphBindings({ nodes, children, gesture }: { nodes: ShaderFlowNode[]; children: ReactNode; gesture: HostGesture }) {
+export function TeiaGraphBindings({ nodes, children, gesture }: { nodes: TeiaFlowNode[]; children: ReactNode; gesture: HostGesture }) {
   const [store] = useMemo(() => {
     const listeners = new Map<string, Set<() => void>>();
     return [{ data: presentationMap(nodes), listeners, gesture, subscribe(key: string, listener: () => void) {
@@ -40,7 +40,9 @@ export function TeiaGraphBindings({ nodes, children, gesture }: { nodes: ShaderF
     // frame, outside React's commit, rather than synchronously reentering it.
     const frame = requestAnimationFrame(() => {
       const previous = store.data, next = presentationMap(latest.current); store.data = next;
-      for (const [key, subscribers] of store.listeners) if (previous.get(key) !== next.get(key)) for (const notify of [...subscribers]) notify();
+      startTransition(() => {
+        for (const [key, subscribers] of store.listeners) if (previous.get(key) !== next.get(key)) for (const notify of [...subscribers]) notify();
+      });
     });
     return () => cancelAnimationFrame(frame);
   }, [store, nodes]);
@@ -51,6 +53,10 @@ const TeiaNodeView = memo(function TeiaNodeView(shared: SpagbolNodeViewProps) {
   const context = useSpagbol();
   const { editor, zoom, connecting } = context;
   const relative = [...shared.path.slice(editor.getSnapshot().path.length), shared.node.id].join('/');
+  const selectedPort = useSyncExternalStore(editor.subscribe, () => {
+    const port = editor.getSnapshot().selection.port; return port?.nodeId === shared.node.id ? port : undefined;
+  }, () => undefined);
+  const onlySelected = useSyncExternalStore(editor.subscribe, () => shared.selected && editor.getSnapshot().selection.nodeIds.length === 1, () => false);
   const [source, setSource] = useState(() => bindings.data.get(relative));
   useEffect(() => {
     const update = () => setSource(bindings.data.get(relative));
@@ -61,11 +67,11 @@ const TeiaNodeView = memo(function TeiaNodeView(shared: SpagbolNodeViewProps) {
     if (!source) return null;
   const patch = nodeToPatch(shared.node);
   const node = shared.node;
-  const result: ShaderNodeData = {
-    ...source, patchNode: { ...patch, params: { ...patch.params, ...source.patchNode.params } }, canvasZoom: zoom, isCanvasLocked: !editor.editing,
-    isOnlySelected: shared.selected && editor.getSnapshot().selection.nodeIds.length === 1,
+  const result: TeiaNodeData = {
+    ...source, patchNode: { ...patch, params: { ...patch.params, ...source.transientParams } }, canvasZoom: zoom, isCanvasLocked: !editor.editing,
+    isOnlySelected: onlySelected,
     isConnecting: connecting, groupUiPreview: undefined,
-    selectedPort: editor.getSnapshot().selection.port?.nodeId === node.id ? { side: editor.getSnapshot().selection.port!.direction, name: portName(node, editor.getSnapshot().selection.port!.portId, editor.getSnapshot().selection.port!.direction) } : null,
+    selectedPort: selectedPort ? { side: selectedPort.direction, name: portName(node, selectedPort.portId, selectedPort.direction) } : null,
     onTypeChange: (_, kind) => editor.changeNodeKind(node.id, kind),
     onCompactToggle: (_, compact) => editor.updateNode(node.id, { compact }, 'layout'),
     onEnabledChange: (_, enabled) => editor.updateNode(node.id, { enabled }, 'structure'),
@@ -85,7 +91,7 @@ const TeiaNodeView = memo(function TeiaNodeView(shared: SpagbolNodeViewProps) {
     } : {}),
   };
   return result;
-  }, [source, shared.node, shared.selected, shared.projected, shared.path, shared.setValue, shared.patchData, shared.resetOverride, editor, zoom, connecting, bindings]);
+  }, [source, selectedPort, onlySelected, shared.node, shared.selected, shared.projected, shared.path, shared.setValue, shared.patchData, shared.resetOverride, editor, zoom, connecting, bindings]);
   return data ? <TeiaNodeContent data={data} shared={shared} /> : null;
 });
 export const teiaNodeViews: Readonly<Record<string, SpagbolNodeView>> = Object.fromEntries(teiaCatalogue.list().filter(definition => !definition.kind.startsWith('spagbol.')).map(definition => [definition.kind, { render: TeiaNodeView, projected: TeiaNodeView, autoWidth: true, compact: definition.kind !== 'Params', selectable: !['Spread', 'Spawn', 'ConditionalExecution'].includes(definition.kind), draggable: !['Spread', 'Spawn', 'ConditionalExecution'].includes(definition.kind) }]));

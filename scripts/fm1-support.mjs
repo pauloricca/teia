@@ -24,7 +24,7 @@ const watched = [
   'editor/src/editor/NodeEditor.tsx',
   'editor/src/editor/TeiaNodeContent.tsx',
   'editor/src/spagbol/patchCodec.ts', 'editor/src/spagbol/catalogue.ts', 'editor/src/spagbol/useTeiaGraph.ts',
-  'editor/src/spagbol/TeiaNodeView.tsx', 'editor/src/spagbol/normalizeDocument.ts',
+  'editor/src/spagbol/TeiaNodeView.tsx', 'editor/src/spagbol/normalizeDocument.ts', 'editor/src/spagbol/presentation.ts',
   'editor/src/editor/Fm1ModeContext.ts', 'editor/src/audio/fm1Support.ts', 'editor/src/audio/fm1Capabilities.ts',
   'editor/src/editor/Fm1SupportPage.tsx', 'editor/src/App.tsx', 'editor/src/styles.css',
   'firmware/fm1/runtime.h', 'firmware/fm1/app.c', 'firmware/fm1/upload.h',

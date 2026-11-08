@@ -6,7 +6,6 @@ RUN apk add --no-cache ffmpeg git
 
 COPY package.json package-lock.json ./
 COPY editor/package.json editor/package.json
-COPY vendor vendor
 RUN npm install
 
 COPY . .

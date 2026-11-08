@@ -269,16 +269,6 @@
       "sha256": "77472277e3f48fbe221853e5ef3c4635591f5bd46dab20e68a71e376377e83ab"
     },
     {
-      "path": "types/editor/ShaderEdge.d.ts",
-      "bytes": 786,
-      "sha256": "856c3180dbfd30fdcbbe1f5ad8e22770e21ca255741f85c28950dc0b0c38593f"
-    },
-    {
-      "path": "types/editor/ShaderNode.d.ts",
-      "bytes": 427,
-      "sha256": "b37c0192c66140a8411234ab1f5acf8141c1d8ac72ecca70cdb202e4bf5d43fb"
-    },
-    {
       "path": "types/graph/customWave.d.ts",
       "bytes": 1181,
       "sha256": "3f40d9d24654657fc351b9a869df8263cc6dd98df17d5d5f57bd25bd331eb9f9"

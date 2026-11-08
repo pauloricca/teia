@@ -1,13 +1,13 @@
+import { createTeiaPresentationReader } from './presentation';
 import { normalizeTeiaDocument } from './normalizeDocument';
 import { useCallback, useMemo, useState, useRef, useSyncExternalStore, type SetStateAction } from 'react';
 import { GraphEditor, graphAt, pruneInvalidPorts, type EditorOptions } from '@pauloricca/spagbol';
 import { teiaCatalogue } from './catalogue';
-import { graphToPatch, nodeToGraph, patchToGraph, teiaLinkIds, portName } from './patchCodec';
-import { toFlowNodes, toFlowEdges, patchFromFlow, type ShaderFlowNode, type ShaderFlowEdge, type EditorArea } from '../editor/flowPatch';
+import { nodeToGraph, patchToGraph, portName } from './patchCodec';
+import { toFlowNodes, patchFromFlow, type TeiaFlowNode, type TeiaFlowEdge, type EditorArea } from '../editor/flowPatch';
 import type { Patch } from '../graph/types';
 
 type Callbacks = Parameters<typeof toFlowNodes>[1];
-const noop = () => undefined;
 const apply = <T,>(update: SetStateAction<T>, current: T): T => typeof update === 'function' ? (update as (current: T) => T)(current) : update;
 /** Legacy flow records are a read-only domain presentation/codec, never editor state. */
 export function useTeiaGraph(initial: Patch, callbacks: Callbacks, onPaste?: EditorOptions['onPaste']) {
@@ -22,18 +22,10 @@ export function useTeiaGraph(initial: Patch, callbacks: Callbacks, onPaste?: Edi
     } },
   }));
   const snapshot = useSyncExternalStore(editor.subscribe, editor.getSnapshot, editor.getSnapshot);
-  const read = useCallback((): { nodes: ShaderFlowNode[]; edges: ShaderFlowEdge[]; areas: EditorArea[] } => {
-    const graph = editor.graph, patch = graphToPatch(graph), selection = editor.getSnapshot().selection;
-    const ids = teiaLinkIds(graph);
-    const selectedEdges = new Set(selection.linkIds.map(id => ids.get(id)));
-    return {
-      nodes: toFlowNodes(patch, callbacks, null).map(node => ({ ...node, selected: selection.nodeIds.includes(node.id) })),
-      edges: toFlowEdges(patch, noop, noop, noop).map(edge => ({ ...edge, selected: selectedEdges.has(edge.id) })),
-      areas: (patch.areas ?? []) as EditorArea[],
-    };
-  }, [editor, callbacks]);
+  const present = useMemo(() => createTeiaPresentationReader(callbacks), [callbacks]);
+  const read = useCallback(() => present(editor.graph, editor.getSnapshot().selection), [editor, present]);
   const state = useMemo(read, [read, snapshot.document, snapshot.path, snapshot.selection]);
-  const setNodes = useCallback((update: SetStateAction<ShaderFlowNode[]>) => {
+  const setNodes = useCallback((update: SetStateAction<TeiaFlowNode[]>) => {
     const current = read(), next = apply(update, current.nodes);
     if (next === current.nodes) return;
     const document = editor.graph;
@@ -57,7 +49,7 @@ export function useTeiaGraph(initial: Patch, callbacks: Callbacks, onPaste?: Edi
     const selected = next.filter(node => node.selected).map(node => node.id);
     if (JSON.stringify(selected) !== JSON.stringify(editor.getSnapshot().selection.nodeIds)) editor.select({ ...editor.getSnapshot().selection, nodeIds: selected });
   }, [editor, read]);
-  const setEdges = useCallback((update: SetStateAction<ShaderFlowEdge[]>) => {
+  const setEdges = useCallback((update: SetStateAction<TeiaFlowEdge[]>) => {
     const current = read(), next = apply(update, current.edges);
     if (next === current.edges) return;
     const converted = patchToGraph(patchFromFlow(current.nodes, next, current.areas), editor.graph);

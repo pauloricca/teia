@@ -2,7 +2,7 @@ import type { Patch, PatchLink, PatchNode } from './types';
 
 export const DEFAULT_SPREAD_SIZE = { width: 320, height: 220 } as const;
 export const DEFAULT_SPAWN_SIZE = { width: 480, height: 220 } as const;
-export const MIN_RUNTIME_CONTAINER_WIDTH = 240;
+export const MIN_EXECUTION_AREA_WIDTH = 240;
 export const MIN_SPAWN_WIDTH = 480;
 export const SPREAD_HEADER_HEIGHT = 32;
 export const SPREAD_PORTS_HEIGHT = 44;
@@ -22,7 +22,7 @@ export function expandSpreads(patch: Patch): SpreadExpansion {
     return { ...node, subpatch: inner.patch };
   }) };
   let expanded = patch;
-  const spreads = patch.nodes.filter(isRuntimeContainer);
+  const spreads = patch.nodes.filter(isExecutionArea);
   const memberships = new Map<string, string[]>();
 
   for (const spread of spreads) {
@@ -33,7 +33,7 @@ export function expandSpreads(patch: Patch): SpreadExpansion {
   }
   for (const [nodeId, spreadIds] of memberships) {
     if (spreadIds.length > 1) {
-      errors.push(`Node "${nodeId}" is inside multiple execution containers (${spreadIds.join(', ')}). Move it into exactly one container.`);
+      errors.push(`Node "${nodeId}" is inside multiple execution areas (${spreadIds.join(', ')}). Move it into exactly one execution area.`);
     }
   }
   if (errors.length > 0) return { patch, errors };
@@ -48,11 +48,11 @@ export function expandSpreads(patch: Patch): SpreadExpansion {
 }
 
 export function nodeIsInsideSpread(spread: PatchNode, node: PatchNode): boolean {
-  if (!isRuntimeContainer(spread) || node.id === spread.id) return false;
+  if (!isExecutionArea(spread) || node.id === spread.id) return false;
   if (spread.spreadNodeIds) return spread.spreadNodeIds.includes(node.id);
   if (!spread.position || !node.position) return false;
-  const size = runtimeContainerSize(spread);
-  const portsHeight = runtimeContainerPortsHeight(spread);
+  const size = executionAreaSize(spread);
+  const portsHeight = executionAreaPortsHeight(spread);
   return (
     node.position.x >= spread.position.x
     && node.position.x < spread.position.x + size.width
@@ -61,24 +61,24 @@ export function nodeIsInsideSpread(spread: PatchNode, node: PatchNode): boolean 
   );
 }
 
-export function runtimeContainerSize(node: {
+export function executionAreaSize(node: {
   type: PatchNode['type'] | null;
   scopeSize?: PatchNode['scopeSize'];
 }): { width: number; height: number } {
   const fallback = node.type === 'Spawn' ? DEFAULT_SPAWN_SIZE : DEFAULT_SPREAD_SIZE;
   const size = node.scopeSize ?? fallback;
   return {
-    width: Math.max(node.type === 'Spawn' ? MIN_SPAWN_WIDTH : MIN_RUNTIME_CONTAINER_WIDTH, size.width),
+    width: Math.max(node.type === 'Spawn' ? MIN_SPAWN_WIDTH : MIN_EXECUTION_AREA_WIDTH, size.width),
     height: Math.max(140, size.height),
   };
 }
 
-export function runtimeContainerPortsHeight(node: { type: PatchNode['type'] | null }): number {
+export function executionAreaPortsHeight(node: { type: PatchNode['type'] | null }): number {
   return node.type === 'Spawn' ? SPAWN_PORTS_HEIGHT : SPREAD_PORTS_HEIGHT;
 }
 
 function expandOneSpread(patch: Patch, spreadId: string): SpreadExpansion {
-  const spread = patch.nodes.find((node) => node.id === spreadId && isRuntimeContainer(node));
+  const spread = patch.nodes.find((node) => node.id === spreadId && isExecutionArea(node));
   if (!spread) return { patch, errors: [] };
 
   const internalNodes = patch.nodes.filter((node) => nodeIsInsideSpread(spread, node));
@@ -86,10 +86,10 @@ function expandOneSpread(patch: Patch, spreadId: string): SpreadExpansion {
   const errors: string[] = [];
 
   for (const node of internalNodes) {
-    if (isRuntimeContainer(node)) {
+    if (isExecutionArea(node)) {
       errors.push(`${spread.type} "${spread.id}" cannot contain ${node.type} "${node.id}".`);
     } else if (node.type === 'Group' && node.subpatch) {
-      const unsupported = nestedRuntimeContainer(node.subpatch);
+      const unsupported = nestedExecutionArea(node.subpatch);
       if (unsupported) {
         errors.push(`${spread.type} "${spread.id}" cannot contain Group "${node.id}" with ${unsupported} inside it.`);
       }
@@ -98,7 +98,7 @@ function expandOneSpread(patch: Patch, spreadId: string): SpreadExpansion {
 
   const clonedNodes: PatchNode[] = [];
   for (const node of internalNodes) {
-    if (isRuntimeContainer(node)) continue;
+    if (isExecutionArea(node)) continue;
     clonedNodes.push(cloneSpreadNode(spread.type === 'ConditionalExecution' && spread.enabled === false ? { ...node, enabled: false } : node, spread.id, 0, spread.type === 'ConditionalExecution'));
   }
   if (spread.type === 'Spread') {
@@ -194,18 +194,18 @@ function expandOneSpread(patch: Patch, spreadId: string): SpreadExpansion {
   };
 }
 
-function nestedRuntimeContainer(patch: Patch): string | null {
+function nestedExecutionArea(patch: Patch): string | null {
   for (const node of patch.nodes) {
-    if (isRuntimeContainer(node)) return node.type;
+    if (isExecutionArea(node)) return node.type;
     if (node.type === 'Group' && node.subpatch) {
-      const nested = nestedRuntimeContainer(node.subpatch);
+      const nested = nestedExecutionArea(node.subpatch);
       if (nested) return nested;
     }
   }
   return null;
 }
 
-function isRuntimeContainer(node: PatchNode): boolean {
+function isExecutionArea(node: PatchNode): boolean {
   return node.type === 'Spread' || node.type === 'Spawn' || node.type === 'ConditionalExecution';
 }
 

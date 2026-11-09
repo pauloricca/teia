@@ -1,5 +1,5 @@
 import { pruneInvalidPorts, type GraphDocument } from '@pauloricca/spagbol';
-import { runtimeContainerSize, runtimeContainerPortsHeight } from '../graph/spread';
+import { executionAreaSize, executionAreaPortsHeight } from '../graph/spread';
 import { getNodeTypeLabel } from '../graph/nodeTypes';
 import { nodeToGraph, nodeToPatch } from './patchCodec';
 import { teiaCatalogue } from './catalogue';
@@ -36,8 +36,8 @@ export function normalizeTeiaDocument(graph: GraphDocument, previous: GraphDocum
   for (const owner of graph.nodes) {
     if (!['Spread', 'Spawn', 'ConditionalExecution'].includes(owner.kind) || graph.areas.some(area => area.ownerNodeId === owner.id)) continue;
     const patch = nodeToPatch(owner);
-    const size = runtimeContainerSize(patch);
-    graph.areas.push({ id: `spread-area:${owner.id}`, ownerNodeId: owner.id, title: getNodeTypeLabel(patch.type), position: { ...owner.position }, size: { width: size.width, height: size.height + 32 }, controlHeight: runtimeContainerPortsHeight(patch), data: { kind: 'spread', spreadNodeId: owner.id }, ...(patch.spreadNodeIds ? { locked: true, nodeIds: [...patch.spreadNodeIds] } : {}) });
+    const size = executionAreaSize(patch);
+    graph.areas.push({ id: `spread-area:${owner.id}`, ownerNodeId: owner.id, title: getNodeTypeLabel(patch.type), position: { ...owner.position }, size: { width: size.width, height: size.height + 32 }, controlHeight: executionAreaPortsHeight(patch), data: { kind: 'spread', spreadNodeId: owner.id }, ...(patch.spreadNodeIds ? { locked: true, nodeIds: [...patch.spreadNodeIds] } : {}) });
   }
   for (const area of graph.areas) {
     if (!area.ownerNodeId) continue;
@@ -50,9 +50,9 @@ export function normalizeTeiaDocument(graph: GraphDocument, previous: GraphDocum
     else if (oldOwner && (owner.position.x !== oldOwner.position.x || owner.position.y !== oldOwner.position.y)) area.position = { ...owner.position };
     if (old && (area.size.width !== old.size.width || area.size.height !== old.size.height)) owner.data.scopeSize = { width: area.size.width, height: Math.max(140, area.size.height - 32) };
     const patch = nodeToPatch(owner);
-    const size = runtimeContainerSize(patch);
+    const size = executionAreaSize(patch);
     area.size = { width: size.width, height: 32 + size.height };
-    area.controlHeight = runtimeContainerPortsHeight(patch);
+    area.controlHeight = executionAreaPortsHeight(patch);
     if (area.locked) owner.data.spreadNodeIds = (area.nodeIds ?? []).filter(id => id !== owner.id);
     else delete owner.data.spreadNodeIds;
   }

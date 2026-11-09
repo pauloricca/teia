@@ -33,7 +33,7 @@ import { normalizeCustomWave } from '../graph/customWave';
 import { demoPatch } from '../graph/demoPatch';
 import { getNodeDefinition, rollShape, sequencerShape } from '../graph/nodeTypes';
 import { patchToJson } from '../graph/serialize';
-import { DEFAULT_SPAWN_SIZE, DEFAULT_SPREAD_SIZE, MIN_RUNTIME_CONTAINER_WIDTH, MIN_SPAWN_WIDTH, runtimeContainerPortsHeight, runtimeContainerSize, spreadCloneNodeId } from '../graph/spread';
+import { DEFAULT_SPAWN_SIZE, DEFAULT_SPREAD_SIZE, MIN_EXECUTION_AREA_WIDTH, MIN_SPAWN_WIDTH, executionAreaPortsHeight, executionAreaSize, spreadCloneNodeId } from '../graph/spread';
 import type { BufferAsset, CustomWaveSettings, ImageAsset, LinkMode, NodeType, Patch, PatchLink, PatchNode, PortDefinition, SampleAsset } from '../graph/types';
 import { USER_ZOOM_BASELINE } from './canvasZoom';
 import { scopedDspNodeId } from './dspNodeScope';
@@ -1407,7 +1407,7 @@ function NodeEditorInner({ audio, hosted, onAudioOptions }: { audio: AudioEngine
     const nextSize = relatedNode.data.patchNode.type === 'Spread' || relatedNode.data.patchNode.type === 'Spawn' || relatedNode.data.patchNode.type === 'ConditionalExecution'
       ? {
           width: Math.max(
-            relatedNode.data.patchNode.type === 'Spawn' ? MIN_SPAWN_WIDTH : MIN_RUNTIME_CONTAINER_WIDTH,
+            relatedNode.data.patchNode.type === 'Spawn' ? MIN_SPAWN_WIDTH : MIN_EXECUTION_AREA_WIDTH,
             Math.round(size.width),
           ),
           height: Math.max(140, Math.round(size.height)),
@@ -3641,11 +3641,11 @@ function stripPatchForDsp(patch: Patch): Patch {
   // Positions only affect DSP when an unlocked Spread/Spawn derives its
   // membership from canvas containment. Ordinary layout changes must not
   // rebuild the program.
-  const includesPositionBasedRuntimeContainer = patch.nodes.some((node) => (
+  const includesPositionBasedExecutionArea = patch.nodes.some((node) => (
     (node.type === 'Spread' || node.type === 'Spawn' || node.type === 'ConditionalExecution') && !node.spreadNodeIds
   ));
   return {
-    nodes: patch.nodes.map((node) => stripPatchNodeForDsp(node, includesPositionBasedRuntimeContainer)),
+    nodes: patch.nodes.map((node) => stripPatchNodeForDsp(node, includesPositionBasedExecutionArea)),
     links: patch.links.map((link) => ({
       from: { ...link.from },
       to: { ...link.to },
@@ -3826,7 +3826,7 @@ function stripPatchNodeForDsp(node: PatchNode, includeLayout: boolean): PatchNod
     ...(node.image ? { image: { ...node.image } } : {}),
     ...(node.customWave ? { customWave: normalizeCustomWave(node.customWave, node.params) } : {}),
     params: { ...node.params },
-    // Canvas coordinates normally are editor-only. Unlocked runtime containers
+    // Canvas coordinates normally are editor-only. Unlocked execution areas
     // are the exception: their membership is calculated from these bounds.
     ...(includeLayout && node.position ? { position: { ...node.position } } : {}),
     ...(includeLayout && (node.type === 'Spread' || node.type === 'Spawn' || node.type === 'ConditionalExecution') && node.scopeSize
@@ -4532,7 +4532,7 @@ function viewportNodeSize(node: TeiaFlowNode): { width: number; height: number }
   }
 
   if (patchNode.type === 'Spread' || patchNode.type === 'Spawn' || patchNode.type === 'ConditionalExecution') {
-    const size = runtimeContainerSize(patchNode);
+    const size = executionAreaSize(patchNode);
     return { width: size.width, height: size.height + NODE_HEADER_HEIGHT };
   }
 
@@ -4618,8 +4618,8 @@ function flowNodeIsInsideSpread(spread: TeiaFlowNode, node: TeiaFlowNode): boole
   if (spread.data.patchNode.spreadNodeIds) {
     return spread.data.patchNode.spreadNodeIds.includes(node.id);
   }
-  const size = runtimeContainerSize(spread.data.patchNode);
-  const portsHeight = runtimeContainerPortsHeight(spread.data.patchNode);
+  const size = executionAreaSize(spread.data.patchNode);
+  const portsHeight = executionAreaPortsHeight(spread.data.patchNode);
   return (
     node.position.x >= spread.position.x
     && node.position.x < spread.position.x + size.width
@@ -4718,7 +4718,7 @@ function areaContainsArea(area: EditorArea, candidate: EditorArea): boolean {
 
 function areaContainsNode(area: EditorArea, node: TeiaFlowNode): boolean {
   // Locked membership is an explicit snapshot, including an explicitly empty
-  // one. Never fall back to overlap for a locked Area, Spread, or Spawn.
+  // one. Never fall back to overlap for a locked Container, Spread, Spawn, or Conditional Execution.
   return area.locked
     ? area.nodeIds?.includes(node.id) === true
     : areaContainsPoint(area, node.position);

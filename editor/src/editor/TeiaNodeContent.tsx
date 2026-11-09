@@ -1,13 +1,14 @@
 import { SEQUENCER_INDEX_OUTPUT } from '../graph/nodeTypes';
 import { SpagbolNodeFrame, SpagbolNodePort, SpagbolControlNumber, portsFor, useSpagbol, type SpagbolNodeViewProps, type GraphNode } from "@pauloricca/spagbol";
 import { portName } from "../spagbol/patchCodec";
-import { SpagbolControlSlider, SpagbolControlButton, type SpagbolControlButtonMode } from '@pauloricca/spagbol';
+import { SpagbolCurveEditor, SpagbolSequencer, SpagbolControlJoystick, SpagbolControlSlider, SpagbolControlButton, type SpagbolControlButtonMode } from '@pauloricca/spagbol';
 import '@pauloricca/spagbol/controls.css';
+import '@pauloricca/spagbol/editors.css';
 import { HostedModeContext } from '../hosted/HostedModeContext';
 import { Fm1ModeContext } from './Fm1ModeContext';
 import { isFm1NodeImplemented } from '../audio/fm1Support';
 import { Handle as FlowHandle, useNodeId, Position, useConnection, useReactFlow, useUpdateNodeInternals } from '@xyflow/react';
-import { createContext, memo, useEffect, useContext, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type PointerEvent, type ReactNode, type RefObject, type SyntheticEvent } from 'react';
+import { createContext, memo, useEffect, useContext, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type PointerEvent, type ReactNode, type SyntheticEvent } from 'react';
 import {
   CUSTOM_WAVE_MODES,
   customWaveUsesSustainEnd,
@@ -21,11 +22,11 @@ import { getNodeDefinition, sequencerCellParamName, sequencerGateParamName, sequ
 import type { CustomWavePoint, CustomWaveSettings, NodeDefinition, NodeType, PatchNode } from '../graph/types';
 import { midiNoteLabel, normalisePitchClass, PITCH_CLASSES, QUANTISE_SCALES } from '../graph/musicScales';
 import {
-  MIN_RUNTIME_CONTAINER_WIDTH,
+  MIN_EXECUTION_AREA_WIDTH,
   MIN_SPAWN_WIDTH,
   SPREAD_HEADER_HEIGHT,
-  runtimeContainerPortsHeight,
-  runtimeContainerSize,
+  executionAreaPortsHeight,
+  executionAreaSize,
 } from '../graph/spread';
 import {
   clampControlNodeSize,
@@ -56,6 +57,7 @@ import {
 import { ChartGrid, chartGridColumns, chartGridRows, chartScaleTicks, formatChartValue, type ChartGridTick } from './chartGrid';
 
 const CUSTOM_WAVE_DRAG_UPDATE_INTERVAL_MS = 50;
+const SEQUENCER_TRIGGER_GRAB_FRACTION = 0.35;
 const FFT_CAPTURE_SECONDS = 0.012;
 const FFT_ANALYSIS_MIN_FREQUENCY = 20;
 const FFT_ANALYSIS_MAX_FREQUENCY = 20000;
@@ -108,11 +110,8 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
     coordinateScale: number;
     minWidth?: number;
   } | null>(null);
-  const customWaveEditorRef = useRef<SVGSVGElement | null>(null);
   const fftDisplayRef = useRef<HTMLDivElement | null>(null);
   const fftBoundaryDragRef = useRef<{ boundary: 'min' | 'max'; pointerId: number } | null>(null);
-  const customWaveDragRef = useRef<{ pointerId: number; index: number } | null>(null);
-  const customWaveClickRef = useRef<{ index: number | null; time: number }>({ index: null, time: 0 });
   const customWaveDragCommitRef = useRef<{
     lastCommitTime: number;
     pending: { customWave: CustomWaveSettings; historyKey: string } | null;
@@ -126,7 +125,6 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
   const [dragTarget, setDragTarget] = useState<{ side: 'input' | 'output'; port: string } | null>(null);
   const [scopeResizeCorner, setScopeResizeCorner] = useState<'bottom-left' | 'bottom-right' | null>(null);
   const [autoDisplayWidth, setAutoDisplayWidth] = useState<number | null>(null);
-  const [customWaveDragPointIndex, setCustomWaveDragPointIndex] = useState<number | null>(null);
   const [expressionDraft, setExpressionDraft] = useState(node.expression ?? '');
   const [imageAspectRatio, setImageAspectRatio] = useState(DEFAULT_IMAGE_ASPECT_RATIO);
   const [pointerOver, setPointerOver] = useState(false);
@@ -137,7 +135,7 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
   const isSpread = node.type === 'Spread';
   const isSpawn = node.type === 'Spawn';
   const isConditional = node.type === 'ConditionalExecution';
-  const isRuntimeContainer = isSpread || isSpawn || isConditional;
+  const isExecutionArea = isSpread || isSpawn || isConditional;
   const isAreaCollapsedPresentation = data.isAreaCollapsedPresentation === true;
   const isAreaUiCollapsedPresentation = data.isAreaUiCollapsedPresentation === true;
   const isSelector = node.type === 'Selector';
@@ -170,7 +168,7 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
   const showTopGraphic = showMeterDisplay || showScopeDisplay || showFftDisplay || showSliderDisplay || showJoystickDisplay || showButtonDisplay || showKeysDisplay || showCustomWaveEditor || showKinkOscGraphic || showSampleUpload || showBufferDisplay || showImageDisplay || showRollDisplay || Boolean(groupUiPreview);
   const imageX = centeredCoordinateToUnit(data.audioImagePosition?.x ?? node.params.x ?? 0);
   const imageY = centeredCoordinateToUnit(data.audioImagePosition?.y ?? node.params.y ?? 0);
-  const showResizableDisplay = showMeterDisplay || showScopeDisplay || showFftDisplay || showSliderDisplay || showJoystickDisplay || showButtonDisplay || showKeysDisplay || showCustomWaveEditor || showSampleUpload || showBufferDisplay || showImageDisplay || showSequencerDisplay || showRollDisplay || isRuntimeContainer;
+  const showResizableDisplay = showMeterDisplay || showScopeDisplay || showFftDisplay || showSliderDisplay || showJoystickDisplay || showButtonDisplay || showKeysDisplay || showCustomWaveEditor || showSampleUpload || showBufferDisplay || showImageDisplay || showSequencerDisplay || showRollDisplay || isExecutionArea;
   const usesAutoInitialWidth = node.scopeSize === undefined && (
     showMeterDisplay
     || showScopeDisplay
@@ -252,8 +250,8 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
   const rollDisplaySize = roll
     ? clampSequencerNodeSize(node.scopeSize ?? { width: roll.steps * 26 + 32, height: roll.rows.length * 22 }, roll.steps, roll.rows.length, 32)
     : DEFAULT_SCOPE_NODE_SIZE;
-  const defaultDisplaySize = isRuntimeContainer
-    ? runtimeContainerSize(node)
+  const defaultDisplaySize = isExecutionArea
+    ? executionAreaSize(node)
     : showSequencerDisplay
     ? sequencerDisplaySize
     : showRollDisplay
@@ -305,7 +303,7 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
         ...(sequencer ? {
           '--sequencer-steps': String(sequencer.steps),
           '--sequencer-rows': String(sequencer.rows),
-          '--sequencer-label-column-width': `${sequencerLabelColumnWidth}px`,
+          '--spagbol-sequencer-label-width': `${sequencerLabelColumnWidth}px`,
           '--sequencer-grid-height': `${sequencerGridHeight}px`,
         } : {}),
         ...(roll ? {
@@ -361,7 +359,7 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
     '--input-label-width': inputLabelWidth,
     '--node-scale': String(node.scale ?? 1),
     '--canvas-header-title-scale': String(headerTitleScale),
-    '--custom-wave-point-screen-scale': String(customWavePointScale),
+    '--spagbol-curve-editor-point-scale': String(customWavePointScale),
     '--graph-screen-scale': String(graphScreenEmphasis / graphZoomScale),
     '--graph-stroke-scale': String(1 / graphZoomScale),
     ...(groupUiPreview ? { '--group-ui-width': `${groupUiPreview.width}px` } : {}),
@@ -597,55 +595,6 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
     data.onScopeResize(node.id, clampImageNodeSize({ width, height: width / aspect }, aspect), 'right');
   }
 
-  useEffect(() => {
-    function handlePointerMove(event: globalThis.PointerEvent) {
-      const drag = customWaveDragRef.current;
-      if (!drag || drag.pointerId !== event.pointerId || !customWave) return;
-
-      event.preventDefault();
-      const point = customWavePointFromPointer(event);
-      if (!point) return;
-      const lastIndex = customWave.points.length - 1;
-      const previous = customWave.points[drag.index - 1]?.x ?? 0;
-      const next = customWave.points[drag.index + 1]?.x ?? 1;
-      const x = drag.index === 0
-        ? 0
-        : drag.index === lastIndex
-          ? 1
-          : clamp(point.x, previous + 0.001, next - 0.001);
-      const nextPoints = customWave.points.map((entry, index) => (
-        index === drag.index ? { x, y: point.y } : entry
-      ));
-      scheduleCustomWaveDragCommit({ ...customWave, points: nextPoints }, `custom-wave-point:${node.id}`);
-    }
-
-    function stopDragging(pointerId: number) {
-      if (!customWaveDragRef.current || customWaveDragRef.current.pointerId !== pointerId) return;
-
-      flushCustomWaveDragCommit();
-      customWaveDragRef.current = null;
-      setCustomWaveDragPointIndex(null);
-    }
-
-    function handlePointerUp(event: globalThis.PointerEvent) {
-      stopDragging(event.pointerId);
-    }
-
-    function handlePointerCancel(event: globalThis.PointerEvent) {
-      stopDragging(event.pointerId);
-    }
-
-    window.addEventListener('pointermove', handlePointerMove, { passive: false });
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerCancel);
-
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerCancel);
-    };
-  }, [customWave, node.id]);
-
   function handlePortPointerDown(
     event: PointerEvent<HTMLSpanElement>,
     side: 'input' | 'output',
@@ -696,8 +645,8 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
       lastSize: startSize,
       coordinateScale,
       minWidth: sequencerMinWidth
-        ?? (isRuntimeContainer
-          ? (isSpawn ? MIN_SPAWN_WIDTH : MIN_RUNTIME_CONTAINER_WIDTH)
+        ?? (isExecutionArea
+          ? (isSpawn ? MIN_SPAWN_WIDTH : MIN_EXECUTION_AREA_WIDTH)
           : undefined),
     };
     setScopeResizeCorner(corner);
@@ -800,106 +749,32 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
     commitCustomWave(pending.customWave, pending.historyKey);
   }
 
-  function customWavePointFromPointer(event: Pick<globalThis.PointerEvent, 'clientX' | 'clientY'>): CustomWavePoint | null {
-    const editor = customWaveEditorRef.current;
-    if (!editor) return null;
-
-    const rect = editor.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return null;
-    const padding = 12;
-    const width = 300;
-    const height = 128;
-    const innerWidth = width - padding * 2;
-    const innerHeight = height - padding * 2;
-    const screenX = clamp(((event.clientX - rect.left) / rect.width) * width, padding, width - padding);
-    const screenY = clamp(((event.clientY - rect.top) / rect.height) * height, padding, height - padding);
-
-    return {
-      x: clamp((screenX - padding) / innerWidth, 0, 1),
-      y: clamp((1 - ((screenY - padding) / innerHeight)) * 2 - 1, -1, 1),
-    };
-  }
-
-  function removeCustomWavePoint(index: number): boolean {
-    if (!customWave || index <= 0 || index >= customWave.points.length - 1) return false;
-
-    const nextPoints = customWave.points.filter((_, pointIndex) => pointIndex !== index);
-    customWaveDragRef.current = null;
-    setCustomWaveDragPointIndex(null);
-    commitCustomWave({ ...customWave, points: nextPoints }, `custom-wave-point:${node.id}`);
-    return true;
-  }
-
-  function handleCustomWavePointerDown(event: PointerEvent<SVGSVGElement>) {
-    if (!customWave || event.button !== 0) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    const target = event.target instanceof Element
-      ? event.target.closest<SVGElement>('.custom-wave-hit-target, .custom-wave-handle')
-      : null;
-    const targetIndex = target?.dataset.index ? Number(target.dataset.index) : null;
-    const lastIndex = customWave.points.length - 1;
-
-    if (target && Number.isInteger(targetIndex)) {
-      const now = performance.now();
-      if (
-        targetIndex !== null &&
-        targetIndex > 0 &&
-        targetIndex < lastIndex &&
-        customWaveClickRef.current.index === targetIndex &&
-        now - customWaveClickRef.current.time < 360
-      ) {
-        customWaveClickRef.current = { index: null, time: 0 };
-        removeCustomWavePoint(targetIndex);
-        return;
-      }
-
-      customWaveClickRef.current = { index: targetIndex, time: now };
-      if (targetIndex === null || targetIndex <= 0 || targetIndex >= lastIndex) return;
-      customWaveDragRef.current = { pointerId: event.pointerId, index: targetIndex };
-      setCustomWaveDragPointIndex(targetIndex);
-      event.currentTarget.setPointerCapture(event.pointerId);
-      return;
-    }
-
-    const point = customWavePointFromPointer(event);
-    if (!point) return;
-
-    customWaveClickRef.current = { index: null, time: 0 };
+  function insertCustomWavePoint(point: CustomWavePoint): number | null {
+    if (!customWave) return null;
     const nextPoints = [...customWave.points, point].sort((a, b) => a.x - b.x);
-    const nextIndex = nextPoints.reduce((bestIndex, item, index) => {
-      const best = nextPoints[bestIndex];
-      const distance = Math.abs(item.x - point.x) + Math.abs(item.y - point.y);
-      const bestDistance = Math.abs(best.x - point.x) + Math.abs(best.y - point.y);
-      return distance < bestDistance ? index : bestIndex;
-    }, 0);
+    const index = nextPoints.indexOf(point);
     commitCustomWave({ ...customWave, points: nextPoints }, `custom-wave-point:${node.id}`);
-    customWaveDragRef.current = { pointerId: event.pointerId, index: nextIndex };
-    setCustomWaveDragPointIndex(nextIndex);
-    event.currentTarget.setPointerCapture(event.pointerId);
+    return index;
   }
 
-  function handleCustomWaveDoubleClick(event: MouseEvent<SVGSVGElement>) {
+  function moveCustomWavePoint(index: number, point: CustomWavePoint) {
     if (!customWave) return;
-
-    const target = event.target instanceof Element
-      ? event.target.closest<SVGElement>('.custom-wave-hit-target, .custom-wave-handle')
-      : null;
-    if (!target?.dataset.index) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    removeCustomWavePoint(Number(target.dataset.index));
+    scheduleCustomWaveDragCommit({ ...customWave, points: customWave.points.map((entry, i) => i === index ? point : entry) }, `custom-wave-point:${node.id}`);
   }
 
-  if (isRuntimeContainer) {
+  function removeCustomWavePoint(index: number) {
+    if (!customWave || index <= 0 || index >= customWave.points.length - 1) return;
+    flushCustomWaveDragCommit();
+    commitCustomWave({ ...customWave, points: customWave.points.filter((_, i) => i !== index) }, `custom-wave-point:${node.id}`);
+  }
+
+  if (isExecutionArea) {
     return (
       <div
         className={`spread-port-panel${isAreaUiCollapsedPresentation ? ' spread-port-panel-collapsed' : ''}`}
         style={{
           '--spread-port-width': `${displaySize.width}px`,
-          '--spread-port-height': `${runtimeContainerPortsHeight(node)}px`,
+          '--spread-port-height': `${executionAreaPortsHeight(node)}px`,
           '--spread-header-height': `${SPREAD_HEADER_HEIGHT}px`,
           '--node-scale': String(node.scale ?? 1),
         } as CSSProperties}
@@ -1728,10 +1603,10 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
               displaySize={displaySize}
               graphZoomScale={graphZoomScale}
               graphScreenEmphasis={graphScreenEmphasis}
-              activePointIndex={customWaveDragPointIndex}
-              editorRef={customWaveEditorRef}
-              onPointerDown={handleCustomWavePointerDown}
-              onDoubleClick={handleCustomWaveDoubleClick}
+              onInsertPoint={insertCustomWavePoint}
+              onMovePoint={moveCustomWavePoint}
+              onRemovePoint={removeCustomWavePoint}
+              onGestureEnd={() => flushCustomWaveDragCommit()}
               onSustainStartChange={(sustainStart) => {
                 commitCustomWave({
                   ...customWave,
@@ -1763,7 +1638,7 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
             />
           ) : null}
           {showJoystickDisplay ? (
-            <JoystickDisplay
+            <SpagbolControlJoystick
               x={data.midiJoystickPosition?.x ?? node.params.x ?? 0.5}
               y={data.midiJoystickPosition?.y ?? node.params.y ?? 0.5}
               elasticity={node.params.elasticity ?? 0}
@@ -2454,10 +2329,10 @@ interface CustomWaveEditorProps {
   displaySize: ScopeNodeSize;
   graphZoomScale: number;
   graphScreenEmphasis: number;
-  activePointIndex: number | null;
-  editorRef: RefObject<SVGSVGElement | null>;
-  onPointerDown: (event: PointerEvent<SVGSVGElement>) => void;
-  onDoubleClick: (event: MouseEvent<SVGSVGElement>) => void;
+  onInsertPoint: (point: CustomWavePoint) => number | null;
+  onMovePoint: (index: number, point: CustomWavePoint) => void;
+  onRemovePoint: (index: number) => void;
+  onGestureEnd: () => void;
   onSustainStartChange: (value: number) => void;
   onSustainEndChange: (value: number) => void;
 }
@@ -2703,147 +2578,6 @@ function audioInputStatusLabel(status: NonNullable<TeiaNodeData['audioInput']>['
   }
 }
 
-interface JoystickDisplayProps {
-  x: number;
-  y: number;
-  elasticity: number;
-  onChange: (x: number, y: number) => void;
-}
-
-function JoystickDisplay({ x, y, elasticity, onChange }: JoystickDisplayProps) {
-  const dragPointerRef = useRef<number | null>(null);
-  const returnFrameRef = useRef<number | null>(null);
-  const returnTimeRef = useRef(0);
-  const elasticityRef = useRef(elasticity);
-  const normalizedX = clamp(x, 0, 1);
-  const normalizedY = clamp(y, 0, 1);
-  const positionRef = useRef({ x: normalizedX, y: normalizedY });
-
-  elasticityRef.current = elasticity;
-  if (dragPointerRef.current === null && returnFrameRef.current === null) {
-    positionRef.current = { x: normalizedX, y: normalizedY };
-  }
-
-  useEffect(() => () => {
-    if (returnFrameRef.current !== null) {
-      window.cancelAnimationFrame(returnFrameRef.current);
-    }
-  }, []);
-
-  function stopReturn() {
-    if (returnFrameRef.current !== null) {
-      window.cancelAnimationFrame(returnFrameRef.current);
-      returnFrameRef.current = null;
-    }
-  }
-
-  function startReturn() {
-    stopReturn();
-    if (!(elasticityRef.current > 0)) return;
-    returnTimeRef.current = performance.now();
-
-    function stepReturn(timestamp: number) {
-      if (dragPointerRef.current !== null || !(elasticityRef.current > 0)) {
-        returnFrameRef.current = null;
-        return;
-      }
-
-      const elapsedSeconds = Math.min(0.05, Math.max(0, (timestamp - returnTimeRef.current) / 1000));
-      returnTimeRef.current = timestamp;
-      const current = positionRef.current;
-      const deltaX = 0.5 - current.x;
-      const deltaY = 0.5 - current.y;
-      const distance = Math.hypot(deltaX, deltaY);
-      const travel = elasticityRef.current * elapsedSeconds;
-
-      if (distance <= Math.max(0.0001, travel)) {
-        positionRef.current = { x: 0.5, y: 0.5 };
-        returnFrameRef.current = null;
-        onChange(0.5, 0.5);
-        return;
-      }
-
-      const scale = travel / distance;
-      const next = {
-        x: current.x + deltaX * scale,
-        y: current.y + deltaY * scale,
-      };
-      positionRef.current = next;
-      onChange(next.x, next.y);
-      returnFrameRef.current = window.requestAnimationFrame(stepReturn);
-    }
-
-    returnFrameRef.current = window.requestAnimationFrame(stepReturn);
-  }
-
-  function updateFromPointer(event: PointerEvent<HTMLDivElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const nextX = (event.clientX - bounds.left) / Math.max(1, bounds.width);
-    const nextY = 1 - ((event.clientY - bounds.top) / Math.max(1, bounds.height));
-    const next = { x: clamp(nextX, 0, 1), y: clamp(nextY, 0, 1) };
-    positionRef.current = next;
-    onChange(next.x, next.y);
-  }
-
-  return (
-    <div
-      className="audio-node-joystick-display nodrag nopan"
-      role="group"
-      aria-label="Joystick"
-      aria-valuetext={`X ${normalizedX.toFixed(3)}, Y ${normalizedY.toFixed(3)}`}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!event.isPrimary || event.button !== 0) return;
-        stopReturn();
-        dragPointerRef.current = event.pointerId;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        updateFromPointer(event);
-      }}
-      onPointerMove={(event) => {
-        if (dragPointerRef.current !== event.pointerId) return;
-        event.preventDefault();
-        event.stopPropagation();
-        updateFromPointer(event);
-      }}
-      onPointerUp={(event) => {
-        event.stopPropagation();
-        if (dragPointerRef.current === event.pointerId) {
-          dragPointerRef.current = null;
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
-          }
-          startReturn();
-        }
-      }}
-      onPointerCancel={(event) => {
-        event.stopPropagation();
-        if (dragPointerRef.current === event.pointerId) {
-          dragPointerRef.current = null;
-          startReturn();
-        }
-      }}
-      onLostPointerCapture={(event) => {
-        if (dragPointerRef.current === event.pointerId) {
-          dragPointerRef.current = null;
-          startReturn();
-        }
-      }}
-      onClick={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
-    >
-      <span
-        className="audio-node-joystick-handle"
-        style={{
-          left: `calc(${normalizedX} * (100% - var(--joystick-handle-size)))`,
-          top: `calc(${1 - normalizedY} * (100% - var(--joystick-handle-size)))`,
-        }}
-        aria-hidden="true"
-      />
-    </div>
-  );
-}
-
 interface KeysDisplayProps {
   size: number;
   startNote: number;
@@ -2985,17 +2719,17 @@ interface RollGridProps {
 function RollGrid({ params, steps, beatLength, stepLength, rows, currentStep, onParamsChange }: RollGridProps) {
   const storageRow = (displayRow: number) => rows.length - displayRow - 1;
   return (
-    <PatternGrid
+    <SpagbolSequencer
       ariaLabel="Piano roll"
-      className="roll-node-panel pattern-grid-roll"
+      className="roll-node-panel spagbol-sequencer-roll"
       rows={rows.length}
       steps={steps}
-      beatLength={beatLength}
+      groupSize={beatLength}
       currentStep={currentStep}
-      defaultGateLength={stepLength}
+      defaultItemLength={stepLength}
       rowLabel={(displayRow) => midiNoteLabel(rows[storageRow(displayRow)].note)}
-      gatesForRow={(displayRow) => rollGatesForRow(params, rows[storageRow(displayRow)].index, steps)}
-      onCreateGate={(displayRow, start, end) => {
+      itemsForRow={(displayRow) => rollGatesForRow(params, rows[storageRow(displayRow)].index, steps).map(({ slot, velocity, ...item }) => ({ ...item, id: slot, level: velocity }))}
+      onCreateItem={(displayRow, start, end) => {
         const row = rows[storageRow(displayRow)].index;
         const gates = rollGatesForRow(params, row, steps);
         const slot = Array.from({ length: steps }, (_, index) => index).find((index) => !gates.some((gate) => gate.slot === index));
@@ -3010,15 +2744,15 @@ function RollGrid({ params, steps, beatLength, stepLength, rows, currentStep, on
         // Editing a row never clears notes in the other rows.
         onParamsChange(values);
       }}
-      onUpdateGate={(displayRow, slot, update) => {
+      onUpdateItem={(displayRow, slot, update) => {
         const row = rows[storageRow(displayRow)].index;
         const values: Record<string, number> = {};
         if (update.start !== undefined) values[rollGateParamName(row, slot, 'start')] = update.start;
         if (update.end !== undefined) values[rollGateParamName(row, slot, 'end')] = update.end;
-        if (update.velocity !== undefined) values[rollGateVelocityParamName(row, slot)] = update.velocity;
+        if (update.level !== undefined) values[rollGateVelocityParamName(row, slot)] = update.level;
         onParamsChange(values);
       }}
-      onDeleteGate={(displayRow, slot) => onParamsChange({ [rollGateParamName(rows[storageRow(displayRow)].index, slot, 'active')]: 0 })}
+      onDeleteItem={(displayRow, slot) => onParamsChange({ [rollGateParamName(rows[storageRow(displayRow)].index, slot, 'active')]: 0 })}
     />
   );
 }
@@ -3027,266 +2761,6 @@ function RollGrid({ params, steps, beatLength, stepLength, rows, currentStep, on
  * Shared interaction and rendering system for step-based patterns. Callers
  * adapt node storage to gates and choose which interactions are available.
  */
-interface PatternGridGate {
-  slot: number;
-  start: number;
-  end: number;
-  velocity: number;
-}
-
-interface PatternGridProps {
-  ariaLabel: string;
-  className: string;
-  rows: number;
-  steps: number;
-  beatLength: number;
-  currentStep?: number;
-  rowLabel: (row: number) => string;
-  renderRowLabel?: (row: number) => ReactNode;
-  labelPosition?: 'left' | 'right';
-  onRowRef?: (row: number, element: HTMLDivElement | null) => void;
-  gatesForRow: (row: number) => PatternGridGate[];
-  mode?: 'gate' | 'trigger';
-  defaultGateLength?: number;
-  allowMove?: boolean;
-  allowResize?: boolean;
-  allowVelocity?: boolean;
-  onCreateGate: (row: number, start: number, end: number) => void;
-  onCreateGates?: (row: number, gates: Array<{ start: number; end: number }>) => void;
-  onUpdateGate: (row: number, slot: number, update: Partial<Pick<PatternGridGate, 'start' | 'end' | 'velocity'>>) => void;
-  onDeleteGate: (row: number, slot: number) => void;
-}
-
-function PatternGrid({
-  ariaLabel,
-  className,
-  rows,
-  steps,
-  beatLength,
-  currentStep,
-  rowLabel,
-  renderRowLabel,
-  labelPosition = 'left',
-  onRowRef,
-  gatesForRow,
-  mode = 'gate',
-  defaultGateLength = 1,
-  allowMove = true,
-  allowResize = true,
-  allowVelocity = true,
-  onCreateGate,
-  onCreateGates,
-  onUpdateGate,
-  onDeleteGate,
-}: PatternGridProps) {
-  const activeStep = Number.isFinite(currentStep) ? Math.floor(currentStep ?? -1) : -1;
-  const dragRef = useRef<{ pointerId: number; row: number; gate: PatternGridGate; x: number; y: number; action: 'move' | 'left' | 'right' | 'velocity'; moved: boolean } | null>(null);
-  const createRef = useRef<{
-    pointerId: number;
-    row: number;
-    anchorX: number;
-    start: number;
-    end: number;
-    lastStep: number;
-    positions: Set<number>;
-    moved: boolean;
-  } | null>(null);
-  const [createPreview, setCreatePreview] = useState<{ row: number; gates: Array<{ start: number; end: number }> } | null>(null);
-
-  const positionInRow = (event: PointerEvent<HTMLElement>) => {
-    const bounds = event.currentTarget.closest('.pattern-grid-cells')?.getBoundingClientRect();
-    if (!bounds) return 0;
-    return Math.max(0, Math.min(steps, ((event.clientX - bounds.left) / Math.max(1, bounds.width)) * steps));
-  };
-
-  const beginCreate = (event: PointerEvent<HTMLButtonElement>, row: number, step: number) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const existing = gatesForRow(row);
-    if (existing.some((gate) => step >= gate.start && step < gate.end)) return;
-    const nextStart = mode === 'gate'
-      ? existing.filter((gate) => gate.start > step).reduce((boundary, gate) => Math.min(boundary, gate.start), steps)
-      : steps;
-    const end = mode === 'trigger' ? Math.min(steps, step + 1) : Math.min(nextStart, step + defaultGateLength);
-    if (end - step < 0.05) return;
-    createRef.current = {
-      pointerId: event.pointerId,
-      row,
-      anchorX: event.clientX,
-      start: step,
-      end,
-      lastStep: step,
-      positions: new Set([step]),
-      moved: false,
-    };
-    setCreatePreview({ row, gates: [{ start: step, end }] });
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const moveCreate = (event: PointerEvent<HTMLButtonElement>) => {
-    const create = createRef.current;
-    if (!create || create.pointerId !== event.pointerId) return;
-    if (Math.abs(event.clientX - create.anchorX) >= 3) create.moved = true;
-    if (mode === 'trigger') {
-      const nextStep = Math.max(0, Math.min(steps - 1, Math.floor(positionInRow(event))));
-      const direction = nextStep >= create.lastStep ? 1 : -1;
-      for (let step = create.lastStep; step !== nextStep + direction; step += direction) create.positions.add(step);
-      create.lastStep = nextStep;
-      const occupied = gatesForRow(create.row);
-      const gates = [...create.positions]
-        .filter((step) => !occupied.some((gate) => Math.abs(gate.start - step) < 0.000001))
-        .sort((left, right) => left - right)
-        .map((step) => ({ start: step, end: Math.min(steps, step + 1) }));
-      setCreatePreview({ row: create.row, gates });
-      return;
-    }
-    if (!create.moved) return;
-    const nextStart = gatesForRow(create.row)
-      .filter((gate) => gate.start > create.start)
-      .reduce((boundary, gate) => Math.min(boundary, gate.start), steps);
-    create.end = Math.max(create.start + 0.05, Math.min(nextStart, positionInRow(event)));
-    setCreatePreview({ row: create.row, gates: [{ start: create.start, end: create.end }] });
-  };
-
-  const finishCreate = (pointerId: number) => {
-    const create = createRef.current;
-    if (!create || create.pointerId !== pointerId) return;
-    const occupied = gatesForRow(create.row);
-    const gates = mode === 'trigger'
-      ? [...create.positions]
-          .filter((step) => !occupied.some((gate) => Math.abs(gate.start - step) < 0.000001))
-          .sort((left, right) => left - right)
-          .map((step) => ({ start: step, end: Math.min(steps, step + 1) }))
-      : [{ start: create.start, end: create.end }];
-    if (onCreateGates) onCreateGates(create.row, gates);
-    else for (const gate of gates) onCreateGate(create.row, gate.start, gate.end);
-    createRef.current = null;
-    setCreatePreview(null);
-  };
-
-  const beginDrag = (event: PointerEvent<HTMLElement>, row: number, gate: PatternGridGate, action: 'move' | 'left' | 'right' | 'velocity') => {
-    if (event.button !== 0) return;
-    event.preventDefault(); event.stopPropagation();
-    dragRef.current = { pointerId: event.pointerId, row, gate, x: event.clientX, y: event.clientY, action, moved: false };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const moveDrag = (event: PointerEvent<HTMLElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const bounds = event.currentTarget.closest('.pattern-grid-cells')?.getBoundingClientRect();
-    const delta = ((event.clientX - drag.x) / Math.max(1, bounds?.width ?? steps * 26)) * steps;
-    const velocityDelta = (event.clientY - drag.y) / Math.max(1, bounds?.height ?? 26);
-    drag.moved ||= Math.hypot(event.clientX - drag.x, event.clientY - drag.y) >= 3;
-    if (!drag.moved) return;
-    if (drag.action === 'velocity') return onUpdateGate(drag.row, drag.gate.slot, { velocity: Math.max(SEQUENCER_MIN_VELOCITY, Math.min(1, drag.gate.velocity - velocityDelta)) });
-    const length = drag.gate.end - drag.gate.start;
-    if (mode === 'trigger') {
-      const start = Math.max(0, Math.min(steps - 1, drag.gate.start + delta));
-      return onUpdateGate(drag.row, drag.gate.slot, { start, end: Math.min(steps, start + 1) });
-    }
-    const otherGates = gatesForRow(drag.row).filter((gate) => gate.slot !== drag.gate.slot);
-    const previousEnd = otherGates
-      .filter((gate) => gate.start < drag.gate.start)
-      .reduce((boundary, gate) => Math.max(boundary, gate.end), 0);
-    const nextStart = otherGates
-      .filter((gate) => gate.start >= drag.gate.end)
-      .reduce((boundary, gate) => Math.min(boundary, gate.start), steps);
-    if (drag.action === 'move') {
-      const start = Math.max(previousEnd, Math.min(nextStart - length, drag.gate.start + delta));
-      return onUpdateGate(drag.row, drag.gate.slot, { start, end: start + length });
-    }
-    if (drag.action === 'left') return onUpdateGate(drag.row, drag.gate.slot, { start: Math.max(previousEnd, Math.min(drag.gate.end - 0.05, drag.gate.start + delta)) });
-    onUpdateGate(drag.row, drag.gate.slot, { end: Math.max(drag.gate.start + 0.05, Math.min(nextStart, drag.gate.end + delta)) });
-  };
-  const finishDrag = (pointerId: number) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== pointerId) return;
-    if (!drag.moved && drag.action === 'move') onDeleteGate(drag.row, drag.gate.slot);
-    dragRef.current = null;
-  };
-  const endDrag = (event: PointerEvent<HTMLElement>) => finishDrag(event.pointerId);
-  const cancelDrag = (pointerId: number) => {
-    if (dragRef.current?.pointerId === pointerId) dragRef.current = null;
-  };
-
-  useEffect(() => {
-    const finishPointer = (event: globalThis.PointerEvent) => {
-      finishCreate(event.pointerId);
-      finishDrag(event.pointerId);
-    };
-    const cancelPointer = (event: globalThis.PointerEvent) => {
-      if (createRef.current?.pointerId === event.pointerId) {
-        createRef.current = null;
-        setCreatePreview(null);
-      }
-      cancelDrag(event.pointerId);
-    };
-    window.addEventListener('pointerup', finishPointer);
-    window.addEventListener('pointercancel', cancelPointer);
-    return () => {
-      window.removeEventListener('pointerup', finishPointer);
-      window.removeEventListener('pointercancel', cancelPointer);
-    };
-  });
-
-  return (
-    <div className={`pattern-grid pattern-grid-label-${labelPosition} ${className} nodrag nopan`} style={{ '--pattern-grid-steps': steps } as CSSProperties} aria-label={ariaLabel}>
-      {Array.from({ length: rows }, (_, row) => (
-        <div className="pattern-grid-row" key={row} ref={(element) => onRowRef?.(row, element)}>
-          {labelPosition === 'left' ? <div className="pattern-grid-label">{renderRowLabel?.(row) ?? rowLabel(row)}</div> : null}
-          <div className="pattern-grid-cells" role="row">
-            {Array.from({ length: steps }, (_, step) => (
-              <button
-                className={['pattern-grid-cell', Math.floor(step / beatLength) % 2 === 1 ? 'pattern-grid-cell-beat-highlight' : '', activeStep === step ? 'pattern-grid-cell-current' : ''].filter(Boolean).join(' ')}
-                key={step}
-                type="button"
-                aria-label={`${rowLabel(row)}, step ${step + 1}`}
-                data-pattern-grid-cell="true"
-                data-row-index={row}
-                data-step-index={step}
-                onPointerDown={(event) => beginCreate(event, row, step)}
-                onPointerMove={moveCreate}
-                onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); finishCreate(event.pointerId); }}
-                onPointerCancel={(event) => { createRef.current = null; setCreatePreview(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
-                onLostPointerCapture={(event) => finishCreate(event.pointerId)}
-                onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}
-              />
-            ))}
-            {createPreview?.row === row ? createPreview.gates.map((gate, index) => (
-              <div
-                className="pattern-grid-gate pattern-grid-create-preview"
-                key={`${gate.start}:${index}`}
-                style={{ left: `${gate.start / steps * 100}%`, width: `${(gate.end - gate.start) / steps * 100}%` }}
-              />
-            )) : null}
-            {gatesForRow(row).map((gate) => (
-              <div
-                className="pattern-grid-gate"
-                key={gate.slot}
-                style={{ top: `${(1 - gate.velocity) * 100}%`, left: `${gate.start / steps * 100}%`, width: `${(gate.end - gate.start) / steps * 100}%` }}
-                role="button"
-                tabIndex={0}
-                aria-label={`${rowLabel(row)} ${mode} from ${gate.start.toFixed(2)} to ${gate.end.toFixed(2)}, velocity ${gate.velocity.toFixed(2)}`}
-                onPointerDown={(event) => { if (allowMove && event.target === event.currentTarget) beginDrag(event, row, gate, 'move'); }}
-                onPointerMove={moveDrag}
-                onPointerUp={endDrag}
-                onPointerCancel={(event) => cancelDrag(event.pointerId)}
-                onLostPointerCapture={(event) => cancelDrag(event.pointerId)}
-                onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}
-              >
-                {allowVelocity ? <span className="pattern-grid-velocity-handle" onPointerDown={(event) => beginDrag(event, row, gate, 'velocity')} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={(event) => cancelDrag(event.pointerId)} /> : null}
-                {allowResize ? <><span className="pattern-grid-gate-handle pattern-grid-gate-handle-left" onPointerDown={(event) => beginDrag(event, row, gate, 'left')} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={(event) => cancelDrag(event.pointerId)} /><span className="pattern-grid-gate-handle pattern-grid-gate-handle-right" onPointerDown={(event) => beginDrag(event, row, gate, 'right')} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={(event) => cancelDrag(event.pointerId)} /></> : null}
-              </div>
-            ))}
-          </div>
-          {labelPosition === 'right' ? <div className="pattern-grid-label">{renderRowLabel?.(row) ?? rowLabel(row)}</div> : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 interface SequencerGridProps {
   params: Record<string, number>;
   rows: number;
@@ -3300,8 +2774,6 @@ interface SequencerGridProps {
   onParamsChange: (values: Record<string, number>) => void;
   onRowLabelsChange: (labels: string[]) => void;
 }
-
-const SEQUENCER_TRIGGER_GRAB_FRACTION = 0.35;
 
 function SequencerGrid({
   params,
@@ -3341,7 +2813,7 @@ function SequencerGrid({
     )));
   };
 
-  const patternGatesForRow = (rowIndex: number): PatternGridGate[] => gateMode
+  const patternGatesForRow = (rowIndex: number): ReturnType<typeof sequencerGatesForRow> => gateMode
     ? sequencerGatesForRow(params, rowIndex, steps)
     : sequencerTriggersForRow(params, rowIndex, steps).map((trigger) => ({
         slot: trigger.slot,
@@ -3375,12 +2847,12 @@ function SequencerGrid({
   };
 
   return (
-    <PatternGrid
+    <SpagbolSequencer
       ariaLabel="Sequencer pattern"
-      className="pattern-grid-sequencer"
+      className="teia-sequencer-grid"
       rows={rows}
       steps={steps}
-      beatLength={beatLength}
+      groupSize={beatLength}
       currentStep={currentStep}
       mode={gateMode ? 'gate' : 'trigger'}
       labelPosition="right"
@@ -3404,7 +2876,7 @@ function SequencerGrid({
               type="source"
               position={Position.Right}
               className={[
-                'teia-handle teia-handle-output teia-handle-output-sequencer',
+                'sequencer-row-output-pin',
                 selectedLinkOutputs.includes(outputName) ? 'teia-handle-selected-link' : '',
               ].filter(Boolean).join(' ')}
             />
@@ -3412,16 +2884,16 @@ function SequencerGrid({
         );
       }}
       onRowRef={(rowIndex, element) => setOutputRowRef(sequencerOutputName(rowIndex), element)}
-      gatesForRow={patternGatesForRow}
-      defaultGateLength={1}
+      itemsForRow={(row) => patternGatesForRow(row).map(({ slot, velocity, ...item }) => ({ ...item, id: slot, level: velocity }))}
+      defaultItemLength={1}
       allowMove
       allowResize={gateMode}
-      allowVelocity
-      onCreateGate={(rowIndex, start, end) => createGates(rowIndex, [{ start, end }])}
-      onCreateGates={createGates}
-      onUpdateGate={(rowIndex, slot, update) => {
+      allowLevel
+      onCreateItem={(rowIndex, start, end) => createGates(rowIndex, [{ start, end }])}
+      onCreateItems={createGates}
+      onUpdateItem={(rowIndex, slot, update) => {
         const values: Record<string, number> = {};
-        if (update.velocity !== undefined) values[sequencerStepVelocityParamName(rowIndex, slot)] = update.velocity;
+        if (update.level !== undefined) values[sequencerStepVelocityParamName(rowIndex, slot)] = update.level;
         if (gateMode) {
           if (update.start !== undefined) values[sequencerGateParamName(rowIndex, slot, 'start')] = update.start;
           if (update.end !== undefined) values[sequencerGateParamName(rowIndex, slot, 'end')] = update.end;
@@ -3430,7 +2902,7 @@ function SequencerGrid({
         }
         onParamsChange(values);
       }}
-      onDeleteGate={(rowIndex, slot) => onParamsChange(gateMode
+      onDeleteItem={(rowIndex, slot) => onParamsChange(gateMode
         ? { [sequencerGateParamName(rowIndex, slot, 'active')]: 0 }
         : { [sequencerCellParamName(rowIndex, slot)]: 0 })}
     />
@@ -3438,180 +2910,41 @@ function SequencerGrid({
 }
 
 function CustomWaveEditor({
-  customWave,
-  waves,
-  selectedWaveIndex,
-  onWaveSelect,
-  subdivisions,
-  subgroups,
-  baseLevel,
-  rangeMin,
-  rangeMax,
-  frequency,
-  hasLivePlayheads,
-  playheads,
-  compact,
-  displaySize,
-  graphZoomScale,
-  graphScreenEmphasis,
-  activePointIndex,
-  editorRef,
-  onPointerDown,
-  onDoubleClick,
-  onSustainStartChange,
-  onSustainEndChange,
+  customWave, waves, selectedWaveIndex, onWaveSelect, subdivisions, subgroups,
+  baseLevel, rangeMin, rangeMax, frequency, hasLivePlayheads, playheads, compact,
+  displaySize, graphZoomScale, graphScreenEmphasis, onInsertPoint, onMovePoint,
+  onRemovePoint, onGestureEnd, onSustainStartChange, onSustainEndChange,
 }: CustomWaveEditorProps) {
-  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
-  const width = 300;
-  const height = 128;
-  const padding = 12;
-  const innerWidth = width - padding * 2;
-  const innerHeight = height - padding * 2;
   const points = customWaveWithBaseLevel(customWave, baseLevel, rangeMin, rangeMax).points;
-  const path = customWavePath(points, width, height, padding);
-  const graphDetailSize = {
-    width: displaySize.width * graphZoomScale,
-    height: displaySize.height * graphZoomScale,
-  };
-  const gridColumns = customWaveGridColumns(subdivisions);
-  const subgroupBands = customWaveSubgroupBands(subdivisions, subgroups, width, padding);
-  const gridRows = customWaveGridRows(rangeMin, rangeMax, graphDetailSize.height);
-  const sustainStartX = padding + customWave.sustainStart * innerWidth;
-  const sustainEndX = padding + customWave.sustainEnd * innerWidth;
-  const showSustainStart = customWaveUsesSustainStart(customWave.mode);
-  const showSustainEnd = customWaveUsesSustainEnd(customWave.mode);
-  const showLowFrequencyScan = hasLivePlayheads && Number.isFinite(frequency) && Math.abs(frequency) < 20;
-  const hitRadius = screenCircleRadius(15 * graphScreenEmphasis, width, height, graphDetailSize);
-  const editPointScreenScale = customWaveEditPointScreenScale(graphZoomScale);
-  const endpointRadius = screenCircleRadius(5 * graphScreenEmphasis * editPointScreenScale, width, height, graphDetailSize);
-  const handleRadius = screenCircleRadius(6 * graphScreenEmphasis * editPointScreenScale, width, height, graphDetailSize);
-  const valueLabelIndex = activePointIndex ?? hoveredPointIndex;
-  const valueLabelPoint = valueLabelIndex === null ? null : points[valueLabelIndex] ?? null;
-  const valueLabelScreen = valueLabelPoint
-    ? customWavePointToScreen(valueLabelPoint, width, height, padding)
-    : null;
-
-  return (
-    <div className="custom-wave-node-editor nodrag nopan">
-      <div className="custom-wave-node-chart">
-        {waves.length > 1 ? (
-          <div className="custom-wave-tabs" aria-label="Select wave">
-            {waves.map((_, index) => <button key={index} type="button" className={`custom-wave-tab wave-color-${index % 8} ${index === selectedWaveIndex ? 'is-selected' : ''} nodrag nopan`} title={`Edit wave ${index + 1} (${index + 1})`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onWaveSelect(index); }}>{index + 1}</button>)}
-          </div>
-        ) : null}
-        {subgroupBands.length > 0 ? (
-          <svg className="custom-wave-subgroup-bands" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
-            {subgroupBands.map((band) => <rect key={band.x} x={band.x} y={padding} width={band.width} height={innerHeight} />)}
-          </svg>
-        ) : null}
-        <ChartGrid
-          width={innerWidth}
-          height={innerHeight}
-          columns={gridColumns}
-          rows={gridRows}
-          className="custom-wave-node-grid"
-          showRowLabels
-        />
-        <svg
-          ref={editorRef}
-          className="custom-wave-node-canvas"
-          viewBox={`0 0 ${width} ${height}`}
-          preserveAspectRatio="none"
-          aria-label="Custom wave editor"
-          role="img"
-          onPointerDown={onPointerDown}
-          onDoubleClick={onDoubleClick}
-        >
-        <g className="custom-wave-chart-chrome">
-          {showSustainStart ? (
-            <line className="custom-wave-sustain-line" x1={sustainStartX} y1={padding} x2={sustainStartX} y2={height - padding} />
-          ) : null}
-          {showSustainEnd ? (
-            <line className="custom-wave-sustain-line is-end" x1={sustainEndX} y1={padding} x2={sustainEndX} y2={height - padding} />
-          ) : null}
-          {waves.map((wave, index) => index !== selectedWaveIndex ? <path key={index} className={`custom-wave-path is-background wave-color-${index % 8}`} d={customWavePath(customWaveWithBaseLevel(wave, baseLevel, rangeMin, rangeMax).points, width, height, padding)} /> : null)}
-          <path className={`custom-wave-path wave-color-${selectedWaveIndex % 8}`} d={path} />
-          {showLowFrequencyScan ? playheads.map((playhead, index) => {
-            const playheadX = padding + clamp(playhead, 0, 1) * innerWidth;
-            return <line className={`wave-playhead-line wave-playhead-${index % 4} is-low-frequency`} key={`${index}:${playhead}`} x1={playheadX} y1={padding} x2={playheadX} y2={height - padding}><title>Playback {index + 1}</title></line>;
-          }) : null}
-        </g>
-        {points.map((point, index) => {
-          const screen = customWavePointToScreen(point, width, height, padding);
-          const locked = index === 0 || index === points.length - 1;
-          return (
-            <g
-              key={`${point.x}:${point.y}:${index}`}
-              onPointerEnter={() => setHoveredPointIndex(index)}
-              onPointerLeave={() => setHoveredPointIndex((current) => current === index ? null : current)}
-            >
-              <ellipse
-                className={[
-                  'custom-wave-hit-target',
-                  locked ? 'is-locked' : '',
-                ].filter(Boolean).join(' ')}
-                data-index={index}
-                cx={screen.x}
-                cy={screen.y}
-                rx={hitRadius.rx}
-                ry={hitRadius.ry}
-              />
-              <ellipse
-                className={[
-                  'custom-wave-handle',
-                  locked ? 'custom-wave-endpoint is-locked' : '',
-                ].filter(Boolean).join(' ')}
-                data-index={index}
-                cx={screen.x}
-                cy={screen.y}
-                rx={locked ? endpointRadius.rx : handleRadius.rx}
-                ry={locked ? endpointRadius.ry : handleRadius.ry}
-              />
-            </g>
-          );
-        })}
-        </svg>
-        {valueLabelPoint && valueLabelScreen ? (
-          <span
-            className={[
-              'custom-wave-node-value-label',
-              valueLabelPoint.x > 0.72 ? 'is-left' : '',
-              valueLabelPoint.y > 0.72 ? 'is-below' : '',
-            ].filter(Boolean).join(' ')}
-            style={{
-              left: `${(valueLabelScreen.x / width) * 100}%`,
-              top: `${(valueLabelScreen.y / height) * 100}%`,
-            }}
-            aria-hidden="true"
-          >
-            {formatChartValue(customWaveOutputValue(valueLabelPoint.y, rangeMin, rangeMax))}
-          </span>
-        ) : null}
-      </div>
-      {!compact && (showSustainStart || showSustainEnd) ? (
-      <div className="custom-wave-node-controls">
-        {showSustainStart ? (
-          <CustomWaveRange
-            label="start"
-            value={customWave.sustainStart}
-            min={0}
-            max={Math.max(0, customWave.sustainEnd - 0.001)}
-            onChange={onSustainStartChange}
-          />
-        ) : null}
-        {showSustainEnd ? (
-          <CustomWaveRange
-            label="end"
-            value={customWave.sustainEnd}
-            min={Math.min(1, customWave.sustainStart + 0.001)}
-            max={1}
-            onChange={onSustainEndChange}
-          />
-        ) : null}
-      </div>
-      ) : null}
-    </div>
-  );
+  const showStart = customWaveUsesSustainStart(customWave.mode);
+  const showEnd = customWaveUsesSustainEnd(customWave.mode);
+  return <SpagbolCurveEditor
+    key={selectedWaveIndex}
+    points={points.map((point, index) => ({ ...point, locked: index === 0 || index === points.length - 1 }))}
+    backgroundCurves={waves.flatMap((wave, index) => index === selectedWaveIndex ? [] : [{ points: customWaveWithBaseLevel(wave, baseLevel, rangeMin, rangeMax).points, className: `wave-color-${index % 8}` }])}
+    pathClassName={`wave-color-${selectedWaveIndex % 8}`}
+    displaySize={{ width: displaySize.width * graphZoomScale, height: displaySize.height * graphZoomScale }}
+    screenEmphasis={graphScreenEmphasis}
+    pointScale={customWaveEditPointScreenScale(graphZoomScale)}
+    formatValue={(value) => formatChartValue(customWaveOutputValue(value, rangeMin, rangeMax))}
+    onInsertPoint={onInsertPoint} onMovePoint={onMovePoint} onRemovePoint={onRemovePoint} onGestureEnd={onGestureEnd}
+    toolbar={waves.length > 1 ? <div className="custom-wave-tabs" aria-label="Select wave">
+      {waves.map((_, index) => <button key={index} type="button" className={`custom-wave-tab wave-color-${index % 8} ${index === selectedWaveIndex ? 'is-selected' : ''} nodrag nopan`} title={`Edit wave ${index + 1} (${index + 1})`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onWaveSelect(index); }}>{index + 1}</button>)}
+    </div> : null}
+    underlay={<>
+      <svg className="custom-wave-subgroup-bands" viewBox="0 0 300 128" preserveAspectRatio="none" aria-hidden="true">{customWaveSubgroupBands(subdivisions, subgroups, 300, 12).map((band) => <rect key={band.x} x={band.x} y={12} width={band.width} height={104} />)}</svg>
+      <ChartGrid width={276} height={104} columns={customWaveGridColumns(subdivisions)} rows={customWaveGridRows(rangeMin, rangeMax, displaySize.height * graphZoomScale)} className="custom-wave-node-grid" showRowLabels />
+    </>}
+    overlay={<>
+      {showStart ? <line className="custom-wave-sustain-line" x1={12 + customWave.sustainStart * 276} y1={12} x2={12 + customWave.sustainStart * 276} y2={116} /> : null}
+      {showEnd ? <line className="custom-wave-sustain-line is-end" x1={12 + customWave.sustainEnd * 276} y1={12} x2={12 + customWave.sustainEnd * 276} y2={116} /> : null}
+      {hasLivePlayheads && Number.isFinite(frequency) && Math.abs(frequency) < 20 ? playheads.map((playhead, index) => <line key={index} className={`wave-playhead-line wave-playhead-${index % 4} is-low-frequency`} x1={12 + clamp(playhead, 0, 1) * 276} y1={12} x2={12 + clamp(playhead, 0, 1) * 276} y2={116}><title>Playback {index + 1}</title></line>) : null}
+    </>}
+    footer={!compact && (showStart || showEnd) ? <div className="custom-wave-node-controls">
+      {showStart ? <CustomWaveRange label="start" value={customWave.sustainStart} min={0} max={Math.max(0, customWave.sustainEnd - 0.001)} onChange={onSustainStartChange} /> : null}
+      {showEnd ? <CustomWaveRange label="end" value={customWave.sustainEnd} min={Math.min(1, customWave.sustainStart + 0.001)} max={1} onChange={onSustainEndChange} /> : null}
+    </div> : null}
+  />;
 }
 
 function customWaveGridColumns(subdivisions: number): ChartGridTick[] {
@@ -3697,20 +3030,6 @@ function CustomWaveRange({ label, value, min, max, onChange }: CustomWaveRangePr
       />
     </label>
   );
-}
-
-function customWavePath(points: CustomWavePoint[], width: number, height: number, padding: number): string {
-  return points.map((point, index) => {
-    const screen = customWavePointToScreen(point, width, height, padding);
-    return `${index === 0 ? 'M' : 'L'}${roundPathNumber(screen.x)} ${roundPathNumber(screen.y)}`;
-  }).join(' ');
-}
-
-function customWavePointToScreen(point: CustomWavePoint, width: number, height: number, padding: number): CustomWavePoint {
-  return {
-    x: padding + point.x * (width - padding * 2),
-    y: padding + (1 - ((point.y + 1) / 2)) * (height - padding * 2),
-  };
 }
 
 function customWaveOutputValue(normalizedValue: number, rangeMin: number, rangeMax: number): number {

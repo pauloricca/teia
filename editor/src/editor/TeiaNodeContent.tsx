@@ -1,5 +1,5 @@
 import { SEQUENCER_INDEX_OUTPUT } from '../graph/nodeTypes';
-import { SpagbolNodeFrame, SpagbolNodePort, SpagbolControlNumber, portsFor, useSpagbol, type SpagbolNodeViewProps, type GraphNode } from "@pauloricca/spagbol";
+import { SpagbolNodeFrame, SpagbolControlSelect, SpagbolNodePort, SpagbolControlNumber, portsFor, useSpagbol, type SpagbolNodeViewProps, type GraphNode } from "@pauloricca/spagbol";
 import { portName } from "../spagbol/patchCodec";
 import { SpagbolCurveEditor, SpagbolSequencer, SpagbolControlJoystick, SpagbolControlSlider, SpagbolControlButton, type SpagbolControlButtonMode } from '@pauloricca/spagbol';
 import '@pauloricca/spagbol/controls.css';
@@ -894,42 +894,14 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
   }
 
   if (!definition) return null;
-  function portContent(port: import('@pauloricca/spagbol').PortDefinition) {
+  function portControl(port: import('@pauloricca/spagbol').PortDefinition) {
     const name = portName(shared.node, port.id, port.direction);
     if (port.direction === 'input') {
       const input = { ...definition!.inputs.find(input => input.name === name)!, preview: false };
-      return <div className="teia-node-parameter">              {isSelector && isSelectorValuePort(input.name) && !input.preview ? (
-                <button
-                  className={[
-                    'selector-index-button nodrag nopan',
-                    selectorSelectedIndex === Number(input.name) ? 'selector-index-button-active' : '',
-                  ].filter(Boolean).join(' ')}
-                  type="button"
-                  title={`Select input ${input.name}`}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    data.onParamChange(node.id, 'select', Number(input.name));
-                  }}
-                >
-                  {input.name}
-                </button>
-              ) : node.type === 'Reverb' && input.name === 'mode' && !input.preview ? (
+      const specialControl = node.type === 'Reverb' && input.name === 'mode' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label="Reverb mode"
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -943,22 +915,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                     <option value="0">original</option>
                     <option value="1">dattorro plate</option>
                     <option value="2">feedback delay network</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showKeysDisplay && input.name === 'mode' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label="Keys mode"
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -971,22 +933,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                   >
                     <option value="0">gate</option>
                     <option value="1">hold</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showCustomWaveEditor && input.name === 'mode' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label="Custom Wave mode"
                     value={customWave?.mode ?? CUSTOM_WAVE_MODES[0].value}
                     onChange={(event) => {
@@ -1000,22 +952,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                     {CUSTOM_WAVE_MODES.map((mode) => (
                       <option key={mode.value} value={mode.value}>{mode.label}</option>
                     ))}
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showSliderDisplay && input.name === 'direction' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     value={String(Math.round(node.params.direction ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
                       data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
@@ -1027,22 +969,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                   >
                     <option value="0">horizontal</option>
                     <option value="1">vertical</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showSequencerDisplay && input.name === 'mode' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label="Sequencer mode"
                     value={sequencerUsesGateMode(node.params) ? '1' : '0'}
                     onChange={(event) => {
@@ -1092,22 +1024,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                   >
                     <option value="0">trigger</option>
                     <option value="1">gate</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : (showMeterDisplay || showScopeDisplay) && input.name === 'mode' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label={`${showMeterDisplay ? 'Meter' : 'Scope'} mode`}
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -1120,22 +1042,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                   >
                     <option value="0">unipolar</option>
                     <option value="1">bipolar</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showScopeDisplay && input.name === 'reset' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label="Scope reset"
                     value={String(Math.round(node.params.reset ?? input.defaultValue ?? 1))}
                     onChange={(event) => {
@@ -1148,22 +1060,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                   >
                     <option value="0">none</option>
                     <option value="1">zero-crossing</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showSampleUpload && input.name === 'mode' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
                       data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
@@ -1176,22 +1078,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                     <option value="0">one-shot</option>
                     <option value="1">loop</option>
                     <option value="2">ping-pong</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showBufferDisplay && input.name === 'on reset' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label="Buffer on reset"
                     value={String(clamp(Math.round(node.params['on reset'] ?? input.defaultValue ?? 0), 0, 1))}
                     onChange={(event) => {
@@ -1204,22 +1096,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                   >
                     <option value="0">clear</option>
                     <option value="1">preserve</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showTempoDisplay && input.name === 'source' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label="Tempo source"
                     value={String(clamp(Math.round(node.params.source ?? input.defaultValue ?? 0), 0, 1))}
                     onChange={(event) => {
@@ -1232,22 +1114,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                   >
                     <option value="0">internal</option>
                     <option value="1">midi</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showTempoDisplay && input.name === 'midiSource' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label="MIDI clock source"
                     value={String(clamp(Math.round(node.params.midiSource ?? input.defaultValue ?? 0), 0, Math.max(0, data.midiInput?.devices.length ?? 0)))}
                     onChange={(event) => {
@@ -1264,22 +1136,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                         {device.label || `MIDI ${index + 1}`}
                       </option>
                     ))}
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showButtonDisplay && input.name === 'mode' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
                       data.onParamChange(node.id, input.name, Number(event.currentTarget.value));
@@ -1292,22 +1154,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                     <option value="0">toggle</option>
                     <option value="1">trigger</option>
                     <option value="2">temporary</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showAccumulatorDisplay && input.name === 'mode' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label="Accumulator mode"
                     value={String(Math.round(node.params.mode ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -1320,22 +1172,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                   >
                     <option value="0">trigger</option>
                     <option value="1">continuous</option>
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : (showQuantiseDisplay || showRollDisplay) && input.name === 'scale' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label={`${node.type} scale`}
                     value={String(clamp(Math.round(node.params.scale ?? input.defaultValue ?? 0), 0, QUANTISE_SCALES.length - 1))}
                     onChange={(event) => {
@@ -1349,22 +1191,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                     {QUANTISE_SCALES.map((scale, index) => (
                       <option key={scale.label} value={index}>{scale.label}</option>
                     ))}
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showQuantiseDisplay && input.name === 'root' && !input.preview ? (
                 <>
-                  <PortNameLabel
-                    name={port.label}
-                    editable={false}
-                    draggable={false}
-                    preview={false}
-                    selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                    activeDragTarget={false}
-                    activeDragSource={false}
-                    onChange={() => undefined}
-                  />
-                  <select
-                    className="teia-port-select nodrag nopan"
+
+                  <SpagbolControlSelect
                     aria-label={`${node.type} root`}
                     value={String(normalisePitchClass(node.params.root ?? input.defaultValue ?? 0))}
                     onChange={(event) => {
@@ -1378,7 +1210,7 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                     {PITCH_CLASSES.map((pitchClass, note) => (
                       <option key={pitchClass} value={note}>{pitchClass}</option>
                     ))}
-                  </select>
+                  </SpagbolControlSelect>
                 </>
               ) : showRollDisplay && input.name === 'middle note' && !input.preview ? (
                 <NoteRangeSelect
@@ -1388,23 +1220,12 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                   max={127}
                   onChange={(value) => data.onParamChange(node.id, input.name, value)}
                 />
-              ) : (
-                <PortNameLabel
-                  name={port.label}
-                  editable={canRenameInputs && !input.preview}
-                  draggable={canRenameInputs && !input.preview}
-                  preview={input.preview}
-                  selected={data.selectedPort?.side === 'input' && data.selectedPort.name === input.name}
-                  activeDragTarget={dragTarget?.side === 'input' && dragTarget.port === input.name}
-                  activeDragSource={dragSource?.side === 'input' && dragSource.port === input.name}
-                  onPointerDown={(event) => {
-                    if (input.preview) return;
-                    if (!canRenameInputs) return;
-                    handlePortPointerDown(event, 'input', input.name);
-                  }}
-                  onChange={(nextName) => data.onPortNameChange(node.id, 'input', input.name, nextName)}
-                />
-              )}
+              ) : null;
+      if (specialControl && !(isSelector && isSelectorValuePort(input.name))) return specialControl;
+      if (!specialControl && !canLearnMidiCc(node.type, input.name) && !(isSelector && isSelectorValuePort(input.name))) {
+        return node.type !== 'Outs' && input.valueEditor !== false && input.defaultValue !== undefined ? undefined : null;
+      }
+      return <>{specialControl}
               {!input.preview && node.type !== 'Outs' && input.valueEditor !== false && input.defaultValue !== undefined && !(showKeysDisplay && input.name === 'mode') && !(showCustomWaveEditor && input.name === 'mode') && !(showSliderDisplay && input.name === 'direction') && !(showSequencerDisplay && input.name === 'mode') && !(showButtonDisplay && input.name === 'mode') && !(showAccumulatorDisplay && input.name === 'mode') && !(showQuantiseDisplay && (input.name === 'scale' || input.name === 'root')) && !(showSampleUpload && input.name === 'mode') && !(showTempoDisplay && (input.name === 'source' || input.name === 'midiSource')) ? (
                 <NumericScrubber
                   value={node.params[input.name] ?? input.defaultValue ?? 0}
@@ -1430,24 +1251,10 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                     }
                   } : undefined}
                 />
-              ) : null}</div>;
+              ) : null}</>;
     }
     const output = { ...definition!.outputs.find(output => output.name === name)!, preview: false };
-    return <div className="teia-node-parameter">                <PortNameLabel
-                name={port.label}
-                editable={canRenameOutputs && !output.preview}
-                draggable={canRenameOutputs && !output.preview}
-                  preview={output.preview}
-                  selected={data.selectedPort?.side === 'output' && data.selectedPort.name === output.name}
-                  activeDragTarget={dragTarget?.side === 'output' && dragTarget.port === output.name}
-                  activeDragSource={dragSource?.side === 'output' && dragSource.port === output.name}
-                  onPointerDown={(event) => {
-                    if (output.preview) return;
-                    if (!canRenameOutputs) return;
-                    handlePortPointerDown(event, 'output', output.name);
-                  }}
-                  onChange={(nextName) => data.onPortNameChange(node.id, 'output', output.name, nextName)}
-                />
+    return <>
                 {!output.preview && (node.type === 'Ins' || node.type === 'Params') && output.valueEditor !== false ? (
                   <div className={node.type === 'Params' ? 'teia-params-values' : undefined}>
                     <NumericScrubber
@@ -1466,7 +1273,7 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
                     )) : null}
                   </div>
                 ) : null}
-</div>;
+</>;
   }
   const frameStyle: CSSProperties = { ...nodeStyle, ...(showResizableDisplay && (!usesAutoInitialWidth || (showSliderDisplay && autoDisplayWidth !== null)) ? { width: displaySize.width } : {}) };
   const resizeControls = <>          {showResizableDisplay && !isCanvasLocked && !isAreaUiCollapsedPresentation ? (
@@ -1493,7 +1300,21 @@ function TeiaNodeContentInner({ data, shared }: { data: TeiaNodeData; shared: Sp
               />
             </>
           ) : null}</>;
-  return <SpagbolNodeFrame {...shared} forceCompact={forceCompactPorts} portsHeader={node.type === 'Params' ? <div className="teia-params-columns" aria-hidden="true"><span>default</span><span>min</span><span>max</span></div> : undefined} rootRef={nodeElementRef} headerOutput={node.type !== "Params" && !showSequencerDisplay} portVisible={port => !showSequencerDisplay || port.direction !== "output" || portName(shared.node, port.id, "output") === SEQUENCER_INDEX_OUTPUT} style={frameStyle} overlay={resizeControls} className={[node.type === 'Params' ? 'teia-node-params' : '', fm1Unsupported || hostedUnsupported ? 'teia-node-unsupported' : ''].filter(Boolean).join(' ')} renderPortContent={portContent} portExtras={isSelector ? <button type="button" className="selector-add-input-button nodrag nopan" onClick={() => data.onSelectorInputAdd?.(node.id)}>+</button> : null}>
+  return <SpagbolNodeFrame {...shared} forceCompact={forceCompactPorts} portsHeader={node.type === 'Params' ? <div className="teia-params-columns" aria-hidden="true"><span>default</span><span>min</span><span>max</span></div> : undefined} rootRef={nodeElementRef} headerOutput={node.type !== "Params" && !showSequencerDisplay} portVisible={port => !showSequencerDisplay || port.direction !== "output" || portName(shared.node, port.id, "output") === SEQUENCER_INDEX_OUTPUT} style={frameStyle} overlay={resizeControls} className={[node.type === 'Params' ? 'teia-node-params' : '', fm1Unsupported || hostedUnsupported ? 'teia-node-unsupported' : ''].filter(Boolean).join(' ')} portLabelProps={port => {
+    const name = portName(shared.node, port.id, port.direction);
+    const editable = port.direction === 'input' ? canRenameInputs : canRenameOutputs;
+    return { name: displayPortName(port.label), editable, draggable: editable,
+      selected: data.selectedPort?.side === port.direction && data.selectedPort.name === name,
+      activeDragTarget: dragTarget?.side === port.direction && dragTarget.port === name,
+      activeDragSource: dragSource?.side === port.direction && dragSource.port === name,
+      onPointerDown: event => { if (editable) handlePortPointerDown(event, port.direction, name); },
+      onChange: next => data.onPortNameChange(node.id, port.direction, name, next),
+      ...(isSelector && port.direction === 'input' && isSelectorValuePort(name) ? {
+        selected: selectorSelectedIndex === Number(name),
+        onClick: (event: MouseEvent<HTMLSpanElement>) => { event.preventDefault(); event.stopPropagation(); data.onParamChange(node.id, 'select', Number(name)); },
+      } : {}),
+    };
+  }} renderPortControl={portControl} portExtras={isSelector ? <button type="button" className="selector-add-input-button nodrag nopan" onClick={() => data.onSelectorInputAdd?.(node.id)}>+</button> : null}>
     <div className="teia-node-content" onPointerEnter={() => setPointerOver(true)} onPointerLeave={() => setPointerOver(false)} onDragOver={handleSampleDragOver} onDrop={handleSampleDrop}>
           {isRoutingNode ? <Handle id={node.type === 'Send' ? 'virtual:send' : 'virtual:receive'} type={node.type === 'Send' ? 'source' : 'target'} position={node.type === 'Send' ? Position.Right : Position.Left} isConnectable={false} /> : null}
           {isExpression ? (
@@ -3303,116 +3124,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-interface PortNameLabelProps {
-  name: string;
-  editable: boolean;
-  draggable?: boolean;
-  selected?: boolean;
-  preview?: boolean;
-  activeDragTarget?: boolean;
-  activeDragSource?: boolean;
-  onPointerDown?: (event: PointerEvent<HTMLSpanElement>) => void;
-  onChange: (nextName: string) => void;
-}
-
-function PortNameLabel({
-  name,
-  editable,
-  draggable = false,
-  selected = false,
-  preview = false,
-  activeDragTarget = false,
-  activeDragSource = false,
-  onPointerDown,
-  onChange,
-}: PortNameLabelProps) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!editing) {
-      setDraft(name);
-    }
-  }, [editing, name]);
-
-  useEffect(() => {
-    if (!editing) return;
-
-    const animationFrame = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
-    return () => cancelAnimationFrame(animationFrame);
-  }, [editing]);
-
-  function commitDraft() {
-    onChange(draft);
-    setEditing(false);
-  }
-
-  function cancelDraft() {
-    setDraft(name);
-    setEditing(false);
-  }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        className="port-name-editor nodrag nopan"
-        value={draft}
-        onChange={(event) => setDraft(event.currentTarget.value)}
-        onBlur={commitDraft}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (event.key === 'Enter') {
-            commitDraft();
-          }
-          if (event.key === 'Escape') {
-            cancelDraft();
-          }
-        }}
-        onPointerDown={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-        spellCheck={false}
-      />
-    );
-  }
-
-  return (
-    <span
-      className={[
-        'port-name-label',
-        editable ? 'port-name-label-editable' : '',
-        draggable ? 'port-name-label-draggable nodrag nopan' : '',
-          selected ? 'port-name-label-selected' : '',
-          preview ? 'port-name-label-preview' : '',
-        activeDragTarget ? 'port-name-label-drag-target' : '',
-        activeDragSource ? 'port-name-label-drag-source' : '',
-      ].filter(Boolean).join(' ')}
-      draggable={draggable}
-        title={preview
-          ? 'Drop a connection here to create this port'
-          : editable
-            ? 'Drag to reorder. Double-click to rename'
-            : undefined}
-        onPointerDown={(event) => {
-          onPointerDown?.(event);
-        }}
-      onDoubleClick={(event) => {
-        if (!editable) return;
-        event.preventDefault();
-        event.stopPropagation();
-        setEditing(true);
-      }}
-    >
-      {displayPortName(name)}
-    </span>
-  );
-}
-
 function displayPortName(name: string): string {
   if (name === 'originalFrequency') return 'original frequency';
   if (name === 'baseLevel') return 'base level';
@@ -3478,9 +3189,7 @@ function NoteRangeSelect({
   const selected = clamp(Math.round(value), lower, upper);
   return (
     <>
-      <PortNameLabel name={label} editable={false} draggable={false} preview={false} selected={false} activeDragTarget={false} activeDragSource={false} onChange={() => undefined} />
-      <select
-        className="teia-port-select nodrag nopan"
+      <SpagbolControlSelect
         aria-label={`Roll ${label}`}
         value={String(selected)}
         onChange={(event) => {
@@ -3494,7 +3203,7 @@ function NoteRangeSelect({
         {Array.from({ length: upper - lower + 1 }, (_, offset) => lower + offset).map((note) => (
           <option key={note} value={note}>{midiNoteLabel(note)}</option>
         ))}
-      </select>
+      </SpagbolControlSelect>
     </>
   );
 }

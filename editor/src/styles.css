@@ -1128,10 +1128,6 @@ button:hover {
   --node-pin-half-size: calc(var(--node-pin-size) / 2);
 }
 
-.react-flow__node:has(.spread-port-panel) {
-  pointer-events: none;
-}
-
 .spread-port-input,
 .spawn-port-input,
 .spread-port-output {
@@ -3149,26 +3145,6 @@ button:hover {
   padding: 0;
 }
 
-.teia-port-select {
-  width: 68px;
-  min-width: 0;
-  height: 22px;
-  padding: 0 4px;
-  border: 1px solid var(--color-foreground);
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font: inherit;
-  line-height: 20px;
-}
-
-.teia-port-reverb-mode {
-  grid-template-columns: minmax(max-content, var(--input-label-width, max-content)) max-content;
-}
-
-.teia-port-reverb-mode .teia-port-select {
-  width: 190px;
-}
-
 .audio-node-scope-resize-handle {
   position: absolute;
   z-index: 3;
@@ -3225,42 +3201,6 @@ button:hover {
   background: var(--color-foreground);
 }
 
-.port-name-label {
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.port-name-label-editable {
-  cursor: grab;
-}
-
-.port-name-label-editable:focus {
-  outline: 1px solid var(--color-foreground);
-  outline-offset: 2px;
-}
-
-.port-name-label-draggable:active {
-  cursor: grabbing;
-}
-
-.port-name-label-drag-target {
-  outline: 1px dashed var(--color-foreground-85);
-  outline-offset: 2px;
-}
-
-.port-name-label-drag-source {
-  opacity: 0.58;
-}
-
-.port-name-label-selected {
-  outline: 1px solid var(--color-foreground-90);
-  outline-offset: 2px;
-}
-
-.port-name-label-preview {
-  font-style: italic;
-}
-
 .port-name-placeholder {
   padding: 0;
   border: 0;
@@ -3275,18 +3215,6 @@ button:hover {
 .port-name-placeholder:hover,
 .port-name-placeholder:focus-visible {
   opacity: 0.8;
-}
-
-.port-name-editor {
-  width: max(7ch, 100%);
-  min-width: max-content;
-  height: 22px;
-  padding: 0 4px;
-  border: 1px solid var(--color-foreground);
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font: inherit;
-  line-height: 20px;
 }
 
 .teia-handle {
@@ -3346,11 +3274,6 @@ button:hover {
 .teia-edge-path-foreground {
   stroke: var(--color-foreground);
   stroke-width: 2;
-}
-
-.react-flow__connection-path {
-  stroke: var(--connection-line-color, var(--color-accent)) !important;
-  stroke-width: 3 !important;
 }
 
 .react-flow__edge.updating .react-flow__edge-path.teia-edge-path-foreground,
@@ -4370,6 +4293,23 @@ dialog.fm1-modal::backdrop { background: var(--color-background-54); }
 .hosted-parameter-error { display: block; font-size: 0.85em; }
 
 /* Teia supplies DSP widgets inside Spagbol's canonical frame and port rows. */
+.spagbol-canvas.teia-graph-canvas .react-flow__node-spagbolArea,
+.spagbol-canvas.teia-graph-canvas .react-flow__node:has(.spread-port-panel) {
+  /* React Flow sets pointer-events inline on these wrappers. Only the area
+     header/resize handle and execution controls should intercept the canvas. */
+  pointer-events: none !important;
+}
+.teia-graph-canvas .spagbol-canvas-area-title {
+  /* Keep the text cursor on the title instead of stretching it across the header. */
+  flex: 0 1 auto;
+}
+.spagbol-canvas.teia-graph-canvas .react-flow__pane {
+  cursor: default;
+}
+.spagbol-canvas.teia-graph-canvas .react-flow__handle.spagbol-node-port,
+.spagbol-canvas.teia-graph-canvas .react-flow__handle.spagbol-property-port {
+  cursor: crosshair;
+}
 .spagbol-canvas.teia-graph-canvas { --spagbol-bg: var(--color-background); --spagbol-foreground: var(--color-foreground); --spagbol-border: var(--color-foreground); --spagbol-surface: var(--color-background); --spagbol-selection: var(--color-selection); --spagbol-header: var(--color-node-title-background); --spagbol-header-text: var(--color-node-title-text); --spagbol-accent: var(--color-accent); --spagbol-font: var(--font-main); --spagbol-control: var(--color-control); }
 .teia-graph-canvas .spagbol-canvas-breadcrumbs > button + button {
   position: relative;
@@ -4389,15 +4329,23 @@ dialog.fm1-modal::backdrop { background: var(--color-background-54); }
 }
 .teia-node-content { position: relative; }
 .teia-node-content:empty { display: none; }
-.teia-node-parameter { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; width: 100%; }
-.teia-node-parameter .port-name-label { flex: 1; }
-.teia-graph-canvas .spagbol-node-port-row:has(.teia-node-parameter) { min-width: max-content; }
 .teia-graph-canvas .spagbol-node-frame-body .teia-node-content-graphic-empty { display: none; }
+.teia-graph-canvas .spagbol-canvas-picker {
+  transform: scale(0.5);
+  transform-origin: top left;
+  width: max-content;
+  min-width: 248px;
+  max-width: calc(100% - 16px);
+}
+.teia-graph-canvas .spagbol-canvas-picker-list button > span,
+.teia-graph-canvas .spagbol-canvas-picker-list button > small {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .teia-graph-canvas .spagbol-node-frame { min-width: 168px; }
 .teia-graph-canvas .spagbol-node-frame-auto-compact { min-width: 0; }
 .teia-node-unsupported { outline: 2px solid var(--color-error, #f66); }
 
 .teia-node-params .teia-params-columns { grid-column: 1 / -1; grid-row: 1; justify-self: end; margin-right: 0; }
 .teia-node-params .spagbol-node-port-row { grid-column: 1 !important; }
-.teia-node-params .teia-node-parameter { display: flex; align-items: center; gap: 8px; }
 .teia-node-params .teia-params-values { flex-shrink: 0; }
